@@ -111,58 +111,82 @@ class TAVRStudySession:
         browser_node = self.get_sequence_browser_node()
         
         if not sequence_node or not browser_node:
+            print("DEBUG: 没有找到序列节点或浏览器节点")
             return "未知序列"
         
         try:
             # 获取当前选中的帧索引
             current_frame_index = browser_node.GetSelectedItemNumber()
+            print(f"DEBUG: 当前帧索引: {current_frame_index}")
             
             # 获取当前帧对应的数据节点
             current_data_node = sequence_node.GetNthDataNode(current_frame_index)
             
             if current_data_node:
-                # 新策略: 首先尝试通过DICOM tag (0008,103e) 直接从文件读取
-                if hasattr(self, '_read_series_description_from_file'):
-                    series_desc = self._read_series_description_from_file(current_data_node)
-                    if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
-                        return series_desc
-                        
+                print(f"DEBUG: 当前数据节点名称: {current_data_node.GetName()}")
+                
                 # 策略1: 尝试从节点属性中获取Series Description
                 series_desc = self._get_dicom_series_description_from_node(current_data_node)
+                print(f"DEBUG: 从节点属性获取的Series Description: {series_desc}")
                 if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                    print(f"DEBUG: 返回节点属性中的Series Description: {series_desc}")
                     return series_desc
                 
                 # 策略2: 尝试从DICOM数据库中获取
                 series_desc = self._get_dicom_series_description_from_database(current_data_node)
+                print(f"DEBUG: 从数据库获取的Series Description: {series_desc}")
                 if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                    print(f"DEBUG: 返回数据库中的Series Description: {series_desc}")
                     return series_desc
                 
-                # 策略3: 尝试从序列节点的索引值获取（如果有时间信息）
+                # 策略3: 直接从DICOM文件读取（创建logic实例来调用方法）
+                try:
+                    import slicer
+                    logic = slicer.modules.tavi_analytics.widgetRepresentation().self().logic
+                    if logic and hasattr(logic, '_read_series_description_from_file'):
+                        series_desc = logic._read_series_description_from_file(current_data_node)
+                        print(f"DEBUG: 从DICOM文件直接读取的Series Description: {series_desc}")
+                        if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                            print(f"DEBUG: 返回DICOM文件中的Series Description: {series_desc}")
+                            return series_desc
+                except Exception as e:
+                    print(f"DEBUG: 从DICOM文件读取时出错: {e}")
+                
+                # 策略4: 尝试从序列节点的索引值获取（如果有时间信息）
                 series_desc = self._get_series_description_from_sequence_index(sequence_node, current_frame_index)
+                print(f"DEBUG: 从序列索引获取的描述: {series_desc}")
                 if series_desc:
                     return series_desc
                 
-                # 策略4: 从存储节点的文件路径获取信息
+                # 策略5: 从存储节点的文件路径获取信息
                 series_desc = self._get_series_description_from_storage_node(current_data_node)
+                print(f"DEBUG: 从存储节点获取的描述: {series_desc}")
                 if series_desc:
                     return series_desc
                 
                 # 如果都没有找到，返回帧信息
                 time_value = sequence_node.GetNthIndexValue(current_frame_index)
                 if time_value:
-                    return f"Phase {time_value}% (帧 {current_frame_index + 1})"
+                    result = f"Phase {time_value}% (帧 {current_frame_index + 1})"
+                    print(f"DEBUG: 返回时间值描述: {result}")
+                    return result
                 else:
-                    return f"帧 {current_frame_index + 1}/{sequence_node.GetNumberOfDataNodes()}"
+                    result = f"帧 {current_frame_index + 1}/{sequence_node.GetNumberOfDataNodes()}"
+                    print(f"DEBUG: 返回帧数描述: {result}")
+                    return result
             
             return f"帧 {current_frame_index + 1}"
             
         except Exception as e:
             print(f"获取Series Description时出错: {e}")
+            import traceback
+            traceback.print_exc()
             return "未知序列"
     
     def _get_dicom_series_description_from_node(self, node) -> Optional[str]:
         """从节点属性获取DICOM Series Description"""
         if not hasattr(node, 'GetAttribute'):
+            print("DEBUG: 节点没有GetAttribute方法")
             return None
             
         # 尝试常见的DICOM属性名
@@ -176,10 +200,12 @@ class TAVRStudySession:
         
         for attr in dicom_attributes:
             value = node.GetAttribute(attr)
+            print(f"DEBUG: 检查属性 {attr}: {value}")
             if value and value.strip():
-                logging.debug(f"Found Series Description in node attribute {attr}: {value}")
+                print(f"DEBUG: 在节点属性 {attr} 中找到Series Description: {value}")
                 return value.strip()
         
+        print("DEBUG: 在节点属性中未找到Series Description")
         return None
     
     def _get_dicom_series_description_from_database(self, node) -> Optional[str]:
@@ -640,6 +666,9 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # 连接信号
         self.setup_connections()
+        
+        # 检查场景中是否已有序列数据，如果有则重新处理DICOM元数据
+        self.check_and_process_existing_sequences()
 
     def load_valve_config(self):
         """加载瓣膜配置文件"""
@@ -788,6 +817,37 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.session.reset()
         self.update_status_display()
         self.cycle_management_widget.setVisible(False)
+
+    def check_and_process_existing_sequences(self):
+        """检查并处理现有的序列数据"""
+        try:
+            # 查找场景中的序列节点
+            sequence_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceNode')
+            browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
+            
+            if sequence_nodes and browser_nodes:
+                print("DEBUG: 发现现有序列数据，正在重新处理DICOM元数据...")
+                
+                # 选择第一个序列节点
+                sequence_node = sequence_nodes[0]
+                browser_node = browser_nodes[0]
+                
+                # 更新会话
+                self.session.volume_sequence_node_id = sequence_node.GetID()
+                self.session.sequence_browser_node_id = browser_node.GetID()
+                
+                # 重新处理DICOM元数据
+                self.logic.preserve_dicom_metadata(sequence_node)
+                
+                # 更新状态显示
+                self.update_status_display()
+                
+                print("DEBUG: 完成现有序列数据的DICOM元数据处理")
+                
+        except Exception as e:
+            print(f"DEBUG: 处理现有序列数据时出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     def on_load_data_clicked(self):
         """处理加载数据按钮点击（已废弃，保留用于兼容性）"""
@@ -1118,6 +1178,8 @@ class tavi_analyticsLogic(ScriptedLoadableModuleLogic):
                         # 保存到节点属性
                         data_node.SetAttribute('DICOM.SeriesDescription', series_desc)
                         data_node.SetAttribute('SeriesDescription', series_desc)
+                        data_node.SetAttribute('DICOM.0008,103E', series_desc)
+                        data_node.SetAttribute('DICOM.0008,103e', series_desc)
                         
                         # 如果是第一个节点，也设置到序列节点
                         if i == 0:
@@ -1126,21 +1188,78 @@ class tavi_analyticsLogic(ScriptedLoadableModuleLogic):
                             
                         logging.info(f"为第 {i+1} 帧保存了Series Description: {series_desc}")
                     else:
-                        # 如果无法获取Series Description，尝试直接从DICOM文件读取
-                        series_desc = self._read_series_description_from_file(data_node)
+                        # 如果无法获取Series Description，尝试通过实例UID从数据库直接读取
+                        series_desc = self._get_series_description_by_instance_uid(data_node)
                         if series_desc:
                             data_node.SetAttribute('DICOM.SeriesDescription', series_desc)
                             data_node.SetAttribute('SeriesDescription', series_desc)
+                            data_node.SetAttribute('DICOM.0008,103E', series_desc)
+                            data_node.SetAttribute('DICOM.0008,103e', series_desc)
                             if i == 0:
                                 sequence_node.SetAttribute('DICOM.SeriesDescription', series_desc)
                                 sequence_node.SetAttribute('SeriesDescription', series_desc)
-                            logging.info(f"从文件为第 {i+1} 帧读取了Series Description: {series_desc}")
+                            logging.info(f"通过实例UID为第 {i+1} 帧获取了Series Description: {series_desc}")
+                        else:
+                            # 最后尝试直接从DICOM文件读取
+                            series_desc = self._read_series_description_from_file(data_node)
+                            if series_desc:
+                                data_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                                data_node.SetAttribute('SeriesDescription', series_desc)
+                                data_node.SetAttribute('DICOM.0008,103E', series_desc)
+                                data_node.SetAttribute('DICOM.0008,103e', series_desc)
+                                if i == 0:
+                                    sequence_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                                    sequence_node.SetAttribute('SeriesDescription', series_desc)
+                                logging.info(f"从文件为第 {i+1} 帧读取了Series Description: {series_desc}")
                     
                     # 也尝试保存其他重要的DICOM属性
                     self._preserve_other_dicom_attributes(data_node)
                     
         except Exception as e:
             logging.warning(f"Failed to preserve DICOM metadata: {e}")
+    
+    def _get_series_description_by_instance_uid(self, data_node):
+        """通过实例UID从DICOM数据库获取Series Description"""
+        try:
+            import slicer
+            import os
+            
+            # 获取DICOM数据库
+            dicom_db = slicer.dicomDatabase
+            if not dicom_db or not dicom_db.isOpen:
+                return None
+            
+            # 获取实例UID
+            instance_uids = data_node.GetAttribute("DICOM.instanceUIDs")
+            if instance_uids:
+                # 分割为单个实例UID
+                uid_list = instance_uids.split()
+                
+                if uid_list:
+                    # 获取第一个实例UID
+                    first_instance_uid = uid_list[0]
+                    
+                    # 从DICOM数据库获取文件路径
+                    file_path = dicom_db.fileForInstance(first_instance_uid)
+                    
+                    if file_path and os.path.exists(file_path):
+                        # 使用pydicom直接读取文件
+                        try:
+                            import pydicom
+                            dcm = pydicom.dcmread(file_path, stop_before_pixels=True)
+                            
+                            # 通过标签(0008,103e)访问SeriesDescription
+                            if (0x0008, 0x103e) in dcm:
+                                series_desc = str(dcm[0x0008, 0x103e].value).strip()
+                                if series_desc:
+                                    return series_desc
+                        except Exception as e:
+                            logging.debug(f"Error reading DICOM file {file_path}: {e}")
+            
+            return None
+        except Exception as e:
+            logging.debug(f"Error in _get_series_description_by_instance_uid: {e}")
+            return None
     
     def _read_series_description_from_file(self, data_node):
         """直接从DICOM文件读取Series Description"""
@@ -1180,12 +1299,17 @@ class tavi_analyticsLogic(ScriptedLoadableModuleLogic):
         if existing_desc and existing_desc.strip():
             return existing_desc.strip()
         
-        # 策略2: 直接从DICOM文件读取（最可靠的方法）
+        # 策略2: 通过实例UID从DICOM数据库直接读取（最可靠的方法）
+        series_desc = self._get_series_description_by_instance_uid(data_node)
+        if series_desc:
+            return series_desc
+        
+        # 策略3: 直接从DICOM文件读取
         series_desc = self._read_series_description_from_file(data_node)
         if series_desc:
             return series_desc
         
-        # 策略3: 从Subject Hierarchy获取
+        # 策略4: 从Subject Hierarchy获取
         try:
             import slicer
             shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
@@ -1206,7 +1330,7 @@ class tavi_analyticsLogic(ScriptedLoadableModuleLogic):
         except Exception:
             pass
         
-        # 策略4: 从DICOM数据库查询（如果可用的话）
+        # 策略5: 从DICOM数据库查询（如果可用的话）
         try:
             import slicer
             db = slicer.dicomDatabase
