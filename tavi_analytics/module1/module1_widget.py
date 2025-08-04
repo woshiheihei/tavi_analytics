@@ -1,0 +1,481 @@
+"""
+模块一主界面
+
+该模块提供TAVR分析的模块一完整界面，包括：
+- 数据导入与配置
+- 心动周期管理
+- 状态显示
+- 患者信息管理
+
+模块一是TAVR分析流程的第一步，负责数据准备和基础配置。
+
+作者：TAVR Research Team
+创建时间：2024
+"""
+
+import qt
+import slicer
+from typing import Optional
+import logging
+
+try:
+    from ..core.session import TAVRStudySession
+    from ..core.data_models import PatientData
+    from ..core.enums import ImageQuality, FollowUpTimepoint
+    from .data_loading_dialog import DataLoadingDialog
+    from .cardiac_cycle_widget import CardiacCycleWidget
+    from .status_display_widget import StatusDisplayWidget
+    from ..utils.config_manager import ConfigManager
+    from ..utils.qt_utils import QtUtils
+except ImportError:
+    import sys
+    import os
+    current_dir = os.path.dirname(__file__)
+    parent_dir = os.path.dirname(current_dir)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from core.session import TAVRStudySession
+    from core.data_models import PatientData
+    from core.enums import ImageQuality, FollowUpTimepoint
+    # 使用当前目录导入
+    current_module_dir = os.path.dirname(__file__)
+    if current_module_dir not in sys.path:
+        sys.path.insert(0, current_module_dir)
+    from data_loading_dialog import DataLoadingDialog
+    from cardiac_cycle_widget import CardiacCycleWidget
+    from status_display_widget import StatusDisplayWidget
+    from utils.config_manager import ConfigManager
+    from utils.qt_utils import QtUtils
+
+
+class Module1Widget(qt.QWidget):
+    """模块一主界面
+    
+    提供TAVR分析的第一步功能：数据准备和基础配置
+    """
+    
+    # 信号定义
+    dataConfigured = qt.Signal()  # 数据配置完成信号
+    phasesMarked = qt.Signal()    # 关键时相标记完成信号
+    readyForNextModule = qt.Signal()  # 准备进入下一模块信号
+    
+    def __init__(self, session: TAVRStudySession, parent=None, logic=None):
+        """初始化模块一界面
+        
+        Args:
+            session: TAVR研究会话对象
+            parent: 父窗口对象
+            logic: 业务逻辑实例
+        """
+        super().__init__(parent)
+        self.session = session
+        self.logic = logic
+        self.config_manager = ConfigManager()
+        
+        # 子组件
+        self.data_loading_dialog = None
+        self.cardiac_cycle_widget = None
+        self.status_display_widget = None
+        
+        # 初始化界面
+        self._init_ui()
+        self._setup_connections()
+        
+        # 检查现有数据
+        self._check_existing_data()
+        
+        logging.info("模块一界面初始化完成")
+        
+    def _init_ui(self):
+        """初始化用户界面"""
+        # 主布局
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 标题
+        title_label = qt.QLabel("模块一：数据导入与配置")
+        title_label.setStyleSheet(
+            "QLabel { "
+            "font-size: 18px; font-weight: bold; "
+            "padding: 10px; margin-bottom: 10px; "
+            "background-color: #3f51b5; color: white; "
+            "border-radius: 6px; "
+            "}"
+        )
+        title_label.setAlignment(qt.Qt.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # 状态显示组件
+        self.status_display_widget = StatusDisplayWidget(self.session, self)
+        main_layout.addWidget(self.status_display_widget)
+        
+        # 数据导入按钮区域
+        self._create_data_import_section(main_layout)
+        
+        # 心动周期管理组件
+        self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
+        main_layout.addWidget(self.cardiac_cycle_widget)
+        
+        # 操作按钮区域
+        self._create_action_buttons_section(main_layout)
+        
+        # 添加弹性空间
+        main_layout.addStretch()
+        
+    def _create_data_import_section(self, parent_layout):
+        """创建数据导入区域"""
+        import_group = qt.QGroupBox("数据导入")
+        import_layout = qt.QVBoxLayout(import_group)
+        
+        # 说明文本
+        instruction_label = qt.QLabel(
+            "请点击下方按钮导入4D心脏CT数据并配置患者信息。\n"
+            "支持从DICOM浏览器加载或从现有场景数据创建序列。"
+        )
+        instruction_label.setWordWrap(True)
+        instruction_label.setStyleSheet(
+            "QLabel { padding: 8px; background-color: #f5f5f5; border-radius: 4px; }"
+        )
+        import_layout.addWidget(instruction_label)
+        
+        # 数据导入按钮
+        self.load_data_button = qt.QPushButton("数据导入与配置")
+        self.load_data_button.setMinimumHeight(40)
+        self.load_data_button.setStyleSheet(
+            "QPushButton { "
+            "font-size: 14px; font-weight: bold; "
+            "padding: 10px; background-color: #4caf50; color: white; "
+            "border-radius: 6px; "
+            "}"
+            "QPushButton:hover { background-color: #45a049; }"
+            "QPushButton:pressed { background-color: #3d8b40; }"
+        )
+        import_layout.addWidget(self.load_data_button)
+        
+        parent_layout.addWidget(import_group)
+        
+    def _create_action_buttons_section(self, parent_layout):
+        """创建操作按钮区域"""
+        actions_group = qt.QGroupBox("操作")
+        actions_layout = qt.QVBoxLayout(actions_group)
+        
+        # 刷新状态按钮
+        self.refresh_button = qt.QPushButton("刷新状态")
+        self.refresh_button.setStyleSheet(
+            "QPushButton { "
+            "padding: 8px; background-color: #2196f3; color: white; "
+            "border-radius: 4px; "
+            "}"
+            "QPushButton:hover { background-color: #1976d2; }"
+        )
+        actions_layout.addWidget(self.refresh_button)
+        
+        # 重置数据按钮
+        self.reset_button = qt.QPushButton("重置数据")
+        self.reset_button.setStyleSheet(
+            "QPushButton { "
+            "padding: 8px; background-color: #ff9800; color: white; "
+            "border-radius: 4px; "
+            "}"
+            "QPushButton:hover { background-color: #f57c00; }"
+        )
+        actions_layout.addWidget(self.reset_button)
+        
+        # 进入下一模块按钮
+        self.next_module_button = qt.QPushButton("进入模块二：瓣膜分割")
+        self.next_module_button.setEnabled(False)
+        self.next_module_button.setMinimumHeight(35)
+        self.next_module_button.setStyleSheet(
+            "QPushButton { "
+            "font-size: 13px; font-weight: bold; "
+            "padding: 10px; background-color: #9c27b0; color: white; "
+            "border-radius: 6px; "
+            "}"
+            "QPushButton:hover:enabled { background-color: #7b1fa2; }"
+            "QPushButton:disabled { "
+            "background-color: #cccccc; color: #666666; "
+            "}"
+        )
+        actions_layout.addWidget(self.next_module_button)
+        
+        parent_layout.addWidget(actions_group)
+        
+    def _setup_connections(self):
+        """设置信号连接"""
+        # 按钮连接
+        self.load_data_button.clicked.connect(self._on_load_data_clicked)
+        self.refresh_button.clicked.connect(self._on_refresh_clicked)
+        self.reset_button.clicked.connect(self._on_reset_clicked)
+        self.next_module_button.clicked.connect(self._on_next_module_clicked)
+        
+    def _check_existing_data(self):
+        """检查现有数据并更新界面状态"""
+        try:
+            # 检查场景中是否已有序列数据
+            sequence_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceNode')
+            if sequence_nodes:
+                logging.info(f"发现 {len(sequence_nodes)} 个序列节点")
+                
+            # 更新状态显示
+            self._update_interface_state()
+            
+        except Exception as e:
+            logging.error(f"检查现有数据时发生错误: {str(e)}")
+            
+    def _on_load_data_clicked(self):
+        """处理数据导入按钮点击"""
+        try:
+            # 获取瓣膜配置
+            valve_config = self.config_manager.load_valve_config()
+            
+            # 创建并显示数据加载对话框
+            # 正确的参数顺序：(parent, session, valve_config, logic)
+            self.data_loading_dialog = DataLoadingDialog(
+                parent=self, 
+                session=self.session, 
+                valve_config=valve_config, 
+                logic=self.logic
+            )
+                
+            # 连接对话框信号
+            self.data_loading_dialog.dataLoaded.connect(self._on_data_loaded)
+            
+            # 显示对话框
+            result = self.data_loading_dialog.exec_()
+            
+            if result == qt.QDialog.Accepted:
+                logging.info("数据导入对话框完成")
+            else:
+                logging.info("数据导入对话框被取消")
+                
+        except Exception as e:
+            logging.error(f"打开数据导入对话框时发生错误: {str(e)}")
+            qt.QMessageBox.critical(
+                self, "错误", 
+                f"无法打开数据导入对话框：\n{str(e)}"
+            )
+            
+    def _on_data_loaded(self):
+        """处理数据加载完成"""
+        try:
+            logging.info("数据加载完成，激活心动周期管理")
+            
+            # 激活心动周期管理
+            success = self.cardiac_cycle_widget.activate()
+            if success:
+                # 更新界面状态
+                self._update_interface_state()
+                
+                # 发出数据配置完成信号
+                self.dataConfigured.emit()
+                
+                logging.info("模块一数据配置完成")
+            else:
+                logging.warning("激活心动周期管理失败")
+                
+        except Exception as e:
+            logging.error(f"处理数据加载完成时发生错误: {str(e)}")
+            
+    def _on_refresh_clicked(self):
+        """处理刷新按钮点击"""
+        try:
+            logging.info("刷新模块一状态")
+            
+            # 刷新状态显示
+            self.status_display_widget.update_status()
+            
+            # 刷新心动周期显示
+            self.cardiac_cycle_widget.refresh_display()
+            
+            # 更新界面状态
+            self._update_interface_state()
+            
+        except Exception as e:
+            logging.error(f"刷新状态时发生错误: {str(e)}")
+            
+    def _on_reset_clicked(self):
+        """处理重置按钮点击"""
+        try:
+            # 确认对话框
+            reply = qt.QMessageBox.question(
+                self, "确认重置", 
+                "确定要重置所有数据吗？这将清除当前的配置和标记。",
+                qt.QMessageBox.Yes | qt.QMessageBox.No,
+                qt.QMessageBox.No
+            )
+            
+            if reply == qt.QMessageBox.Yes:
+                logging.info("重置模块一数据")
+                
+                # 重置会话
+                self.session.reset()
+                
+                # 停用心动周期管理
+                self.cardiac_cycle_widget.deactivate()
+                
+                # 更新界面状态
+                self._update_interface_state()
+                
+                logging.info("模块一数据重置完成")
+                
+        except Exception as e:
+            logging.error(f"重置数据时发生错误: {str(e)}")
+            
+    def _on_next_module_clicked(self):
+        """处理进入下一模块按钮点击"""
+        try:
+            # 检查是否满足进入下一模块的条件
+            if self._check_ready_for_next_module():
+                logging.info("准备进入模块二")
+                self.readyForNextModule.emit()
+            else:
+                # 显示未满足条件的提示
+                missing_items = self._get_missing_requirements()
+                qt.QMessageBox.information(
+                    self, "未满足条件", 
+                    "进入下一模块需要完成以下步骤：\n" + "\n".join(missing_items)
+                )
+                
+        except Exception as e:
+            logging.error(f"检查下一模块条件时发生错误: {str(e)}")
+            
+    def _update_interface_state(self):
+        """更新界面状态"""
+        try:
+            # 更新状态显示
+            self.status_display_widget.update_status()
+            
+            # 检查是否可以进入下一模块
+            ready_for_next = self._check_ready_for_next_module()
+            self.next_module_button.setEnabled(ready_for_next)
+            
+            if ready_for_next:
+                self.next_module_button.setText("进入模块二：瓣膜分割")
+                self.next_module_button.setStyleSheet(
+                    "QPushButton { "
+                    "font-size: 13px; font-weight: bold; "
+                    "padding: 10px; background-color: #9c27b0; color: white; "
+                    "border-radius: 6px; "
+                    "}"
+                    "QPushButton:hover { background-color: #7b1fa2; }"
+                )
+            else:
+                self.next_module_button.setText("等待数据配置完成...")
+                self.next_module_button.setStyleSheet(
+                    "QPushButton { "
+                    "font-size: 13px; font-weight: bold; "
+                    "padding: 10px; background-color: #cccccc; color: #666666; "
+                    "border-radius: 6px; "
+                    "}"
+                )
+                
+        except Exception as e:
+            logging.error(f"更新界面状态时发生错误: {str(e)}")
+            
+    def _check_ready_for_next_module(self) -> bool:
+        """检查是否准备好进入下一模块
+        
+        Returns:
+            是否可以进入下一模块
+        """
+        try:
+            # 基本数据检查
+            if not self.session.is_ready():
+                return False
+                
+            # 检查关键时相是否已标记
+            end_diastole = self.session.get_marked_phase('end_diastole')
+            end_systole = self.session.get_marked_phase('end_systole')
+            
+            phases_marked = (
+                end_diastole.get('frame_index') is not None and
+                end_systole.get('frame_index') is not None
+            )
+            
+            return phases_marked
+            
+        except Exception as e:
+            logging.error(f"检查下一模块条件时发生错误: {str(e)}")
+            return False
+            
+    def _get_missing_requirements(self) -> list:
+        """获取未满足的条件列表
+        
+        Returns:
+            未满足条件的描述列表
+        """
+        missing = []
+        
+        try:
+            # 检查基本数据
+            if not self.session.is_ready():
+                missing.append("• 导入并配置4D心脏CT数据")
+                
+            # 检查患者信息
+            patient_data = self.session.patient_data
+            if not patient_data or not patient_data.patientID:
+                missing.append("• 填写完整的患者信息")
+                
+            # 检查时相标记
+            end_diastole = self.session.get_marked_phase('end_diastole')
+            end_systole = self.session.get_marked_phase('end_systole')
+            
+            if end_diastole.get('frame_index') is None:
+                missing.append("• 标记舒张末期时相")
+                
+            if end_systole.get('frame_index') is None:
+                missing.append("• 标记收缩末期时相")
+                
+        except Exception as e:
+            logging.error(f"获取缺失条件时发生错误: {str(e)}")
+            missing.append("• 检查系统状态时发生错误")
+            
+        return missing
+        
+    def get_session(self) -> TAVRStudySession:
+        """获取会话对象
+        
+        Returns:
+            TAVR研究会话对象
+        """
+        return self.session
+        
+    def get_cardiac_cycle_widget(self) -> CardiacCycleWidget:
+        """获取心动周期管理组件
+        
+        Returns:
+            心动周期管理组件
+        """
+        return self.cardiac_cycle_widget
+        
+    def get_status_display_widget(self) -> StatusDisplayWidget:
+        """获取状态显示组件
+        
+        Returns:
+            状态显示组件
+        """
+        return self.status_display_widget
+        
+    def is_ready_for_next_module(self) -> bool:
+        """检查是否准备好进入下一模块
+        
+        Returns:
+            是否可以进入下一模块
+        """
+        return self._check_ready_for_next_module()
+        
+    def cleanup(self):
+        """清理资源"""
+        try:
+            # 清理子组件
+            if self.cardiac_cycle_widget:
+                self.cardiac_cycle_widget.deactivate()
+                
+            if self.data_loading_dialog:
+                self.data_loading_dialog.close()
+                
+            logging.info("模块一界面清理完成")
+            
+        except Exception as e:
+            logging.error(f"清理模块一界面时发生错误: {str(e)}")

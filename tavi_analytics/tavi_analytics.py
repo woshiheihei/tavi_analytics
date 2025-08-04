@@ -30,6 +30,7 @@ try:
     from .utils.config_manager import ConfigManager
     from .utils.qt_utils import QtUtils
     from .utils.logging_utils import LoggingUtils
+    from .module1.module1_widget import Module1Widget
 except ImportError:
     # 回退到绝对导入（用于3D Slicer直接加载）
     import os
@@ -45,7 +46,7 @@ except ImportError:
     from utils.config_manager import ConfigManager
     from utils.qt_utils import QtUtils
     from utils.logging_utils import LoggingUtils
-    from module1.data_loading_dialog import DataLoadingDialog
+    from module1.module1_widget import Module1Widget
 
 
 # TAVRStudySession 类已移动到 core/session.py
@@ -83,12 +84,14 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def __init__(self, parent=None) -> None:
         """初始化界面"""
-        ScriptedLoadableModuleWidget.__init__(self, parent)
-        VTKObservationMixin.__init__(self)
+        # 先初始化必要的属性
         self.logic = None
         self.session = TAVRStudySession()
-        self.valve_config = {}
-        self.data_loading_dialog = None
+        self.module1_widget = None
+        
+        # 然后调用父类初始化（这会触发setup()方法）
+        ScriptedLoadableModuleWidget.__init__(self, parent)
+        VTKObservationMixin.__init__(self)
         
     def setup(self) -> None:
         """设置界面"""
@@ -101,144 +104,36 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # 创建逻辑类
         self.logic = tavi_analyticsLogic()
         
-        # 加载瓣膜配置
-        self.load_valve_config()
-        
         # 创建主界面
         self.create_main_ui()
         
         # 连接信号
         self.setup_connections()
         
-        # 检查场景中是否已有序列数据，如果有则重新处理DICOM元数据
+        # 检查场景中是否已有序列数据
         self.check_and_process_existing_sequences()
-
-    def load_valve_config(self):
-        """加载瓣膜配置文件"""
-        self.valve_config = ConfigManager.load_valve_config()
 
     def create_main_ui(self):
         """创建主界面"""
-        # 状态显示区域
-        status_group = qt.QGroupBox("当前状态")
-        status_layout = qt.QVBoxLayout(status_group)
+        # 创建模块一组件
+        self.module1_widget = Module1Widget(self.session, logic=self.logic)
         
-        self.status_label = qt.QLabel("未配置数据")
-        self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet("QLabel { padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; }")
-        status_layout.addWidget(self.status_label)
-        
-        # 操作按钮区域
-        button_layout = qt.QHBoxLayout()
-        
-        self.setup_data_button = qt.QPushButton("数据导入与配置")
-        self.setup_data_button.setStyleSheet("QPushButton { font-size: 16px; padding: 15px; background-color: #2196F3; color: white; }")
-        self.setup_data_button.clicked.connect(self.show_data_loading_dialog)
-        button_layout.addWidget(self.setup_data_button)
-        
-        # 心动周期管理面板
-        self.create_cardiac_cycle_section()
+        # 连接模块一信号
+        self.module1_widget.dataConfigured.connect(self.on_module1_data_configured)
+        self.module1_widget.readyForNextModule.connect(self.on_ready_for_module2)
         
         # 添加到主布局
-        self.layout.addWidget(status_group)
-        self.layout.addLayout(button_layout)
-        self.layout.addWidget(self.cycle_management_widget)
+        self.layout.addWidget(self.module1_widget)
         self.layout.addStretch()
         
-        # 初始更新状态
-        self.update_status_display()
-
-    def show_data_loading_dialog(self):
-        """显示数据加载对话框"""
-        dialog = DataLoadingDialog(parent=self.parent, session=self.session, valve_config=self.valve_config, logic=self.logic)
+    def on_module1_data_configured(self):
+        """处理模块一数据配置完成"""
+        pass  # 可以在这里添加额外的处理逻辑
         
-        if dialog.exec_() == qt.QDialog.Accepted:
-            # 用户确认了配置，激活心动周期管理
-            self.activate_cardiac_cycle_management()
-            self.update_status_display()
-
-    def update_status_display(self):
-        """更新状态显示"""
-        if self.session.is_ready():
-            patient_data = self.session.get_patient_data()
-            valve_info = self.session.get_selected_valve()
-            
-            status_text = f"""
-<b>数据已配置完成</b><br/>
-<b>患者ID:</b> {patient_data.patientID}<br/>
-<b>瓣膜:</b> {valve_info['brand']} - {valve_info['model']}<br/>
-<b>序列:</b> {self.session.get_volume_sequence_node().GetName() if self.session.get_volume_sequence_node() else '未知'}
-"""
-            self.status_label.setText(status_text)
-            self.status_label.setStyleSheet("QLabel { padding: 10px; background-color: #e8f5e8; border: 1px solid #4CAF50; }")
-            self.setup_data_button.setText("重新配置数据")
-        else:
-            self.status_label.setText("请点击下方按钮开始数据导入与配置")
-            self.status_label.setStyleSheet("QLabel { padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; }")
-            self.setup_data_button.setText("数据导入与配置")
-
-    def create_patient_info_section(self, parent_layout):
-        """创建患者信息输入区域"""
-        # 这个方法已经移动到DataLoadingDialog中，这里保留为空以避免错误
-        pass
-
-    def create_cardiac_cycle_section(self):
-        """创建心动周期管理区域"""
-        # 心动周期管理折叠面板
-        self.cycle_management_widget = qt.QGroupBox("心动周期管理")
-        self.cycle_management_widget.setVisible(False)  # 初始隐藏
-        
-        cycle_layout = qt.QVBoxLayout(self.cycle_management_widget)
-        
-        # 时相百分比显示
-        self.phase_percent_label = qt.QLabel("当前时相: 0.0%")
-        self.phase_percent_label.setAlignment(qt.Qt.AlignCenter)
-        self.phase_percent_label.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 10px; }")
-        cycle_layout.addWidget(self.phase_percent_label)
-        
-        # Series Description 显示
-        self.series_description_label = qt.QLabel("序列描述: 未加载")
-        self.series_description_label.setAlignment(qt.Qt.AlignCenter)
-        self.series_description_label.setStyleSheet("QLabel { font-size: 14px; margin: 5px; padding: 8px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; }")
-        self.series_description_label.setWordWrap(True)  # 允许文本换行
-        cycle_layout.addWidget(self.series_description_label)
-        
-        # 心动周期时间轴滑块
-        self.timeline_slider = qt.QSlider(qt.Qt.Horizontal)
-        self.timeline_slider.setEnabled(False)
-        self.timeline_slider.valueChanged.connect(self.on_timeline_slider_changed)
-        cycle_layout.addWidget(self.timeline_slider)
-        
-        # 时相标记按钮
-        button_layout = qt.QHBoxLayout()
-        
-        self.mark_end_diastole_button = qt.QPushButton("标记舒张末期")
-        self.mark_end_diastole_button.setEnabled(False)
-        self.mark_end_diastole_button.setStyleSheet("QPushButton { padding: 8px; background-color: #FF9800; color: white; }")
-        self.mark_end_diastole_button.clicked.connect(lambda: self.mark_phase('end_diastole'))
-        button_layout.addWidget(self.mark_end_diastole_button)
-        
-        self.mark_end_systole_button = qt.QPushButton("标记收缩末期")
-        self.mark_end_systole_button.setEnabled(False)
-        self.mark_end_systole_button.setStyleSheet("QPushButton { padding: 8px; background-color: #9C27B0; color: white; }")
-        self.mark_end_systole_button.clicked.connect(lambda: self.mark_phase('end_systole'))
-        button_layout.addWidget(self.mark_end_systole_button)
-        
-        cycle_layout.addLayout(button_layout)
-        
-        # 已标记时相显示
-        marked_phases_layout = qt.QVBoxLayout()
-        self.end_diastole_label = qt.QLabel("舒张末期: 未标记")
-        self.end_diastole_label.setStyleSheet("QLabel { padding: 5px; background-color: #fff3e0; border: 1px solid #ff9800; }")
-        self.end_diastole_label.setWordWrap(True)  # 允许文本换行
-        
-        self.end_systole_label = qt.QLabel("收缩末期: 未标记")
-        self.end_systole_label.setStyleSheet("QLabel { padding: 5px; background-color: #f3e5f5; border: 1px solid #9c27b0; }")
-        self.end_systole_label.setWordWrap(True)  # 允许文本换行
-        
-        marked_phases_layout.addWidget(self.end_diastole_label)
-        marked_phases_layout.addWidget(self.end_systole_label)
-        cycle_layout.addLayout(marked_phases_layout)
+    def on_ready_for_module2(self):
+        """处理准备进入模块二"""
+        # 这里可以显示模块二界面或切换到模块二
+        pass  # 暂时保留为空，等待模块二实现
 
     def setup_connections(self):
         """设置信号连接"""
@@ -254,8 +149,11 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """场景关闭结束时的处理"""
         # 重置会话
         self.session.reset()
-        self.update_status_display()
-        self.cycle_management_widget.setVisible(False)
+        
+        # 如果模块一组件存在，更新其状态
+        if self.module1_widget:
+            # 模块一组件会自动检测会话状态并更新界面
+            pass
 
     def check_and_process_existing_sequences(self):
         """检查并处理现有的序列数据"""
@@ -265,7 +163,8 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
             
             if sequence_nodes and browser_nodes:
-                print("DEBUG: 发现现有序列数据，正在重新处理DICOM元数据...")
+                import logging
+                logging.info("发现现有序列数据，正在重新处理DICOM元数据...")
                 
                 # 选择第一个序列节点
                 sequence_node = sequence_nodes[0]
@@ -278,137 +177,21 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # 重新处理DICOM元数据
                 self.logic.preserve_dicom_metadata(sequence_node)
                 
-                # 更新状态显示
-                self.update_status_display()
-                
-                print("DEBUG: 完成现有序列数据的DICOM元数据处理")
+                logging.info("完成现有序列数据的DICOM元数据处理")
                 
         except Exception as e:
-            print(f"DEBUG: 处理现有序列数据时出错: {e}")
+            import logging
+            logging.error(f"处理现有序列数据时出错: {e}")
             import traceback
             traceback.print_exc()
-
-    def on_load_data_clicked(self):
-        """处理加载数据按钮点击（已废弃，保留用于兼容性）"""
-        pass
-
-    def on_valve_brand_changed(self, brand):
-        """处理瓣膜品牌选择变化（已废弃，保留用于兼容性）"""
-        pass
-
-    def check_confirm_button_state(self):
-        """检查确认按钮状态（已废弃，保留用于兼容性）"""
-        pass
-
-    def on_confirm_clicked(self):
-        """处理确认按钮点击（已废弃，保留用于兼容性）"""
-        pass
-
-    def save_patient_data_to_session(self):
-        """保存患者信息到会话（已废弃，保留用于兼容性）"""
-        pass
-
-    def activate_cardiac_cycle_management(self):
-        """激活心动周期管理"""
-        sequence_node = self.session.get_volume_sequence_node()
-        browser_node = self.session.get_sequence_browser_node()
-        
-        if sequence_node and browser_node:
-            # 设置滑块范围
-            num_frames = sequence_node.GetNumberOfDataNodes()
-            self.timeline_slider.setMaximum(num_frames - 1)
-            self.timeline_slider.setEnabled(True)
-            
-            # 启用标记按钮
-            self.mark_end_diastole_button.setEnabled(True)
-            self.mark_end_systole_button.setEnabled(True)
-            
-            # 显示管理面板
-            self.cycle_management_widget.setVisible(True)
-            
-            # 初始化当前帧
-            self.on_timeline_slider_changed(0)
-
-    def update_sequence_info(self):
-        """更新序列信息显示（已废弃，保留用于兼容性）"""
-        pass
-
-    def parse_dicom_metadata(self):
-        """解析DICOM元数据并填充患者信息（已废弃，保留用于兼容性）"""
-        pass
-
-    def update_patient_info_ui(self):
-        """更新患者信息界面（已废弃，保留用于兼容性）"""
-        pass
-
-    def on_timeline_slider_changed(self, value):
-        """处理时间轴滑块变化"""
-        browser_node = self.session.get_sequence_browser_node()
-        sequence_node = self.session.get_volume_sequence_node()
-        
-        if browser_node and sequence_node:
-            # 设置当前帧
-            browser_node.SetSelectedItemNumber(value)
-            
-            # 获取并显示时相百分比
-            try:
-                index_value = sequence_node.GetNthIndexValue(value)
-                phase_percent = float(index_value)
-                self.phase_percent_label.setText(f"当前时相: {phase_percent:.1f}%")
-            except:
-                self.phase_percent_label.setText(f"当前时相: 帧 {value}")
-
-            # 获取并显示Series Description
-            series_desc = self.session.get_current_frame_series_description()
-            self.series_description_label.setText(f"序列描述: {series_desc}")
-
-    def mark_phase(self, phase_name):
-        """标记关键时相"""
-        browser_node = self.session.get_sequence_browser_node()
-        sequence_node = self.session.get_volume_sequence_node()
-        
-        if browser_node and sequence_node:
-            frame_index = browser_node.GetSelectedItemNumber()
-            
-            try:
-                index_value = sequence_node.GetNthIndexValue(frame_index)
-                phase_percent = float(index_value)
-            except:
-                phase_percent = 0.0
-            
-            # 获取当前帧的序列描述信息
-            series_description = self.session.get_current_frame_series_description()
-            
-            # 保存到会话
-            self.session.mark_phase(phase_name, frame_index, phase_percent, series_description)
-            
-            # 更新界面显示
-            self.update_phase_labels()
-
-    def update_phase_labels(self):
-        """更新时相标记显示"""
-        end_diastole = self.session.get_marked_phase('end_diastole')
-        end_systole = self.session.get_marked_phase('end_systole')
-        
-        if end_diastole and end_diastole['frame_index'] is not None:
-            phase_text = f"舒张末期: 已标记 @ {end_diastole['phase_percent']:.1f}%"
-            if end_diastole.get('series_description'):
-                phase_text += f"\n序列描述: {end_diastole['series_description']}"
-            self.end_diastole_label.setText(phase_text)
-        else:
-            self.end_diastole_label.setText("舒张末期: 未标记")
-            
-        if end_systole and end_systole['frame_index'] is not None:
-            phase_text = f"收缩末期: 已标记 @ {end_systole['phase_percent']:.1f}%"
-            if end_systole.get('series_description'):
-                phase_text += f"\n序列描述: {end_systole['series_description']}"
-            self.end_systole_label.setText(phase_text)
-        else:
-            self.end_systole_label.setText("收缩末期: 未标记")
 
     def cleanup(self) -> None:
         """清理资源"""
         self.removeObservers()
+        
+        # 清理模块一组件
+        if self.module1_widget:
+            self.module1_widget.cleanup()
 
     def enter(self) -> None:
         """进入模块"""

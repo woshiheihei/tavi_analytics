@@ -41,6 +41,9 @@ class DataLoadingDialog(qt.QDialog):
     - DEFAULT_VALVE_MODELS: 每个品牌对应的默认型号字典
     """
     
+    # 信号定义
+    dataLoaded = qt.Signal()  # 数据加载完成信号
+    
     # 瓣膜品牌和型号的默认值配置
     DEFAULT_VALVE_BRAND = "Medtronic"
     DEFAULT_VALVE_MODELS = {
@@ -348,6 +351,10 @@ class DataLoadingDialog(qt.QDialog):
     def on_confirm(self):
         """确认按钮处理"""
         self.save_patient_data_to_session()
+        
+        # 发出数据加载完成信号
+        self.dataLoaded.emit()
+        
         self.accept()
         
     def save_patient_data_to_session(self):
