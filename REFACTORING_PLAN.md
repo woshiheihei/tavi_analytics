@@ -82,10 +82,10 @@ tavi_analytics/
 - [x] 补充缺失的导入语句 (`datetime` 等)
 
 #### ✅ 任务 1.3：重构会话管理类
-- [ ] 将 `TAVRStudySession` 移动到 `core/session.py`
-- [ ] 清理和优化会话管理逻辑
-- [ ] 确保单例模式的正确实现
-- [ ] 添加详细的文档字符串
+- [x] 将 `TAVRStudySession` 移动到 `core/session.py`
+- [x] 清理和优化会话管理逻辑
+- [x] 确保单例模式的正确实现
+- [x] 添加详细的文档字符串
 
 #### ✅ 任务 1.4：创建工具类
 - [ ] 创建 `utils/dicom_utils.py` - DICOM处理工具

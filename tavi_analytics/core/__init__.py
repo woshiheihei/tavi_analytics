@@ -6,12 +6,12 @@
 """
 
 # 核心组件导入
-# from .session import TAVRStudySession  # 待任务1.3完成
+from .session import TAVRStudySession  # 任务1.3已完成
 from .data_models import PatientData
 from .enums import ImageQuality, FollowUpTimepoint
 
 __all__ = [
-    # "TAVRStudySession",  # 待任务1.3完成
+    "TAVRStudySession",  # 任务1.3已完成
     "PatientData", 
     "ImageQuality",
     "FollowUpTimepoint"
