@@ -97,10 +97,9 @@ tavi_analytics/
 ### 🎯 阶段二：模块一重构 (数据导入与场景准备)
 
 #### ✅ 任务 2.1：重构数据加载对话框
-- [ ] 将 `DataLoadingDialog` 移动到 `module1/data_loading_dialog.py`
+- [x] 将 `DataLoadingDialog` 移动到 `module1/data_loading_dialog.py`
 - [ ] 优化UI构建逻辑，提取通用组件
 - [ ] 改进错误处理和用户提示
-- [ ] 添加进度条和异步处理
 
 #### ✅ 任务 2.2：重构主界面组件
 - [ ] 从 `tavi_analyticsWidget` 中提取模块一相关部分
