@@ -1,0 +1,23 @@
+{
+  "Medtronic": [
+    "Evolut R/PRO", 
+    "Evolut FX", 
+    "CoreValve", 
+    "Evolut PRO+"
+  ],
+  "Edwards Lifesciences": [
+    "SAPIEN 3",
+    "SAPIEN 3 Ultra",
+    "SAPIEN XT"
+  ],
+  "Venus Medtech": [
+    "VenusA-Valve", 
+    "VenusA-Plus"
+  ],
+  "MicroPort": [
+    "VitaFlow"
+  ],
+  "Peijia Medical": [
+    "TaurusOne"
+  ]
+}
