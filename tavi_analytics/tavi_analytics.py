@@ -2,9 +2,7 @@ import logging
 import os
 import json
 import datetime
-from dataclasses import dataclass
 from typing import Optional, Dict, Any
-from enum import Enum
 
 import vtk
 import qt
@@ -22,39 +20,22 @@ from slicer.util import VTKObservationMixin
 
 from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode, vtkMRMLScalarVolumeNode
 
+# 导入重构后的核心模块
+try:
+    # 尝试相对导入（用于包内导入）
+    from .core.data_models import PatientData
+    from .core.enums import ImageQuality, FollowUpTimepoint
+except ImportError:
+    # 回退到绝对导入（用于3D Slicer直接加载）
+    import os
+    import sys
+    current_dir = os.path.dirname(__file__)
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    
+    from core.data_models import PatientData
+    from core.enums import ImageQuality, FollowUpTimepoint
 
-#
-# Data Classes and Enums
-#
-
-class ImageQuality(Enum):
-    EXCELLENT = "优"
-    GOOD = "一般"
-    POOR = "差"
-
-class FollowUpTimepoint(Enum):
-    ONE_MONTH = "1月"
-    THREE_MONTHS = "3月"
-    SIX_MONTHS = "6月"
-    ONE_YEAR = "1年"
-    TWO_YEARS = "2年"
-    OTHER = "其他"
-
-@dataclass
-class PatientData:
-    """患者数据类，对应杭州方案术后CT核心实验室评估表的基本情况部分"""
-    patientID: str = ""
-    patientName: str = ""
-    patientAge: int = 0
-    patientSex: str = ""
-    surgeryDate: Optional[datetime.date] = None
-    ctScanDate: Optional[datetime.date] = None
-    imageQuality: ImageQuality = ImageQuality.GOOD
-    followUpTimepoint: FollowUpTimepoint = FollowUpTimepoint.ONE_MONTH
-    valveBrand: str = ""
-    valveModel: str = ""
-    stsScore: Optional[float] = None
-    euroScoreII: Optional[float] = None
 
 
 class TAVRStudySession:

@@ -71,15 +71,15 @@ tavi_analytics/
 ### 🎯 阶段一：核心基础重构 (基础架构)
 
 #### ✅ 任务 1.1：创建目录结构
-- [ ] 创建所有必要的目录
-- [ ] 创建各目录的 `__init__.py` 文件
-- [ ] 设置基础的导入结构
+- [x] 创建所有必要的目录
+- [x] 创建各目录的 `__init__.py` 文件
+- [x] 设置基础的导入结构
 
 #### ✅ 任务 1.2：提取枚举和数据模型
-- [ ] 将 `ImageQuality`、`FollowUpTimepoint` 移动到 `core/enums.py`
-- [ ] 将 `PatientData` 移动到 `core/data_models.py`
-- [ ] 添加必要的导入和类型注解
-- [ ] 补充缺失的导入语句 (`datetime` 等)
+- [x] 将 `ImageQuality`、`FollowUpTimepoint` 移动到 `core/enums.py`
+- [x] 将 `PatientData` 移动到 `core/data_models.py`
+- [x] 添加必要的导入和类型注解
+- [x] 补充缺失的导入语句 (`datetime` 等)
 
 #### ✅ 任务 1.3：重构会话管理类
 - [ ] 将 `TAVRStudySession` 移动到 `core/session.py`
