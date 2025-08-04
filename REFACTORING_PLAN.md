@@ -88,10 +88,11 @@ tavi_analytics/
 - [x] 添加详细的文档字符串
 
 #### ✅ 任务 1.4：创建工具类
-- [ ] 创建 `utils/dicom_utils.py` - DICOM处理工具
-- [ ] 创建 `utils/config_manager.py` - 配置文件管理
-- [ ] 创建 `utils/qt_utils.py` - Qt通用工具函数
-- [ ] 创建 `utils/logging_utils.py` - 日志配置
+- [x] 创建 `utils/dicom_utils.py` - DICOM处理工具
+- [x] 创建 `utils/config_manager.py` - 配置文件管理
+- [x] 创建 `utils/qt_utils.py` - Qt工具函数
+- [x] 创建 `utils/logging_utils.py` - 日志工具
+- [x] 重构主文件中的工具函数调用
 
 ### 🎯 阶段二：模块一重构 (数据导入与场景准备)
 

@@ -5,13 +5,30 @@
 为所有模块提供基础的工具支持。
 """
 
-# 工具类导入将在重构完成后添加
-# from .dicom_utils import *
-# from .config_manager import ConfigManager
-# from .qt_utils import *
-# from .logging_utils import setup_logging
+# 导入工具类 - 使用try-except确保兼容性
+try:
+    from .dicom_utils import DicomUtils
+except ImportError:
+    from dicom_utils import DicomUtils
+
+try:
+    from .config_manager import ConfigManager
+except ImportError:
+    from config_manager import ConfigManager
+
+try:
+    from .qt_utils import QtUtils
+except ImportError:
+    from qt_utils import QtUtils
+
+try:
+    from .logging_utils import LoggingUtils
+except ImportError:
+    from logging_utils import LoggingUtils
 
 __all__ = [
-    # "ConfigManager",
-    # "setup_logging"
+    "DicomUtils",
+    "ConfigManager", 
+    "QtUtils",
+    "LoggingUtils"
 ]
