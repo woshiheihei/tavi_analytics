@@ -502,12 +502,6 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.setup_data_button.clicked.connect(self.show_data_loading_dialog)
         button_layout.addWidget(self.setup_data_button)
         
-        # 演示数据按钮
-        self.demo_data_button = qt.QPushButton("加载演示数据")
-        self.demo_data_button.setStyleSheet("QPushButton { font-size: 14px; padding: 10px; background-color: #FF9800; color: white; }")
-        self.demo_data_button.clicked.connect(self.load_demo_data)
-        button_layout.addWidget(self.demo_data_button)
-        
         # 心动周期管理面板
         self.create_cardiac_cycle_section()
         
@@ -519,77 +513,6 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # 初始更新状态
         self.update_status_display()
-
-    def load_demo_data(self):
-        """加载演示数据"""
-        try:
-            # 重置会话
-            self.session.reset()
-            
-            # 创建模拟的4D序列数据
-            import SampleData
-            
-            # 加载样例容积数据
-            volume_node = SampleData.downloadSample('MRHead')
-            if not volume_node:
-                qt.QMessageBox.warning(None, "错误", "无法加载样例数据")
-                return
-            
-            # 创建序列节点
-            sequence_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSequenceNode')
-            sequence_node.SetName("Demo_4D_Cardiac_CT")
-            
-            # 创建多个时间点的数据（复制原始数据并稍作变化）
-            for i in range(10):
-                # 创建新的容积节点
-                demo_volume = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLScalarVolumeNode')
-                demo_volume.SetName(f"Demo_Frame_{i}")
-                
-                # 复制数据
-                demo_volume.SetAndObserveImageData(volume_node.GetImageData())
-                demo_volume.SetOrigin(volume_node.GetOrigin())
-                demo_volume.SetSpacing(volume_node.GetSpacing())
-                demo_volume.SetIJKToRASMatrix(volume_node.GetIJKToRASMatrix())
-                
-                # 添加到序列
-                phase_percent = (i * 100.0) / 9  # 0-100%
-                sequence_node.SetDataNodeAtValue(demo_volume, str(phase_percent))
-            
-            sequence_node.SetIndexName("Phase")
-            sequence_node.SetIndexUnit("%")
-            
-            # 创建序列浏览器
-            browser_node = self.logic.get_or_create_sequence_browser(sequence_node)
-            
-            # 保存到会话
-            self.session.volume_sequence_node_id = sequence_node.GetID()
-            self.session.sequence_browser_node_id = browser_node.GetID()
-            
-            # 设置演示患者数据
-            data = self.session.patient_data
-            data.patientID = "DEMO001"
-            data.patientName = "演示患者"
-            data.patientAge = 65
-            data.patientSex = "男"
-            data.surgeryDate = datetime.date.today()
-            data.ctScanDate = datetime.date.today()
-            data.imageQuality = ImageQuality.GOOD
-            data.followUpTimepoint = FollowUpTimepoint.ONE_MONTH
-            data.valveBrand = "Medtronic"
-            data.valveModel = "Evolut R/PRO"
-            
-            # 激活心动周期管理
-            self.activate_cardiac_cycle_management()
-            self.update_status_display()
-            
-            # 清理临时容积节点
-            slicer.mrmlScene.RemoveNode(volume_node)
-            
-            qt.QMessageBox.information(None, "成功", "演示数据加载完成！\n您现在可以测试心动周期管理功能。")
-            
-        except Exception as e:
-            logging.error(f"Failed to load demo data: {e}")
-            qt.QMessageBox.critical(None, "错误", f"加载演示数据失败: {str(e)}")
 
     def show_data_loading_dialog(self):
         """显示数据加载对话框"""
