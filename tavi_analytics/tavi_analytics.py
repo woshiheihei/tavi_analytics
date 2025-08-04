@@ -323,7 +323,22 @@ class TAVRStudySession:
 
 
 class DataLoadingDialog(qt.QDialog):
-    """数据加载和配置对话框"""
+    """数据加载和配置对话框
+    
+    要修改瓣膜品牌和型号的默认值，请修改以下类属性：
+    - DEFAULT_VALVE_BRAND: 默认选择的瓣膜品牌
+    - DEFAULT_VALVE_MODELS: 每个品牌对应的默认型号字典
+    """
+    
+    # 瓣膜品牌和型号的默认值配置
+    DEFAULT_VALVE_BRAND = "Medtronic"
+    DEFAULT_VALVE_MODELS = {
+        "Medtronic": "Evolut R/PRO",
+        "Edwards Lifesciences": "SAPIEN 3",
+        "Venus Medtech": "VenusA-Valve",
+        "MicroPort": "VitaFlow",
+        "Peijia Medical": "TaurusOne"
+    }
     
     def __init__(self, parent=None, session=None, valve_config=None):
         super().__init__(parent)
@@ -429,10 +444,21 @@ class DataLoadingDialog(qt.QDialog):
         self.valve_brand_combo.addItem("")
         self.valve_brand_combo.addItems(list(self.valve_config.keys()))
         
+        # 设置瓣膜品牌预设值
+        if self.valve_config:
+            # 优先选择默认品牌，如果没有则选择第一个
+            default_brand = self.DEFAULT_VALVE_BRAND if self.DEFAULT_VALVE_BRAND in self.valve_config else list(self.valve_config.keys())[0]
+            brand_index = self.valve_brand_combo.findText(default_brand)
+            if brand_index >= 0:
+                self.valve_brand_combo.setCurrentIndex(brand_index)
+        
         self.valve_model_combo = qt.QComboBox()
         
         valve_layout.addWidget(self.valve_brand_combo)
         valve_layout.addWidget(self.valve_model_combo)
+        
+        # 初始化瓣膜型号选项（基于默认品牌）
+        self.initialize_valve_model_combo()
         
         # 可选评分
         self.sts_score_edit = qt.QDoubleSpinBox()
@@ -457,6 +483,22 @@ class DataLoadingDialog(qt.QDialog):
         layout.addRow("EuroScore II:", self.euro_score_edit)
         
         parent_layout.addWidget(group_box)
+        
+    def initialize_valve_model_combo(self):
+        """初始化瓣膜型号下拉菜单，包括设置默认值"""
+        current_brand = self._get_widget_text(self.valve_brand_combo, 'currentText')
+        self.valve_model_combo.clear()
+        
+        if current_brand and current_brand in self.valve_config:
+            self.valve_model_combo.addItem("")
+            models = self.valve_config[current_brand]
+            self.valve_model_combo.addItems(models)
+            
+            # 设置默认型号
+            if current_brand in self.DEFAULT_VALVE_MODELS and self.DEFAULT_VALVE_MODELS[current_brand] in models:
+                model_index = self.valve_model_combo.findText(self.DEFAULT_VALVE_MODELS[current_brand])
+                if model_index >= 0:
+                    self.valve_model_combo.setCurrentIndex(model_index)
         
     def create_button_section(self, parent_layout):
         """创建按钮区域"""
@@ -544,7 +586,15 @@ class DataLoadingDialog(qt.QDialog):
         self.valve_model_combo.clear()
         if brand and brand in self.valve_config:
             self.valve_model_combo.addItem("")
-            self.valve_model_combo.addItems(self.valve_config[brand])
+            models = self.valve_config[brand]
+            self.valve_model_combo.addItems(models)
+            
+            # 设置默认型号
+            if brand in self.DEFAULT_VALVE_MODELS and self.DEFAULT_VALVE_MODELS[brand] in models:
+                model_index = self.valve_model_combo.findText(self.DEFAULT_VALVE_MODELS[brand])
+                if model_index >= 0:
+                    self.valve_model_combo.setCurrentIndex(model_index)
+                    
         self.check_confirm_button_state()
         
     def check_confirm_button_state(self):
