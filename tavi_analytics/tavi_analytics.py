@@ -144,6 +144,20 @@ class DataLoadingDialog(qt.QDialog):
         self.setup_ui()
         self.setup_connections()
         
+    def _get_widget_text(self, widget, method_name='text'):
+        """安全获取Qt部件的文本，兼容属性和方法访问方式"""
+        try:
+            return getattr(widget, method_name)()
+        except TypeError:
+            return getattr(widget, method_name)
+    
+    def _get_widget_value(self, widget, method_name='value'):
+        """安全获取Qt部件的值，兼容属性和方法访问方式"""
+        try:
+            return getattr(widget, method_name)()
+        except TypeError:
+            return getattr(widget, method_name)
+        
     def setup_ui(self):
         """设置对话框界面"""
         layout = qt.QVBoxLayout(self)
@@ -342,9 +356,15 @@ class DataLoadingDialog(qt.QDialog):
     def check_confirm_button_state(self):
         """检查确认按钮状态"""
         has_sequence = self.session.volume_sequence_node_id is not None
-        has_patient_id = self.patient_id_edit.text().strip() != ""
-        has_valve_brand = self.valve_brand_combo.currentText() != ""
-        has_valve_model = self.valve_model_combo.currentText() != ""
+        # Use utility method for safe text access
+        patient_text = self._get_widget_text(self.patient_id_edit, 'text')
+        has_patient_id = patient_text.strip() != ""
+        
+        valve_brand_text = self._get_widget_text(self.valve_brand_combo, 'currentText')
+        has_valve_brand = valve_brand_text != ""
+        
+        valve_model_text = self._get_widget_text(self.valve_model_combo, 'currentText')
+        has_valve_model = valve_model_text != ""
         
         enabled = has_sequence and has_patient_id and has_valve_brand and has_valve_model
         self.confirm_button.setEnabled(enabled)
@@ -372,10 +392,11 @@ class DataLoadingDialog(qt.QDialog):
     def save_patient_data_to_session(self):
         """保存患者信息到会话"""
         data = self.session.patient_data
-        data.patientID = self.patient_id_edit.text()
-        data.patientName = self.patient_name_edit.text()
-        data.patientAge = self.patient_age_edit.value()
-        data.patientSex = self.patient_sex_combo.currentText()
+        # Use utility method for safe text access
+        data.patientID = self._get_widget_text(self.patient_id_edit, 'text')
+        data.patientName = self._get_widget_text(self.patient_name_edit, 'text')
+        data.patientAge = self._get_widget_value(self.patient_age_edit, 'value')
+        data.patientSex = self._get_widget_text(self.patient_sex_combo, 'currentText')
         
         # 修复QDate转换 - 兼容属性和方法两种访问方式
         surgery_qdate = self.surgery_date_edit.date() if callable(self.surgery_date_edit.date) else self.surgery_date_edit.date
@@ -384,12 +405,14 @@ class DataLoadingDialog(qt.QDialog):
         ct_scan_qdate = self.ct_scan_date_edit.date() if callable(self.ct_scan_date_edit.date) else self.ct_scan_date_edit.date
         data.ctScanDate = datetime.date(ct_scan_qdate.year(), ct_scan_qdate.month(), ct_scan_qdate.day())
         
-        data.imageQuality = ImageQuality(self.image_quality_combo.currentText())
-        data.followUpTimepoint = FollowUpTimepoint(self.followup_timepoint_combo.currentText())
-        data.valveBrand = self.valve_brand_combo.currentText()
-        data.valveModel = self.valve_model_combo.currentText()
-        data.stsScore = self.sts_score_edit.value() if self.sts_score_edit.value() > 0 else None
-        data.euroScoreII = self.euro_score_edit.value() if self.euro_score_edit.value() > 0 else None
+        data.imageQuality = ImageQuality(self._get_widget_text(self.image_quality_combo, 'currentText'))
+        data.followUpTimepoint = FollowUpTimepoint(self._get_widget_text(self.followup_timepoint_combo, 'currentText'))
+        data.valveBrand = self._get_widget_text(self.valve_brand_combo, 'currentText')
+        data.valveModel = self._get_widget_text(self.valve_model_combo, 'currentText')
+        sts_value = self._get_widget_value(self.sts_score_edit, 'value')
+        data.stsScore = sts_value if sts_value > 0 else None
+        euro_value = self._get_widget_value(self.euro_score_edit, 'value')
+        data.euroScoreII = euro_value if euro_value > 0 else None
 
 
 #
