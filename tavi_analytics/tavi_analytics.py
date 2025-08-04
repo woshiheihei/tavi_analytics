@@ -299,11 +299,12 @@ class TAVRStudySession:
             
         return None
     
-    def mark_phase(self, phase_name: str, frame_index: int, phase_percent: float):
+    def mark_phase(self, phase_name: str, frame_index: int, phase_percent: float, series_description: str = ""):
         """标记关键时相"""
         if phase_name in self.marked_phases:
             self.marked_phases[phase_name]['frame_index'] = frame_index
             self.marked_phases[phase_name]['phase_percent'] = phase_percent
+            self.marked_phases[phase_name]['series_description'] = series_description
     
     def is_ready(self) -> bool:
         """检查模块一是否准备完成"""
@@ -317,8 +318,8 @@ class TAVRStudySession:
         self.volume_sequence_node_id = None
         self.sequence_browser_node_id = None
         self.marked_phases = {
-            'end_diastole': {'frame_index': None, 'phase_percent': None},
-            'end_systole': {'frame_index': None, 'phase_percent': None}
+            'end_diastole': {'frame_index': None, 'phase_percent': None, 'series_description': None},
+            'end_systole': {'frame_index': None, 'phase_percent': None, 'series_description': None}
         }
 
 
@@ -843,9 +844,11 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         marked_phases_layout = qt.QVBoxLayout()
         self.end_diastole_label = qt.QLabel("舒张末期: 未标记")
         self.end_diastole_label.setStyleSheet("QLabel { padding: 5px; background-color: #fff3e0; border: 1px solid #ff9800; }")
+        self.end_diastole_label.setWordWrap(True)  # 允许文本换行
         
         self.end_systole_label = qt.QLabel("收缩末期: 未标记")
         self.end_systole_label.setStyleSheet("QLabel { padding: 5px; background-color: #f3e5f5; border: 1px solid #9c27b0; }")
+        self.end_systole_label.setWordWrap(True)  # 允许文本换行
         
         marked_phases_layout.addWidget(self.end_diastole_label)
         marked_phases_layout.addWidget(self.end_systole_label)
@@ -987,8 +990,11 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except:
                 phase_percent = 0.0
             
+            # 获取当前帧的序列描述信息
+            series_description = self.session.get_current_frame_series_description()
+            
             # 保存到会话
-            self.session.mark_phase(phase_name, frame_index, phase_percent)
+            self.session.mark_phase(phase_name, frame_index, phase_percent, series_description)
             
             # 更新界面显示
             self.update_phase_labels()
@@ -999,12 +1005,18 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         end_systole = self.session.get_marked_phase('end_systole')
         
         if end_diastole and end_diastole['frame_index'] is not None:
-            self.end_diastole_label.setText(f"舒张末期: 已标记 @ {end_diastole['phase_percent']:.1f}%")
+            phase_text = f"舒张末期: 已标记 @ {end_diastole['phase_percent']:.1f}%"
+            if end_diastole.get('series_description'):
+                phase_text += f"\n序列描述: {end_diastole['series_description']}"
+            self.end_diastole_label.setText(phase_text)
         else:
             self.end_diastole_label.setText("舒张末期: 未标记")
             
         if end_systole and end_systole['frame_index'] is not None:
-            self.end_systole_label.setText(f"收缩末期: 已标记 @ {end_systole['phase_percent']:.1f}%")
+            phase_text = f"收缩末期: 已标记 @ {end_systole['phase_percent']:.1f}%"
+            if end_systole.get('series_description'):
+                phase_text += f"\n序列描述: {end_systole['series_description']}"
+            self.end_systole_label.setText(phase_text)
         else:
             self.end_systole_label.setText("收缩末期: 未标记")
 
