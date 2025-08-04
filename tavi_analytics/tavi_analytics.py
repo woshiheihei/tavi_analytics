@@ -105,6 +105,174 @@ class TAVRStudySession:
         """获取标记的时相信息"""
         return self.marked_phases.get(phase_name)
     
+    def get_current_frame_series_description(self) -> str:
+        """获取当前帧的Series Description"""
+        sequence_node = self.get_volume_sequence_node()
+        browser_node = self.get_sequence_browser_node()
+        
+        if not sequence_node or not browser_node:
+            return "未知序列"
+        
+        try:
+            # 获取当前选中的帧索引
+            current_frame_index = browser_node.GetSelectedItemNumber()
+            
+            # 获取当前帧对应的数据节点
+            current_data_node = sequence_node.GetNthDataNode(current_frame_index)
+            
+            if current_data_node:
+                # 新策略: 首先尝试通过DICOM tag (0008,103e) 直接从文件读取
+                if hasattr(self, '_read_series_description_from_file'):
+                    series_desc = self._read_series_description_from_file(current_data_node)
+                    if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                        return series_desc
+                        
+                # 策略1: 尝试从节点属性中获取Series Description
+                series_desc = self._get_dicom_series_description_from_node(current_data_node)
+                if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                    return series_desc
+                
+                # 策略2: 尝试从DICOM数据库中获取
+                series_desc = self._get_dicom_series_description_from_database(current_data_node)
+                if series_desc and series_desc not in ["Volume", "Volume_1", "Volume_2"]:
+                    return series_desc
+                
+                # 策略3: 尝试从序列节点的索引值获取（如果有时间信息）
+                series_desc = self._get_series_description_from_sequence_index(sequence_node, current_frame_index)
+                if series_desc:
+                    return series_desc
+                
+                # 策略4: 从存储节点的文件路径获取信息
+                series_desc = self._get_series_description_from_storage_node(current_data_node)
+                if series_desc:
+                    return series_desc
+                
+                # 如果都没有找到，返回帧信息
+                time_value = sequence_node.GetNthIndexValue(current_frame_index)
+                if time_value:
+                    return f"Phase {time_value}% (帧 {current_frame_index + 1})"
+                else:
+                    return f"帧 {current_frame_index + 1}/{sequence_node.GetNumberOfDataNodes()}"
+            
+            return f"帧 {current_frame_index + 1}"
+            
+        except Exception as e:
+            print(f"获取Series Description时出错: {e}")
+            return "未知序列"
+    
+    def _get_dicom_series_description_from_node(self, node) -> Optional[str]:
+        """从节点属性获取DICOM Series Description"""
+        if not hasattr(node, 'GetAttribute'):
+            return None
+            
+        # 尝试常见的DICOM属性名
+        dicom_attributes = [
+            'DICOM.0008,103E',  # Series Description的DICOM标签（优先）
+            'DICOM.0008,103e',  # 小写e版本
+            'DICOM.SeriesDescription',
+            'SeriesDescription', 
+            'vtkMRMLSubjectHierarchyConstants.GetDICOMSeriesDescriptionAttributeName()',
+        ]
+        
+        for attr in dicom_attributes:
+            value = node.GetAttribute(attr)
+            if value and value.strip():
+                logging.debug(f"Found Series Description in node attribute {attr}: {value}")
+                return value.strip()
+        
+        return None
+    
+    def _get_dicom_series_description_from_database(self, node) -> Optional[str]:
+        """从DICOM数据库获取Series Description"""
+        try:
+            import slicer
+            db = slicer.dicomDatabase
+            if not db or not db.isOpen:
+                return None
+            
+            # 策略1: 直接通过Series UID获取（这是最可靠的方法）
+            series_uid = node.GetAttribute('DICOM.SeriesInstanceUID')
+            if not series_uid:
+                # 尝试其他可能的属性名
+                series_uid = node.GetAttribute('DICOM.0020,000E')
+            
+            if series_uid:
+                try:
+                    series_desc = db.seriesDescription(series_uid)
+                    if series_desc and series_desc.strip():
+                        return series_desc.strip()
+                except Exception:
+                    pass
+            
+            # 策略2: 如果有实例UID，通过遍历数据库查找匹配的系列
+            instance_uids = node.GetAttribute('DICOM.instanceUIDs')
+            if instance_uids:
+                first_instance_uid = instance_uids.split()[0] if instance_uids else None
+                if first_instance_uid:
+                    try:
+                        # 遍历数据库查找包含此实例的系列
+                        patients = db.patients()
+                        for patient in patients:
+                            studies = db.studiesForPatient(patient)
+                            for study in studies:
+                                series_list = db.seriesForStudy(study)
+                                for series_id in series_list:
+                                    try:
+                                        instances = db.instancesForSeries(series_id)
+                                        if first_instance_uid in instances:
+                                            series_desc = db.seriesDescription(series_id)
+                                            if series_desc and series_desc.strip():
+                                                return series_desc.strip()
+                                    except Exception:
+                                        continue
+                    except Exception:
+                        pass
+            
+        except Exception as e:
+            print(f"从DICOM数据库获取Series Description时出错: {e}")
+            
+        return None
+    
+    def _get_series_description_from_sequence_index(self, sequence_node, frame_index) -> Optional[str]:
+        """从序列索引值构建描述"""
+        try:
+            index_name = sequence_node.GetIndexName()
+            index_unit = sequence_node.GetIndexUnit()
+            index_value = sequence_node.GetNthIndexValue(frame_index)
+            
+            if index_name and index_value:
+                if index_unit:
+                    return f"{index_name}: {index_value}{index_unit}"
+                else:
+                    return f"{index_name}: {index_value}"
+                    
+        except Exception:
+            pass
+            
+        return None
+    
+    def _get_series_description_from_storage_node(self, node) -> Optional[str]:
+        """从存储节点文件路径提取系列信息"""
+        try:
+            if hasattr(node, 'GetStorageNode'):
+                storage_node = node.GetStorageNode()
+                if storage_node and hasattr(storage_node, 'GetFileName'):
+                    file_path = storage_node.GetFileName()
+                    if file_path:
+                        import os
+                        # 从文件名提取可能的系列信息
+                        filename = os.path.basename(file_path)
+                        # 移除常见的文件扩展名
+                        name_without_ext = os.path.splitext(filename)[0]
+                        # 如果文件名包含有意义的信息，返回它
+                        if len(name_without_ext) > 5 and not name_without_ext.startswith("IM"):
+                            return name_without_ext
+                            
+        except Exception:
+            pass
+            
+        return None
+    
     def mark_phase(self, phase_name: str, frame_index: int, phase_percent: float):
         """标记关键时相"""
         if phase_name in self.marked_phases:
@@ -562,6 +730,13 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.phase_percent_label.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 10px; }")
         cycle_layout.addWidget(self.phase_percent_label)
         
+        # Series Description 显示
+        self.series_description_label = qt.QLabel("序列描述: 未加载")
+        self.series_description_label.setAlignment(qt.Qt.AlignCenter)
+        self.series_description_label.setStyleSheet("QLabel { font-size: 14px; margin: 5px; padding: 8px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; }")
+        self.series_description_label.setWordWrap(True)  # 允许文本换行
+        cycle_layout.addWidget(self.series_description_label)
+        
         # 心动周期时间轴滑块
         self.timeline_slider = qt.QSlider(qt.Qt.Horizontal)
         self.timeline_slider.setEnabled(False)
@@ -683,6 +858,10 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.phase_percent_label.setText(f"当前时相: {phase_percent:.1f}%")
             except:
                 self.phase_percent_label.setText(f"当前时相: 帧 {value}")
+
+            # 获取并显示Series Description
+            series_desc = self.session.get_current_frame_series_description()
+            self.series_description_label.setText(f"序列描述: {series_desc}")
 
     def mark_phase(self, phase_name):
         """标记关键时相"""
@@ -918,7 +1097,189 @@ class tavi_analyticsLogic(ScriptedLoadableModuleLogic):
         proxy_node.SetName(f"Proxy_{sequence_node.GetName()}")
         browser_node.SetAndObserveProxyNode(proxy_node, sequence_node)
         
+        # 尝试保存DICOM元数据到序列节点和代理节点
+        self.preserve_dicom_metadata(sequence_node)
+        
         return browser_node
+    
+    def preserve_dicom_metadata(self, sequence_node):
+        """保存DICOM元数据到序列节点中的各个数据节点"""
+        try:
+            num_data_nodes = sequence_node.GetNumberOfDataNodes()
+            logging.info(f"正在为 {num_data_nodes} 个数据节点保存DICOM元数据")
+            
+            for i in range(num_data_nodes):
+                data_node = sequence_node.GetNthDataNode(i)
+                if data_node:
+                    # 尝试从原始DICOM源获取Series Description
+                    series_desc = self._extract_series_description_from_dicom_sources(data_node)
+                    
+                    if series_desc:
+                        # 保存到节点属性
+                        data_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                        data_node.SetAttribute('SeriesDescription', series_desc)
+                        
+                        # 如果是第一个节点，也设置到序列节点
+                        if i == 0:
+                            sequence_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                            sequence_node.SetAttribute('SeriesDescription', series_desc)
+                            
+                        logging.info(f"为第 {i+1} 帧保存了Series Description: {series_desc}")
+                    else:
+                        # 如果无法获取Series Description，尝试直接从DICOM文件读取
+                        series_desc = self._read_series_description_from_file(data_node)
+                        if series_desc:
+                            data_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                            data_node.SetAttribute('SeriesDescription', series_desc)
+                            if i == 0:
+                                sequence_node.SetAttribute('DICOM.SeriesDescription', series_desc)
+                                sequence_node.SetAttribute('SeriesDescription', series_desc)
+                            logging.info(f"从文件为第 {i+1} 帧读取了Series Description: {series_desc}")
+                    
+                    # 也尝试保存其他重要的DICOM属性
+                    self._preserve_other_dicom_attributes(data_node)
+                    
+        except Exception as e:
+            logging.warning(f"Failed to preserve DICOM metadata: {e}")
+    
+    def _read_series_description_from_file(self, data_node):
+        """直接从DICOM文件读取Series Description"""
+        try:
+            if hasattr(data_node, 'GetStorageNode'):
+                storage_node = data_node.GetStorageNode()
+                if storage_node and hasattr(storage_node, 'GetFileName'):
+                    file_path = storage_node.GetFileName()
+                    if file_path:
+                        try:
+                            import pydicom
+                            dcm = pydicom.dcmread(file_path, stop_before_pixels=True)
+                            # 直接通过标签 (0008,103e) 访问 SeriesDescription
+                            if (0x0008, 0x103e) in dcm:
+                                series_desc = str(dcm[0x0008, 0x103e].value).strip()
+                                if series_desc:
+                                    logging.info(f"Found Series Description from tag (0008,103e): {series_desc}")
+                                    return series_desc
+                            # 备选：通过属性名称访问
+                            elif hasattr(dcm, 'SeriesDescription'):
+                                series_desc = str(dcm.SeriesDescription).strip()
+                                if series_desc:
+                                    logging.info(f"Found Series Description from attribute: {series_desc}")
+                                    return series_desc
+                        except ImportError:
+                            logging.debug("pydicom not available for reading DICOM file")
+                        except Exception as e:
+                            logging.debug(f"Error reading DICOM file {file_path}: {e}")
+        except Exception as e:
+            logging.debug(f"Error in _read_series_description_from_file: {e}")
+        return None
+    
+    def _extract_series_description_from_dicom_sources(self, data_node):
+        """从各种DICOM源提取Series Description"""
+        # 策略1: 检查是否已经有Series Description属性
+        existing_desc = data_node.GetAttribute('DICOM.SeriesDescription')
+        if existing_desc and existing_desc.strip():
+            return existing_desc.strip()
+        
+        # 策略2: 直接从DICOM文件读取（最可靠的方法）
+        series_desc = self._read_series_description_from_file(data_node)
+        if series_desc:
+            return series_desc
+        
+        # 策略3: 从Subject Hierarchy获取
+        try:
+            import slicer
+            shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
+            if shNode:
+                item_id = shNode.GetItemByDataNode(data_node)
+                if item_id:
+                    # 检查多种可能的属性名
+                    series_desc_attrs = [
+                        'DICOM.SeriesDescription',
+                        'SeriesDescription',
+                        'DICOM.0008,103E',
+                        'DICOM.0008,103e'
+                    ]
+                    for attr in series_desc_attrs:
+                        series_desc = shNode.GetItemAttribute(item_id, attr)
+                        if series_desc and series_desc.strip():
+                            return series_desc.strip()
+        except Exception:
+            pass
+        
+        # 策略4: 从DICOM数据库查询（如果可用的话）
+        try:
+            import slicer
+            db = slicer.dicomDatabase
+            if db and db.isOpen:
+                # 直接尝试Series UID（如果数据库支持seriesDescription方法）
+                series_uid = data_node.GetAttribute('DICOM.SeriesInstanceUID')
+                if series_uid and hasattr(db, 'seriesDescription'):
+                    try:
+                        series_desc = db.seriesDescription(series_uid)
+                        if series_desc and series_desc.strip():
+                            return series_desc.strip()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        
+        return None
+    
+    def _preserve_other_dicom_attributes(self, data_node):
+        """保存其他重要的DICOM属性"""
+        try:
+            # 保存常用的DICOM标签
+            important_tags = [
+                'DICOM.PatientID',
+                'DICOM.PatientName', 
+                'DICOM.StudyDate',
+                'DICOM.SeriesDate',
+                'DICOM.AcquisitionTime',
+                'DICOM.SeriesTime',
+                'DICOM.StudyDescription',
+                'DICOM.SeriesNumber',
+                'DICOM.SliceThickness',
+                'DICOM.SpacingBetweenSlices'
+            ]
+            
+            # 如果节点有存储节点，尝试从DICOM文件读取这些属性
+            if hasattr(data_node, 'GetStorageNode'):
+                storage_node = data_node.GetStorageNode()
+                if storage_node and hasattr(storage_node, 'GetFileName'):
+                    file_path = storage_node.GetFileName()
+                    if file_path:
+                        try:
+                            import pydicom
+                            dcm = pydicom.dcmread(file_path, stop_before_pixels=True)
+                            
+                            # 映射pydicom属性名到DICOM标签
+                            tag_mapping = {
+                                'DICOM.PatientID': 'PatientID',
+                                'DICOM.PatientName': 'PatientName',
+                                'DICOM.StudyDate': 'StudyDate',
+                                'DICOM.SeriesDate': 'SeriesDate',
+                                'DICOM.AcquisitionTime': 'AcquisitionTime',
+                                'DICOM.SeriesTime': 'SeriesTime',
+                                'DICOM.StudyDescription': 'StudyDescription',
+                                'DICOM.SeriesNumber': 'SeriesNumber',
+                                'DICOM.SliceThickness': 'SliceThickness',
+                                'DICOM.SpacingBetweenSlices': 'SpacingBetweenSlices'
+                            }
+                            
+                            for dicom_tag, pydicom_attr in tag_mapping.items():
+                                if hasattr(dcm, pydicom_attr):
+                                    value = str(getattr(dcm, pydicom_attr))
+                                    if value and value.strip():
+                                        data_node.SetAttribute(dicom_tag, value.strip())
+                                        
+                        except ImportError:
+                            # pydicom不可用
+                            pass
+                        except Exception as e:
+                            logging.debug(f"Failed to read DICOM attributes from {file_path}: {e}")
+                            
+        except Exception as e:
+            logging.warning(f"Failed to preserve other DICOM attributes: {e}")
 
     def validate_sequence_node(self, node) -> bool:
         """验证节点是否为有效的4D序列"""
