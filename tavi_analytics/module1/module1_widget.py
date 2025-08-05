@@ -28,6 +28,7 @@ try:
     from ..utils.config_manager import ConfigManager
     from ..utils.qt_utils import QtUtils
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ..ui.styles import ComponentStyleFactory, StyleManager
 except ImportError:
     import sys
     import os
@@ -38,6 +39,7 @@ except ImportError:
     from core.session import TAVRStudySession
     from core.data_models import PatientData
     from core.enums import ImageQuality, FollowUpTimepoint
+    from ui.styles import ComponentStyleFactory, StyleManager
     # 使用当前目录导入
     current_module_dir = os.path.dirname(__file__)
     if current_module_dir not in sys.path:
@@ -124,18 +126,22 @@ class Module1Widget(qt.QWidget):
         
         # 说明文本
         instruction_label = qt.QLabel(
-            "请点击下方按钮导入4D心脏CT数据并配置患者信息。\n"
+            "请点击下方按钮导入4D心脏CT数据并配置患者信息。"
             "支持从DICOM浏览器加载或从现有场景数据创建序列。"
         )
         instruction_label.setWordWrap(True)
-        instruction_label.setStyleSheet(
-            "QLabel { padding: 8px; background-color: #f5f5f5; border-radius: 4px; }"
-        )
+        # 使用新的shadcn/ui样式系统
+        styles = ComponentStyleFactory.get_module1_styles()
+        instruction_label.setStyleSheet(styles["instruction_label"])
         import_layout.addWidget(instruction_label)
         
-        # 数据导入按钮
-        self.load_data_button = LayoutManager.create_button_with_style("数据导入与配置", "success")
-        self.load_data_button.setMinimumHeight(40)
+        # 数据导入按钮 - 使用统一的按钮创建方法
+        self.load_data_button = LayoutManager.create_button_with_style(
+            text="数据导入与配置", 
+            button_type="primary", 
+            size="default", 
+            min_height=40
+        )
         import_layout.addWidget(self.load_data_button)
         
         parent_layout.addWidget(import_group, 0)  # 固定大小
@@ -148,20 +154,34 @@ class Module1Widget(qt.QWidget):
         # 按钮布局
         button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
         
-        # 刷新状态按钮
-        self.refresh_button = LayoutManager.create_button_with_style("刷新状态", "primary")
+        # 刷新状态按钮 - 使用统一的按钮创建方法
+        self.refresh_button = LayoutManager.create_button_with_style(
+            text="刷新状态", 
+            button_type="secondary", 
+            size="default", 
+            min_height=35
+        )
         button_layout.addWidget(self.refresh_button)
         
-        # 重置数据按钮
-        self.reset_button = LayoutManager.create_button_with_style("重置数据", "warning")
+        # 重置数据按钮 - 使用统一的按钮创建方法
+        self.reset_button = LayoutManager.create_button_with_style(
+            text="重置数据", 
+            button_type="destructive", 
+            size="default", 
+            min_height=35
+        )
         button_layout.addWidget(self.reset_button)
         
         actions_layout.addLayout(button_layout)
         
-        # 进入下一模块按钮 - 单独一行
-        self.next_module_button = LayoutManager.create_button_with_style("进入模块二：瓣膜分割", "primary")
+        # 进入下一模块按钮 - 单独一行，使用统一的按钮创建方法
+        self.next_module_button = LayoutManager.create_button_with_style(
+            text="进入模块二：瓣膜分割", 
+            button_type="primary", 
+            size="default", 
+            min_height=40
+        )
         self.next_module_button.setEnabled(False)
-        self.next_module_button.setMinimumHeight(40)
         actions_layout.addWidget(self.next_module_button)
         
         parent_layout.addWidget(actions_group, 0)  # 固定大小
@@ -305,6 +325,17 @@ class Module1Widget(qt.QWidget):
         except Exception as e:
             logging.error(f"检查下一模块条件时发生错误: {str(e)}")
             
+    def _update_button_style(self, button: qt.QPushButton, button_type: str, size: str = "default"):
+        """更新按钮样式的辅助方法
+        
+        Args:
+            button: 要更新样式的按钮
+            button_type: 按钮类型
+            size: 按钮大小
+        """
+        # 使用LayoutManager提供的统一样式更新接口
+        LayoutManager.update_button_style(button, button_type, size)
+    
     def _update_interface_state(self):
         """更新界面状态"""
         try:
@@ -317,23 +348,12 @@ class Module1Widget(qt.QWidget):
             
             if ready_for_next:
                 self.next_module_button.setText("进入模块二：瓣膜分割")
-                self.next_module_button.setStyleSheet(
-                    "QPushButton { "
-                    "font-size: 13px; font-weight: bold; "
-                    "padding: 10px; background-color: #9c27b0; color: white; "
-                    "border-radius: 6px; "
-                    "}"
-                    "QPushButton:hover { background-color: #7b1fa2; }"
-                )
+                # 使用统一的样式更新方法
+                self._update_button_style(self.next_module_button, "primary", "default")
             else:
                 self.next_module_button.setText("等待数据配置完成...")
-                self.next_module_button.setStyleSheet(
-                    "QPushButton { "
-                    "font-size: 13px; font-weight: bold; "
-                    "padding: 10px; background-color: #cccccc; color: #666666; "
-                    "border-radius: 6px; "
-                    "}"
-                )
+                # 使用统一的样式更新方法，secondary样式表示未就绪
+                self._update_button_style(self.next_module_button, "secondary", "default")
                 
         except Exception as e:
             logging.error(f"更新界面状态时发生错误: {str(e)}")

@@ -79,9 +79,9 @@ class MainUI(qt.QWidget):
         status_layout = qt.QHBoxLayout()
         
         # 简洁的应用标识
-        app_label = qt.QLabel("TAVR Analytics")
-        app_label.setStyleSheet(styles["app_label"])
-        status_layout.addWidget(app_label)
+        # app_label = qt.QLabel("TAVR Analytics")
+        # app_label.setStyleSheet(styles["app_title"])
+        # status_layout.addWidget(app_label)
         
         # 添加弹性空间
         status_layout.addStretch()
@@ -106,11 +106,17 @@ class MainUI(qt.QWidget):
         for module_name in available_modules:
             module_info = self._module_manager.get_module_info(module_name)
             if module_info:
-                button = LayoutManager.create_button_with_style(module_info.display_name, "primary")
+                button = qt.QPushButton(module_info.display_name)
                 button.setCheckable(True)
                 button.setMinimumWidth(120)
                 button.setMinimumHeight(40)
                 button.setProperty("module_name", module_name)
+                
+                # 应用新的shadcn/ui样式
+                button.setStyleSheet(styles["module_button"])
+                
+                # 连接点击事件
+                button.clicked.connect(self._on_module_button_clicked)
                 
                 self._module_buttons.addButton(button)
                 button_layout.addWidget(button)
@@ -533,26 +539,8 @@ TAVR Analytics 帮助
                         button.setProperty("module_name", module_name)
                         
                         # 设置样式和连接
-                        button.setStyleSheet("""
-                            QPushButton {
-                                background-color: #ecf0f1;
-                                border: 2px solid #bdc3c7;
-                                border-radius: 5px;
-                                padding: 8px;
-                                font-weight: bold;
-                            }
-                            QPushButton:checked {
-                                background-color: #3498db;
-                                color: white;
-                                border-color: #2980b9;
-                            }
-                            QPushButton:hover {
-                                background-color: #d5dbdb;
-                            }
-                            QPushButton:checked:hover {
-                                background-color: #5dade2;
-                            }
-                        """)
+                        styles = ComponentStyleFactory.get_main_ui_styles()
+                        button.setStyleSheet(styles["module_button"])
                         
                         button.clicked.connect(self._on_module_button_clicked)
                         self._module_buttons.addButton(button)

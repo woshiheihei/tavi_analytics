@@ -2,7 +2,6 @@
 心动周期管理组件
 
 该模块提供心动周期时间轴管理和时相标记功能，包括：
-- 时相百分比显示
 - 序列描述显示  
 - 时间轴滑块控制
 - 关键时相标记（舒张末期、收缩末期）
@@ -74,17 +73,10 @@ class CardiacCycleWidget(qt.QGroupBox):
         # 获取样式集合
         styles = ComponentStyleFactory.get_cardiac_cycle_styles()
         
-        # === 第一行：当前时相信息 ===
+        # === 第一行：当前信息 ===
         info_layout = LayoutManager.create_horizontal_layout(LayoutType.INFO_DISPLAY)
         
-        # 当前时相百分比（左侧，重点显示）
-        self.phase_percent_label = qt.QLabel("当前时相: 0.0%")
-        self.phase_percent_label.setAlignment(qt.Qt.AlignCenter)
-        self.phase_percent_label.setStyleSheet(styles["phase_percent_label"])
-        self.phase_percent_label.setMinimumWidth(140)
-        info_layout.addWidget(self.phase_percent_label, 0)
-        
-        # 帧信息（中间）
+        # 帧信息（左侧）
         self.frame_info_label = qt.QLabel("帧: 0/0")
         self.frame_info_label.setAlignment(qt.Qt.AlignCenter)
         self.frame_info_label.setStyleSheet(styles["frame_info_label"])
@@ -155,7 +147,7 @@ class CardiacCycleWidget(qt.QGroupBox):
         separator = qt.QFrame()
         separator.setFrameShape(qt.QFrame.VLine)
         separator.setFrameShadow(qt.QFrame.Sunken)
-        separator.setStyleSheet("color: #ddd;")
+        separator.setStyleSheet(styles["section_separator"])
         phase_layout.addWidget(separator, 0)
         
         # 右侧：收缩末期
@@ -179,7 +171,7 @@ class CardiacCycleWidget(qt.QGroupBox):
         
         parent_layout.addLayout(phase_layout, 0)
         
-        # === 第四行：滑块范围信息 ===
+        # === 第三行：滑块范围信息 ===
         self.slider_range_label = qt.QLabel("范围: 0 - 0 (0 帧)")
         self.slider_range_label.setAlignment(qt.Qt.AlignCenter)
         self.slider_range_label.setStyleSheet(styles["range_label"])
@@ -292,7 +284,6 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.setVisible(False)
         
         # 重置显示
-        self.phase_percent_label.setText("当前时相: 0.0%")
         self.frame_info_label.setText("帧: 0/0")
         self.series_description_label.setText("序列: 未加载")
         self.slider_range_label.setText("范围: 0 - 0 (0 帧)")
@@ -316,14 +307,6 @@ class CardiacCycleWidget(qt.QGroupBox):
             # 显示帧信息
             total_frames = sequence_node.GetNumberOfDataNodes()
             self.frame_info_label.setText(f"帧: {value + 1}/{total_frames}")
-            
-            # 获取并显示时相百分比
-            try:
-                index_value = sequence_node.GetNthIndexValue(value)
-                phase_percent = float(index_value)
-                self.phase_percent_label.setText(f"当前时相: {phase_percent:.1f}%")
-            except (ValueError, TypeError):
-                self.phase_percent_label.setText(f"当前时相: 帧 {value + 1}")
                 
             # 获取并显示Series Description
             series_desc = self.session.get_current_frame_series_description()

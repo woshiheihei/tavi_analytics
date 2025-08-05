@@ -154,7 +154,9 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # 添加错误信息
         error_label = qt.QLabel("界面加载失败，使用默认模式")
-        error_label.setStyleSheet("color: red; font-weight: bold;")
+        # 使用统一的样式系统
+        from ui.styles import StyleManager
+        error_label.setStyleSheet(StyleManager.get_status_indicator_style("error"))
         container_layout.addWidget(error_label)
         
         self.layout.addWidget(container_widget)

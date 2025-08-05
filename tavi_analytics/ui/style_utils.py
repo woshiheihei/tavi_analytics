@@ -228,11 +228,20 @@ class StyleUtils:
         """
         return {
             "primary": ThemeColor.PRIMARY.value,
-            "background_light": ThemeColor.BACKGROUND_LIGHT.value,
-            "text_primary": ThemeColor.TEXT_PRIMARY.value,
+            "primary_foreground": ThemeColor.PRIMARY_FOREGROUND.value,
+            "secondary": ThemeColor.SECONDARY.value,
+            "secondary_foreground": ThemeColor.SECONDARY_FOREGROUND.value,
+            "background": ThemeColor.BACKGROUND.value,
+            "foreground": ThemeColor.FOREGROUND.value,
+            "muted": ThemeColor.MUTED.value,
+            "muted_foreground": ThemeColor.MUTED_FOREGROUND.value,
+            "border": ThemeColor.BORDER.value,
+            "input": ThemeColor.INPUT.value,
+            "ring": ThemeColor.RING.value,
             "success": ThemeColor.SUCCESS.value,
             "warning": ThemeColor.WARNING.value,
-            "error": ThemeColor.ERROR.value
+            "error": ThemeColor.ERROR.value,
+            "info": ThemeColor.INFO.value
         }
 
 

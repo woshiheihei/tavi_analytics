@@ -80,29 +80,35 @@ class StatusDisplayWidget(qt.QGroupBox):
         # 使用标准化布局管理器为详细信息组
         details_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, self.details_group)
         
-        # 患者信息显示
+        # 患者信息显示 - 使用更紧凑的样式
         self.patient_info_label = qt.QLabel("患者信息: 未加载")
         self.patient_info_label.setWordWrap(True)
         self.patient_info_label.setStyleSheet(
-            "QLabel { padding: 8px; background-color: #e3f2fd; border: 1px solid #2196f3; }"
+            "QLabel { "
+            "padding: 6px 8px; "
+            "background-color: #f8fafc; "
+            "border: 1px solid #e2e8f0; "
+            "border-radius: 4px; "
+            "font-size: 12px; "
+            "line-height: 1.3; "
+            "}"
         )
         details_layout.addWidget(self.patient_info_label)
         
-        # 序列信息显示
+        # 序列信息显示 - 使用更紧凑的样式
         self.sequence_info_label = qt.QLabel("序列信息: 未加载")
         self.sequence_info_label.setWordWrap(True)
         self.sequence_info_label.setStyleSheet(
-            "QLabel { padding: 8px; background-color: #e8f5e8; border: 1px solid #4caf50; }"
+            "QLabel { "
+            "padding: 6px 8px; "
+            "background-color: #f0fdf4; "
+            "border: 1px solid #bbf7d0; "
+            "border-radius: 4px; "
+            "font-size: 12px; "
+            "line-height: 1.3; "
+            "}"
         )
         details_layout.addWidget(self.sequence_info_label)
-        
-        # 分析进度显示
-        self.progress_label = qt.QLabel("分析进度: 未开始")
-        self.progress_label.setWordWrap(True)
-        self.progress_label.setStyleSheet(
-            "QLabel { padding: 8px; background-color: #fff3e0; border: 1px solid #ff9800; }"
-        )
-        details_layout.addWidget(self.progress_label)
         
         layout.addWidget(self.details_group)
         
@@ -116,7 +122,6 @@ class StatusDisplayWidget(qt.QGroupBox):
         # 更新详细信息
         self._update_patient_info()
         self._update_sequence_info()
-        self._update_progress_info()
         
     def _update_ready_status(self):
         """更新就绪状态显示"""
@@ -174,27 +179,42 @@ class StatusDisplayWidget(qt.QGroupBox):
         patient_data = self.session.patient_data
         
         if patient_data and patient_data.patientID:
-            info_parts = [
-                f"患者ID: {patient_data.patientID}",
+            # 只显示核心信息，更紧凑
+            core_info = [
+                f"ID: {patient_data.patientID}",
                 f"姓名: {patient_data.patientName or '未知'}",
                 f"性别: {patient_data.patientSex or '未知'}",
-                f"年龄: {patient_data.patientAge or '未知'}",
-                f"检查日期: {patient_data.ctScanDate or '未知'}",
-                f"瓣膜品牌: {patient_data.valveBrand or '未选择'}",
-                f"瓣膜型号: {patient_data.valveModel or '未选择'}",
-                f"瓣膜尺寸: 未填写"  # 这个字段在PatientData中暂时没有
+                f"年龄: {patient_data.patientAge or '未知'}"
             ]
             
-            # 添加随访时间点和图像质量信息
+            # 检查日期信息
+            if patient_data.ctScanDate:
+                core_info.append(f"检查日期: {patient_data.ctScanDate}")
+                
+            # 瓣膜信息（如果有）
+            valve_info = []
+            if patient_data.valveBrand:
+                valve_info.append(f"瓣膜: {patient_data.valveBrand}")
+            if patient_data.valveModel:
+                valve_info.append(f"型号: {patient_data.valveModel}")
+            
+            if valve_info:
+                core_info.append(" | ".join(valve_info))
+            
+            # 附加信息（如果有）
+            additional_info = []
             if patient_data.followUpTimepoint:
                 timepoint_name = patient_data.followUpTimepoint.value if hasattr(patient_data.followUpTimepoint, 'value') else str(patient_data.followUpTimepoint)
-                info_parts.append(f"随访时间点: {timepoint_name}")
+                additional_info.append(f"随访: {timepoint_name}")
                 
             if patient_data.imageQuality:
                 quality_name = patient_data.imageQuality.value if hasattr(patient_data.imageQuality, 'value') else str(patient_data.imageQuality)
-                info_parts.append(f"图像质量: {quality_name}")
+                additional_info.append(f"质量: {quality_name}")
+                
+            if additional_info:
+                core_info.append(" | ".join(additional_info))
             
-            self.patient_info_label.setText("患者信息:\n" + "\n".join(info_parts))
+            self.patient_info_label.setText("患者信息: " + " • ".join(core_info))
         else:
             self.patient_info_label.setText("患者信息: 未加载")
             
@@ -204,62 +224,36 @@ class StatusDisplayWidget(qt.QGroupBox):
         browser_node = self.session.get_sequence_browser_node()
         
         if sequence_node and browser_node:
+            # 紧凑显示核心信息
             info_parts = [
-                f"序列名称: {sequence_node.GetName()}",
-                f"数据帧数: {sequence_node.GetNumberOfDataNodes()}",
-                f"索引名称: {sequence_node.GetIndexName()}",
-                f"索引单位: {sequence_node.GetIndexUnit()}",
-                f"当前帧: {browser_node.GetSelectedItemNumber()}"
+                f"序列: {sequence_node.GetName()}",
+                f"帧数: {sequence_node.GetNumberOfDataNodes()}",
+                f"当前: {browser_node.GetSelectedItemNumber() + 1}"
             ]
             
-            # 添加第一帧和最后一帧的索引值
+            # 时相范围信息（如果有）
             if sequence_node.GetNumberOfDataNodes() > 0:
                 first_index = sequence_node.GetNthIndexValue(0)
                 last_index = sequence_node.GetNthIndexValue(sequence_node.GetNumberOfDataNodes() - 1)
-                info_parts.append(f"时相范围: {first_index} - {last_index}")
+                info_parts.append(f"范围: {first_index}-{last_index}")
                 
-            # 添加Series Description信息
+            # 索引信息
+            if sequence_node.GetIndexName() and sequence_node.GetIndexUnit():
+                index_info = f"{sequence_node.GetIndexName()}({sequence_node.GetIndexUnit()})"
+                info_parts.append(f"索引: {index_info}")
+                
+            # Series Description信息（如果有且不是默认值）
             series_desc = self.session.get_current_frame_series_description()
             if series_desc and series_desc != "Unknown":
-                info_parts.append(f"当前序列描述: {series_desc}")
+                # 截断过长的描述
+                if len(series_desc) > 30:
+                    series_desc = series_desc[:27] + "..."
+                info_parts.append(f"描述: {series_desc}")
             
-            self.sequence_info_label.setText("序列信息:\n" + "\n".join(info_parts))
+            self.sequence_info_label.setText("序列信息: " + " • ".join(info_parts))
         else:
             self.sequence_info_label.setText("序列信息: 未加载")
             
-    def _update_progress_info(self):
-        """更新分析进度显示"""
-        if not self.session.is_ready():
-            self.progress_label.setText("分析进度: 未开始 - 请先配置数据")
-            return
-            
-        progress_parts = []
-        
-        # 检查数据加载状态
-        progress_parts.append("✓ 数据加载完成")
-        
-        # 检查时相标记状态
-        end_diastole = self.session.get_marked_phase('end_diastole')
-        end_systole = self.session.get_marked_phase('end_systole')
-        
-        if end_diastole.get('frame_index') is not None:
-            progress_parts.append("✓ 舒张末期已标记")
-        else:
-            progress_parts.append("⚠ 舒张末期未标记")
-            
-        if end_systole.get('frame_index') is not None:
-            progress_parts.append("✓ 收缩末期已标记")
-        else:
-            progress_parts.append("⚠ 收缩末期未标记")
-            
-        # 后续分析步骤（为将来的模块预留）
-        progress_parts.append("◯ 瓣膜分割 (模块二)")
-        progress_parts.append("◯ 形态学测量 (模块三)")
-        progress_parts.append("◯ 功能评估 (模块四)")
-        progress_parts.append("◯ 报告生成 (模块五)")
-        
-        self.progress_label.setText("分析进度:\n" + "\n".join(progress_parts))
-        
     def set_status_message(self, message: str, status_type: str = "info"):
         """设置自定义状态消息
         

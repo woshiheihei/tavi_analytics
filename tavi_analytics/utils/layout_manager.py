@@ -148,7 +148,7 @@ class LayoutManager:
     
     @staticmethod
     def create_section_frame(title: str, layout_type: LayoutType = LayoutType.SECTION_CONTAINER) -> qt.QGroupBox:
-        """创建标准化区域框架
+        """创建标准化区域框架（与心动周期管理面板和当前状态面板相同的显示方式）
         
         Args:
             title: 区域标题
@@ -159,20 +159,21 @@ class LayoutManager:
         """
         frame = qt.QGroupBox(title)
         
-        # 设置基本样式
+        # 使用与心动周期管理面板和当前状态面板相同的简洁样式
+        # 不应用复杂的shadcn/ui样式，保持Qt原生的GroupBox外观
+        # 这样可以避免排版问题并保持与现有面板的一致性
         frame.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
                 border: 2px solid #cccccc;
                 border-radius: 6px;
                 margin-top: 1ex;
-                padding-top: 8px;
+                padding-top: 10px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
-                padding: 0 8px 0 8px;
-                background-color: white;
+                padding: 0 5px 0 5px;
             }
         """)
         
@@ -182,73 +183,67 @@ class LayoutManager:
         return frame
     
     @staticmethod
-    def create_button_with_style(text: str, button_type: str = "primary") -> qt.QPushButton:
-        """创建标准化按钮
+    def create_button_with_style(text: str, button_type: str = "primary", size: str = "default", min_height: int = None) -> qt.QPushButton:
+        """创建标准化按钮 - 使用经过验证的按钮创建方式
         
         Args:
             text: 按钮文本
-            button_type: 按钮类型 ("primary", "secondary", "success", "warning", "danger")
+            button_type: 按钮类型 ("primary", "secondary", "destructive", "outline", "ghost", "link")
+            size: 按钮大小 ("sm", "default", "lg")
+            min_height: 最小高度（像素），如果不指定则使用默认值
             
         Returns:
             配置好的按钮
         """
+        # 直接创建按钮
         button = qt.QPushButton(text)
         
-        # 按钮样式配置
-        styles = {
-            "primary": {
-                "bg_color": "#3498db",
-                "hover_color": "#2980b9",
-                "text_color": "white"
-            },
-            "secondary": {
-                "bg_color": "#95a5a6",
-                "hover_color": "#7f8c8d",
-                "text_color": "white"
-            },
-            "success": {
-                "bg_color": "#27ae60",
-                "hover_color": "#229954",
-                "text_color": "white"
-            },
-            "warning": {
-                "bg_color": "#f39c12",
-                "hover_color": "#e67e22",
-                "text_color": "white"
-            },
-            "danger": {
-                "bg_color": "#e74c3c",
-                "hover_color": "#c0392b",
-                "text_color": "white"
+        # 设置最小高度
+        if min_height is not None:
+            button.setMinimumHeight(min_height)
+        else:
+            # 根据尺寸设置默认最小高度
+            default_heights = {
+                "sm": 35,
+                "default": 40,
+                "lg": 45
             }
-        }
+            button.setMinimumHeight(default_heights.get(size, 40))
         
-        style_config = styles.get(button_type, styles["primary"])
+        # 使用经过验证的样式系统
+        try:
+            from ..ui.styles import StyleManager
+        except ImportError:
+            from ui.styles import StyleManager
         
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {style_config["bg_color"]};
-                color: {style_config["text_color"]};
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-weight: bold;
-                min-height: 30px;
-            }}
-            QPushButton:hover:enabled {{
-                background-color: {style_config["hover_color"]};
-            }}
-            QPushButton:pressed:enabled {{
-                background-color: {style_config["hover_color"]};
-                border: 1px solid rgba(0,0,0,0.2);
-            }}
-            QPushButton:disabled {{
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }}
-        """)
+        # 直接使用StyleManager应用样式 - 这是经过验证有效的方式
+        button.setStyleSheet(StyleManager.get_button_style(button_type, size))
         
         return button
+    
+    @staticmethod
+    def update_button_style(button: qt.QPushButton, button_type: str = "primary", size: str = "default"):
+        """更新按钮样式 - 提供统一的样式更新接口
+        
+        Args:
+            button: 要更新样式的按钮
+            button_type: 按钮类型 ("primary", "secondary", "destructive", "outline", "ghost", "link")
+            size: 按钮大小 ("sm", "default", "lg")
+        """
+        try:
+            # 使用经过验证的样式系统
+            try:
+                from ..ui.styles import StyleManager
+            except ImportError:
+                from ui.styles import StyleManager
+            
+            # 直接使用StyleManager应用样式
+            button.setStyleSheet(StyleManager.get_button_style(button_type, size))
+            
+        except Exception as e:
+            # 导入日志系统
+            import logging
+            logging.error(f"更新按钮样式时发生错误: {str(e)}")
     
     @staticmethod
     def add_stretch_with_ratio(layout: qt.QLayout, stretch_ratio: int = 1):
@@ -292,26 +287,12 @@ class LayoutManager:
         # 设置大小策略
         LayoutManager.setup_widget_size_policy(content_widget, layout_type, SizePolicy.EXPANDING)
         
-        # 设置滚动区域样式
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: #f0f0f0;
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: #cccccc;
-                border-radius: 6px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #999999;
-            }
-        """)
+        # 设置滚动区域样式 - 使用新的shadcn/ui样式系统
+        try:
+            from ..ui.styles import StyleManager
+        except ImportError:
+            from ui.styles import StyleManager
+        scroll_area.setStyleSheet(StyleManager.get_scroll_area_style())
         
         scroll_area.setWidget(content_widget)
         

@@ -122,16 +122,19 @@ class QtUtils:
         """
         button = qt.QPushButton(text)
         
-        # 定义样式映射
-        styles = {
-            "primary": "QPushButton { background-color: #2196F3; color: white; font-size: 14px; padding: 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #1976D2; }",
-            "secondary": "QPushButton { background-color: #9E9E9E; color: white; font-size: 14px; padding: 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #757575; }",
-            "success": "QPushButton { background-color: #4CAF50; color: white; font-size: 14px; padding: 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #388E3C; }",
-            "warning": "QPushButton { background-color: #FF9800; color: white; font-size: 14px; padding: 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #F57C00; }",
-            "danger": "QPushButton { background-color: #F44336; color: white; font-size: 14px; padding: 10px; border: none; border-radius: 4px; } QPushButton:hover { background-color: #D32F2F; }"
+        # 使用新的shadcn/ui样式系统
+        from ui.styles import StyleManager
+        
+        # 映射到新的样式系统
+        style_mapping = {
+            "primary": StyleManager.get_button_style("default", "default"),
+            "secondary": StyleManager.get_button_style("secondary", "default"),
+            "success": StyleManager.get_button_style("default", "default"),
+            "warning": StyleManager.get_button_style("secondary", "default"),
+            "danger": StyleManager.get_button_style("destructive", "default")
         }
         
-        style = styles.get(style_class, styles["primary"])
+        style = style_mapping.get(style_class, style_mapping["primary"])
         button.setStyleSheet(style)
         
         return button
@@ -150,24 +153,27 @@ class QtUtils:
         label = qt.QLabel(text)
         label.setWordWrap(True)
         
-        # 定义样式映射
-        styles = {
-            "normal": "QLabel { padding: 5px; }",
-            "title": "QLabel { font-size: 18px; font-weight: bold; margin: 10px; }",
-            "subtitle": "QLabel { font-size: 16px; font-weight: bold; margin: 5px; }",
-            "info": "QLabel { background-color: #E3F2FD; color: #1976D2; padding: 10px; border: 1px solid #BBDEFB; border-radius: 4px; }",
-            "warning": "QLabel { background-color: #FFF3E0; color: #F57C00; padding: 10px; border: 1px solid #FFCC02; border-radius: 4px; }",
-            "error": "QLabel { background-color: #FFEBEE; color: #D32F2F; padding: 10px; border: 1px solid #FFCDD2; border-radius: 4px; }"
+        # 使用新的shadcn/ui样式系统
+        from ui.styles import StyleManager
+        
+        # 映射到新的样式系统
+        style_mapping = {
+            "normal": StyleManager.get_label_style("default"),
+            "title": StyleManager.get_label_style("title"),
+            "subtitle": StyleManager.get_label_style("subtitle"),
+            "info": StyleManager.get_status_indicator_style("normal"),
+            "warning": StyleManager.get_status_indicator_style("warning"),
+            "error": StyleManager.get_status_indicator_style("error")
         }
         
-        style = styles.get(style_class, styles["normal"])
+        style = style_mapping.get(style_class, style_mapping["normal"])
         label.setStyleSheet(style)
         
         return label
 
     @staticmethod
     def create_group_box(title: str, layout_type: str = "vertical") -> qt.QGroupBox:
-        """创建分组框
+        """创建分组框 - 使用新的shadcn/ui样式系统
         
         Args:
             title: 分组框标题
@@ -176,7 +182,12 @@ class QtUtils:
         Returns:
             分组框及其布局
         """
+        from ui.styles import StyleManager
+        
         group_box = qt.QGroupBox(title)
+        
+        # 使用新的shadcn/ui样式系统
+        group_box.setStyleSheet(StyleManager.get_group_box_style())
         
         # 创建布局
         if layout_type == "vertical":
