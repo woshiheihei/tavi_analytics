@@ -108,10 +108,9 @@ tavi_analytics/
 - [x] 子任务2.2.4: 重构主插件界面 (`tavi_analytics.py`) - 使用模块一组件替换原有代码
 
 #### ✅ 任务 2.3：重构业务逻辑
-- [ ] 从 `tavi_analyticsLogic` 中提取模块一相关逻辑
-- [ ] 创建 `module1/module1_logic.py`
-- [ ] 改进DICOM元数据解析逻辑
-- [ ] 优化序列验证和错误处理
+
+- [x] 创建 `module1/module1_logic.py` - 新建模块一业务逻辑类，包含所有数据导入与场景准备相关逻辑
+- [x] 从 `tavi_analyticsLogic` 中提取模块一相关逻辑 - 移除已提取的方法，更新调用引用
 
 #### ✅ 任务 2.4：创建心动周期管理组件
 - [ ] 提取心动周期相关功能到 `module1/cardiac_cycle_manager.py`

@@ -254,7 +254,7 @@ class DataLoadingDialog(qt.QDialog):
             logging.error("Logic instance is None. Cannot load data.")
             return
             
-        success = self.logic.wait_and_validate_loaded_sequence(self.session)
+        success = self.logic.wait_and_validate_loaded_sequence()
         
         if not success:
             success = self.logic.load_dicom_sequence()
