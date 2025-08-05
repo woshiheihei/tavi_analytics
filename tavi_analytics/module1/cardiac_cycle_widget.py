@@ -20,6 +20,7 @@ import logging
 try:
     from ..core.session import TAVRStudySession
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ..ui.styles import ComponentStyleFactory
 except ImportError:
     import sys
     import os
@@ -29,6 +30,7 @@ except ImportError:
         sys.path.insert(0, parent_dir)
     from core.session import TAVRStudySession
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ui.styles import ComponentStyleFactory
 
 
 class CardiacCycleWidget(qt.QGroupBox):
@@ -69,45 +71,30 @@ class CardiacCycleWidget(qt.QGroupBox):
     def _create_compact_cardiac_cycle_ui(self, parent_layout):
         """创建紧凑的心动周期控制界面"""
         
+        # 获取样式集合
+        styles = ComponentStyleFactory.get_cardiac_cycle_styles()
+        
         # === 第一行：当前时相信息 ===
         info_layout = LayoutManager.create_horizontal_layout(LayoutType.INFO_DISPLAY)
         
         # 当前时相百分比（左侧，重点显示）
         self.phase_percent_label = qt.QLabel("当前时相: 0.0%")
         self.phase_percent_label.setAlignment(qt.Qt.AlignCenter)
-        self.phase_percent_label.setStyleSheet("""
-            QLabel {
-                font-size: 16px; font-weight: bold; color: #333;
-                padding: 10px; background-color: #f5f5f5;
-                border-radius: 4px; border: 1px solid #ddd;
-                min-width: 140px;
-            }
-        """)
+        self.phase_percent_label.setStyleSheet(styles["phase_percent_label"])
+        self.phase_percent_label.setMinimumWidth(140)
         info_layout.addWidget(self.phase_percent_label, 0)
         
         # 帧信息（中间）
         self.frame_info_label = qt.QLabel("帧: 0/0")
         self.frame_info_label.setAlignment(qt.Qt.AlignCenter)
-        self.frame_info_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px; color: #666;
-                padding: 8px; background-color: #f9f9f9;
-                border-radius: 4px; border: 1px solid #ddd;
-                min-width: 80px;
-            }
-        """)
+        self.frame_info_label.setStyleSheet(styles["frame_info_label"])
+        self.frame_info_label.setMinimumWidth(80)
         info_layout.addWidget(self.frame_info_label, 0)
         
         # 序列描述（右侧，可伸缩）
         self.series_description_label = qt.QLabel("序列: 未加载")
         self.series_description_label.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
-        self.series_description_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px; color: #666;
-                padding: 8px; background-color: #f9f9f9;
-                border-radius: 4px; border: 1px solid #ddd;
-            }
-        """)
+        self.series_description_label.setStyleSheet(styles["series_description_label"])
         self.series_description_label.setWordWrap(True)
         self.series_description_label.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred)
         info_layout.addWidget(self.series_description_label, 1)
@@ -121,15 +108,7 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.prev_button = qt.QPushButton("◀")
         self.prev_button.setEnabled(False)
         self.prev_button.setFixedSize(30, 30)
-        self.prev_button.setStyleSheet("""
-            QPushButton {
-                font-size: 14px; font-weight: bold;
-                background-color: #666; color: white;
-                border: none; border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:disabled { background-color: #ddd; color: #999; }
-        """)
+        self.prev_button.setStyleSheet(styles["control_button"])
         self.prev_button.setToolTip("上一帧")
         timeline_layout.addWidget(self.prev_button, 0)
         
@@ -137,36 +116,14 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.timeline_slider = qt.QSlider(qt.Qt.Horizontal)
         self.timeline_slider.setEnabled(False)
         self.timeline_slider.setMinimumHeight(25)
-        self.timeline_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #ccc;
-                background: #f0f0f0;
-                height: 8px; border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #666;
-                border: 1px solid #555;
-                width: 18px; height: 18px;
-                margin: -6px 0; border-radius: 9px;
-            }
-            QSlider::handle:horizontal:hover { background: #555; }
-            QSlider::handle:horizontal:pressed { background: #444; }
-        """)
+        self.timeline_slider.setStyleSheet(styles["slider"])
         timeline_layout.addWidget(self.timeline_slider, 1)
         
         # 下一帧按钮
         self.next_button = qt.QPushButton("▶")
         self.next_button.setEnabled(False)
         self.next_button.setFixedSize(30, 30)
-        self.next_button.setStyleSheet("""
-            QPushButton {
-                font-size: 14px; font-weight: bold;
-                background-color: #666; color: white;
-                border: none; border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:disabled { background-color: #ddd; color: #999; }
-        """)
+        self.next_button.setStyleSheet(styles["control_button"])
         self.next_button.setToolTip("下一帧")
         timeline_layout.addWidget(self.next_button, 0)
         
@@ -182,25 +139,11 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.mark_end_diastole_button = qt.QPushButton("标记舒张末期")
         self.mark_end_diastole_button.setEnabled(False)
         self.mark_end_diastole_button.setMinimumHeight(35)
-        self.mark_end_diastole_button.setStyleSheet("""
-            QPushButton {
-                background-color: #666; color: white;
-                border: none; border-radius: 4px;
-                font-size: 12px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:disabled { background-color: #ddd; color: #999; }
-        """)
+        self.mark_end_diastole_button.setStyleSheet(styles["mark_button"])
         diastole_container.addWidget(self.mark_end_diastole_button)
         
         self.end_diastole_label = qt.QLabel("舒张末期: 未标记")
-        self.end_diastole_label.setStyleSheet("""
-            QLabel {
-                padding: 6px; font-size: 10px;
-                background-color: #f5f5f5; color: #333;
-                border: 1px solid #ddd; border-radius: 4px;
-            }
-        """)
+        self.end_diastole_label.setStyleSheet(styles["marked_phase_label"])
         self.end_diastole_label.setWordWrap(True)
         self.end_diastole_label.setCursor(qt.Qt.PointingHandCursor)
         self.end_diastole_label.setToolTip("双击跳转到舒张末期")
@@ -222,25 +165,11 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.mark_end_systole_button = qt.QPushButton("标记收缩末期")
         self.mark_end_systole_button.setEnabled(False)
         self.mark_end_systole_button.setMinimumHeight(35)
-        self.mark_end_systole_button.setStyleSheet("""
-            QPushButton {
-                background-color: #666; color: white;
-                border: none; border-radius: 4px;
-                font-size: 12px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:disabled { background-color: #ddd; color: #999; }
-        """)
+        self.mark_end_systole_button.setStyleSheet(styles["mark_button"])
         systole_container.addWidget(self.mark_end_systole_button)
         
         self.end_systole_label = qt.QLabel("收缩末期: 未标记")
-        self.end_systole_label.setStyleSheet("""
-            QLabel {
-                padding: 6px; font-size: 10px;
-                background-color: #f5f5f5; color: #333;
-                border: 1px solid #ddd; border-radius: 4px;
-            }
-        """)
+        self.end_systole_label.setStyleSheet(styles["marked_phase_label"])
         self.end_systole_label.setWordWrap(True)
         self.end_systole_label.setCursor(qt.Qt.PointingHandCursor)
         self.end_systole_label.setToolTip("双击跳转到收缩末期")
@@ -253,13 +182,7 @@ class CardiacCycleWidget(qt.QGroupBox):
         # === 第四行：滑块范围信息 ===
         self.slider_range_label = qt.QLabel("范围: 0 - 0 (0 帧)")
         self.slider_range_label.setAlignment(qt.Qt.AlignCenter)
-        self.slider_range_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px; color: #666;
-                padding: 4px; background-color: #f9f9f9;
-                border-radius: 3px;
-            }
-        """)
+        self.slider_range_label.setStyleSheet(styles["range_label"])
         parent_layout.addWidget(self.slider_range_label, 0)
         
     def _setup_connections(self):

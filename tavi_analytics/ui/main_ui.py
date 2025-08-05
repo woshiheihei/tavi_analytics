@@ -6,9 +6,11 @@ import logging
 from typing import Optional, Dict, Any
 import qt
 import slicer
+import traceback
 from core.session import TAVRStudySession
 from core.module_manager import ModuleManager
 from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+from ui.styles import ComponentStyleFactory, StyleManager
 
 
 class MainUI(qt.QWidget):
@@ -70,12 +72,15 @@ class MainUI(qt.QWidget):
         
         nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_frame)
         
+        # 获取样式集合
+        styles = ComponentStyleFactory.get_main_ui_styles()
+        
         # 创建顶部状态行（状态指示器）
         status_layout = qt.QHBoxLayout()
         
         # 简洁的应用标识
         app_label = qt.QLabel("TAVR Analytics")
-        app_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        app_label.setStyleSheet(styles["app_label"])
         status_layout.addWidget(app_label)
         
         # 添加弹性空间
@@ -83,16 +88,7 @@ class MainUI(qt.QWidget):
         
         # 全局状态指示器
         self._status_indicator = qt.QLabel("就绪")
-        self._status_indicator.setStyleSheet("""
-            QLabel {
-                background-color: #27ae60;
-                color: white;
-                padding: 4px 8px;
-                border-radius: 3px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-        """)
+        self._status_indicator.setStyleSheet(styles["status_indicator"])
         status_layout.addWidget(self._status_indicator)
         
         nav_layout.addLayout(status_layout)
@@ -124,7 +120,7 @@ class MainUI(qt.QWidget):
         
         # 添加导航提示
         nav_hint = qt.QLabel("点击上方按钮切换模块")
-        nav_hint.setStyleSheet("color: #7f8c8d; font-size: 12px;")
+        nav_hint.setStyleSheet(styles["nav_hint"])
         nav_hint.setAlignment(qt.Qt.AlignCenter)
         
         nav_layout.addLayout(button_layout)
@@ -159,15 +155,18 @@ class MainUI(qt.QWidget):
         layout = qt.QVBoxLayout(default_widget)
         layout.setAlignment(qt.Qt.AlignCenter)
         
+        # 获取样式集合
+        styles = ComponentStyleFactory.get_main_ui_styles()
+        
         # 欢迎信息
         welcome_label = qt.QLabel("欢迎使用 TAVR Analytics")
-        welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #34495e;")
+        welcome_label.setStyleSheet(styles["welcome_label"])
         welcome_label.setAlignment(qt.Qt.AlignCenter)
         layout.addWidget(welcome_label)
         
         # 说明文字
         desc_label = qt.QLabel("请选择上方的模块开始分析工作流")
-        desc_label.setStyleSheet("font-size: 14px; color: #7f8c8d; margin-top: 10px;")
+        desc_label.setStyleSheet(styles["description_label"])
         desc_label.setAlignment(qt.Qt.AlignCenter)
         layout.addWidget(desc_label)
         
@@ -475,24 +474,9 @@ TAVR Analytics 帮助
         """
         self._status_indicator.setText(message)
         
-        # 根据状态类型设置不同的颜色
-        color_map = {
-            "normal": "#3498db",
-            "success": "#27ae60", 
-            "warning": "#f39c12",
-            "error": "#e74c3c"
-        }
-        
-        color = color_map.get(status_type, "#3498db")
-        self._status_indicator.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                color: white;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }}
-        """)
+        # 使用统一样式系统
+        style = StyleManager.get_status_indicator_style(status_type)
+        self._status_indicator.setStyleSheet(style)
     
     def auto_activate_default_module(self):
         """自动激活默认模块（模块一）"""
