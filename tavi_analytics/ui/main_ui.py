@@ -65,9 +65,6 @@ class MainUI(qt.QWidget):
         
         # 创建内容区域（模块内容）- 使用可滚动容器
         self._create_content_area(main_layout)
-        
-        # 创建状态栏区域
-        self._create_status_area(main_layout)
     
     def _create_header_area(self, parent_layout):
         """创建头部区域"""
@@ -167,8 +164,8 @@ class MainUI(qt.QWidget):
         container_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self._content_container)
         container_layout.addWidget(self._content_stack)
         
-        # 将滚动区域添加到主布局，并设置较大的伸缩因子
-        parent_layout.addWidget(self._content_scroll, 3)  # 给内容区域更多空间
+        # 将滚动区域添加到主布局，并设置最大的伸缩因子
+        parent_layout.addWidget(self._content_scroll, 1)  # 内容区域占用所有剩余空间
     
     def _create_default_page(self):
         """创建默认页面"""
@@ -189,75 +186,6 @@ class MainUI(qt.QWidget):
         layout.addWidget(desc_label)
         
         return default_widget
-    
-    def _create_status_area(self, parent_layout):
-        """创建状态栏区域"""
-        status_frame = qt.QFrame()
-        status_frame.setMaximumHeight(50)  # 增加高度
-        status_frame.setFrameStyle(qt.QFrame.StyledPanel)
-        
-        status_layout = qt.QHBoxLayout(status_frame)
-        status_layout.setContentsMargins(10, 5, 10, 5)
-        
-        # 左侧状态信息组
-        left_status_layout = qt.QVBoxLayout()
-        
-        # 当前患者信息
-        self._patient_label = qt.QLabel("患者: 未加载")
-        self._patient_label.setStyleSheet("color: #7f8c8d; font-weight: bold;")
-        left_status_layout.addWidget(self._patient_label)
-        
-        # 数据加载状态
-        self._data_status_label = qt.QLabel("数据: 未加载")
-        self._data_status_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
-        left_status_layout.addWidget(self._data_status_label)
-        
-        status_layout.addLayout(left_status_layout)
-        
-        # 中间弹性空间
-        status_layout.addStretch()
-        
-        # 中间状态信息组  
-        center_status_layout = qt.QVBoxLayout()
-        
-        # 会话状态
-        self._session_label = qt.QLabel("会话: 空闲")
-        self._session_label.setStyleSheet("color: #7f8c8d; font-weight: bold;")
-        center_status_layout.addWidget(self._session_label)
-        
-        # 处理进度
-        self._progress_label = qt.QLabel("进度: 等待开始")
-        self._progress_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
-        center_status_layout.addWidget(self._progress_label)
-        
-        status_layout.addLayout(center_status_layout)
-        
-        # 右侧弹性空间
-        status_layout.addStretch()
-        
-        # 右侧状态信息组
-        right_status_layout = qt.QVBoxLayout()
-        
-        # 系统状态
-        self._system_status_label = qt.QLabel("系统: 正常")
-        self._system_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
-        right_status_layout.addWidget(self._system_status_label)
-        
-        # 时间戳
-        import datetime
-        current_time = datetime.datetime.now().strftime("%H:%M:%S")
-        self._timestamp_label = qt.QLabel(f"时间: {current_time}")
-        self._timestamp_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
-        right_status_layout.addWidget(self._timestamp_label)
-        
-        status_layout.addLayout(right_status_layout)
-        
-        parent_layout.addWidget(status_frame)
-        
-        # 创建定时器用于更新时间戳
-        self._timer = qt.QTimer()
-        self._timer.timeout.connect(self._update_timestamp)
-        self._timer.start(1000)  # 每秒更新一次
     
     def _setup_connections(self):
         """设置信号连接"""
@@ -375,8 +303,6 @@ class MainUI(qt.QWidget):
                 
                 # 重置状态
                 self.update_status("界面已重置", "success")
-                self.update_session_status("空闲")
-                self.update_progress_status("等待开始")
                 
                 logging.info("界面已重置")
                 
@@ -435,18 +361,6 @@ TAVR Analytics 帮助
                     if module_info.dependencies:
                         tooltip += f"\n依赖: {', '.join(module_info.dependencies)}"
                     button.setToolTip(tooltip)
-            
-            # 为状态标签添加工具提示
-            if hasattr(self, '_patient_label'):
-                self._patient_label.setToolTip("当前分析的患者信息")
-            if hasattr(self, '_session_label'):
-                self._session_label.setToolTip("当前会话状态")
-            if hasattr(self, '_data_status_label'):
-                self._data_status_label.setToolTip("数据加载和处理状态")
-            if hasattr(self, '_progress_label'):
-                self._progress_label.setToolTip("当前操作进度")
-            if hasattr(self, '_system_status_label'):
-                self._system_status_label.setToolTip("系统运行状态")
                 
         except Exception as e:
             logging.warning(f"设置工具提示时出错: {e}")
@@ -514,9 +428,6 @@ TAVR Analytics 帮助
             self._hide_loading_state()
             self.update_status(f"已加载: {display_name}", "success")
             self._update_module_button_state(module_name)
-            
-            # 更新会话状态
-            self.update_session_status(f"使用{display_name}")
             
             # 发送用户友好的通知
             self._show_success_notification(f"已切换到: {display_name}")
@@ -646,107 +557,6 @@ TAVR Analytics 帮助
             }}
         """)
     
-    def update_patient_info(self, patient_id: str = None):
-        """
-        更新患者信息显示
-        
-        Args:
-            patient_id: 患者ID，None表示清除
-        """
-        if patient_id:
-            self._patient_label.setText(f"患者: {patient_id}")
-            self._patient_label.setStyleSheet("color: #2c3e50; font-weight: bold;")
-        else:
-            self._patient_label.setText("患者: 未加载")
-            self._patient_label.setStyleSheet("color: #7f8c8d;")
-    
-    def update_session_status(self, status: str):
-        """
-        更新会话状态显示
-        
-        Args:
-            status: 会话状态描述
-        """
-        self._session_label.setText(f"会话: {status}")
-    
-    def update_data_status(self, status: str):
-        """
-        更新数据状态显示
-        
-        Args:
-            status: 数据状态描述
-        """
-        if hasattr(self, '_data_status_label'):
-            self._data_status_label.setText(f"数据: {status}")
-    
-    def update_progress_status(self, progress: str):
-        """
-        更新处理进度显示
-        
-        Args:
-            progress: 进度描述
-        """
-        if hasattr(self, '_progress_label'):
-            self._progress_label.setText(f"进度: {progress}")
-    
-    def update_system_status(self, status: str, status_type: str = "normal"):
-        """
-        更新系统状态显示
-        
-        Args:
-            status: 系统状态描述
-            status_type: 状态类型 ("normal", "warning", "error", "success")
-        """
-        if hasattr(self, '_system_status_label'):
-            self._system_status_label.setText(f"系统: {status}")
-            
-            # 根据状态类型设置颜色
-            color_map = {
-                "normal": "#3498db",
-                "success": "#27ae60",
-                "warning": "#f39c12", 
-                "error": "#e74c3c"
-            }
-            
-            color = color_map.get(status_type, "#3498db")
-            self._system_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
-    
-    def _update_timestamp(self):
-        """更新时间戳显示"""
-        if hasattr(self, '_timestamp_label'):
-            import datetime
-            current_time = datetime.datetime.now().strftime("%H:%M:%S")
-            self._timestamp_label.setText(f"时间: {current_time}")
-    
-    def update_comprehensive_status(self, patient_id: str = None, data_status: str = None, 
-                                   session_status: str = None, progress: str = None,
-                                   system_status: str = None, system_type: str = "normal"):
-        """
-        一次性更新所有状态显示
-        
-        Args:
-            patient_id: 患者ID
-            data_status: 数据状态
-            session_status: 会话状态  
-            progress: 处理进度
-            system_status: 系统状态
-            system_type: 系统状态类型
-        """
-        if patient_id is not None:
-            self.update_patient_info(patient_id)
-        
-        if data_status is not None:
-            self.update_data_status(data_status)
-        
-        if session_status is not None:
-            self.update_session_status(session_status)
-        
-        if progress is not None:
-            self.update_progress_status(progress)
-        
-        if system_status is not None:
-            self.update_system_status(system_status, system_type)
-    
     def auto_activate_default_module(self):
         """自动激活默认模块（模块一）"""
         if "module1" in self._module_manager.get_available_modules():
@@ -855,11 +665,6 @@ TAVR Analytics 帮助
     
     def cleanup(self):
         """清理资源"""
-        # 停止定时器
-        if hasattr(self, '_timer') and self._timer:
-            self._timer.stop()
-            self._timer = None
-        
         # 清理模块组件缓存
         for widget in self._module_widgets.values():
             if hasattr(widget, 'cleanup'):
