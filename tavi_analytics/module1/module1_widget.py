@@ -64,9 +64,14 @@ class Module1Widget(qt.QWidget):
         
         Args:
             session: TAVR研究会话对象
-            parent: 父窗口对象
+            parent: 父窗口对象 (可以是None)
             logic: 业务逻辑实例
         """
+        # 确保parent参数适用于Qt
+        if parent is not None and not isinstance(parent, qt.QWidget):
+            # 如果传入的不是QWidget，设为None
+            parent = None
+        
         super().__init__(parent)
         self.session = session
         self.logic = logic

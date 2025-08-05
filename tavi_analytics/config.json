@@ -1,0 +1,60 @@
+{
+  "plugin": {
+    "name": "TAVR Analytics",
+    "version": "1.0.0",
+    "description": "TAVR术后四维心脏CT分析插件",
+    "author": "TAVR Research Team",
+    "license": "MIT",
+    "dependencies": ["Sequences"],
+    "slicer_version_min": "5.0.0"
+  },
+  "ui": {
+    "theme": "default",
+    "language": "zh_CN",
+    "show_advanced_options": false,
+    "auto_save_enabled": true,
+    "auto_save_interval": 300
+  },
+  "modules": {
+    "module1": {
+      "enabled": true,
+      "auto_load_dicom": true,
+      "preserve_original_names": true,
+      "default_quality": "GOOD"
+    },
+    "module2": {
+      "enabled": false,
+      "auto_segment": false
+    },
+    "module3": {
+      "enabled": false,
+      "auto_measure": false
+    },
+    "module4": {
+      "enabled": false,
+      "auto_generate_report": false
+    },
+    "module5": {
+      "enabled": false,
+      "auto_export": false
+    }
+  },
+  "data": {
+    "default_output_dir": "",
+    "backup_enabled": true,
+    "max_backup_files": 10,
+    "compress_backups": true
+  },
+  "performance": {
+    "max_memory_usage": 8192,
+    "use_gpu_acceleration": false,
+    "parallel_processing": true,
+    "max_threads": 4
+  },
+  "debug": {
+    "logging_level": "INFO",
+    "debug_mode": false,
+    "show_debug_info": false,
+    "profiling_enabled": false
+  }
+}
