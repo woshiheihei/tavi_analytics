@@ -57,37 +57,29 @@ class MainUI(qt.QWidget):
         # 设置主界面响应式布局
         LayoutManager.apply_responsive_layout(self, min_width=1000, min_height=700)
         
-        # 创建头部区域（标题和全局状态）
-        self._create_header_area(main_layout)
-        
-        # 创建导航区域（模块切换）
+        # 创建导航区域（模块切换和状态显示）
         self._create_navigation_area(main_layout)
         
         # 创建内容区域（模块内容）- 使用可滚动容器
         self._create_content_area(main_layout)
     
-    def _create_header_area(self, parent_layout):
-        """创建头部区域"""
-        header_frame = qt.QFrame()
-        header_frame.setFrameStyle(qt.QFrame.StyledPanel)
-        header_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f0f0f0;
-                border: 1px solid #d0d0d0;
-                border-radius: 5px;
-            }
-        """)
+    def _create_navigation_area(self, parent_layout):
+        """创建导航区域（包含模块切换和状态显示）"""
+        nav_frame = LayoutManager.create_section_frame("模块导航", LayoutType.BUTTON_GROUP)
+        nav_frame.setMaximumHeight(110)  # 稍微增加高度以容纳状态行
         
-        header_layout = qt.QHBoxLayout(header_frame)
-        header_layout.setContentsMargins(15, 10, 15, 10)
+        nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_frame)
         
-        # 应用标题
-        title_label = qt.QLabel("TAVR Analytics - 经导管主动脉瓣置换术分析工作流")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
-        header_layout.addWidget(title_label)
+        # 创建顶部状态行（状态指示器）
+        status_layout = qt.QHBoxLayout()
+        
+        # 简洁的应用标识
+        app_label = qt.QLabel("TAVR Analytics")
+        app_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        status_layout.addWidget(app_label)
         
         # 添加弹性空间
-        header_layout.addStretch()
+        status_layout.addStretch()
         
         # 全局状态指示器
         self._status_indicator = qt.QLabel("就绪")
@@ -95,21 +87,15 @@ class MainUI(qt.QWidget):
             QLabel {
                 background-color: #27ae60;
                 color: white;
-                padding: 5px 10px;
+                padding: 4px 8px;
                 border-radius: 3px;
                 font-weight: bold;
+                font-size: 12px;
             }
         """)
-        header_layout.addWidget(self._status_indicator)
+        status_layout.addWidget(self._status_indicator)
         
-        parent_layout.addWidget(header_frame)
-    
-    def _create_navigation_area(self, parent_layout):
-        """创建导航区域"""
-        nav_frame = LayoutManager.create_section_frame("模块导航", LayoutType.BUTTON_GROUP)
-        nav_frame.setMaximumHeight(100)  # 固定导航区域高度
-        
-        nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_frame)
+        nav_layout.addLayout(status_layout)
         
         # 创建按钮行
         button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
@@ -199,35 +185,8 @@ class MainUI(qt.QWidget):
         # 设置工具提示
         self._setup_tooltips()
         
-        # 设置键盘快捷键
-        self._setup_shortcuts()
-        
         # 设置右键菜单
         self._setup_context_menus()
-    
-    def _setup_shortcuts(self):
-        """设置键盘快捷键"""
-        try:
-            # F5: 刷新当前模块
-            refresh_shortcut = qt.QShortcut(qt.QKeySequence("F5"), self)
-            refresh_shortcut.activated.connect(self._refresh_current_module)
-            
-            # Ctrl+1: 切换到模块一
-            module1_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+1"), self)
-            module1_shortcut.activated.connect(lambda: self._switch_to_module_by_shortcut("module1"))
-            
-            # Ctrl+R: 重置界面
-            reset_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+R"), self)
-            reset_shortcut.activated.connect(self._reset_interface)
-            
-            # F1: 显示帮助
-            help_shortcut = qt.QShortcut(qt.QKeySequence("F1"), self)
-            help_shortcut.activated.connect(self._show_help)
-            
-            logging.info("键盘快捷键设置完成")
-            
-        except Exception as e:
-            logging.warning(f"设置键盘快捷键时出错: {e}")
     
     def _setup_context_menus(self):
         """设置右键菜单"""
@@ -260,29 +219,13 @@ class MainUI(qt.QWidget):
             # 如果是当前模块，添加刷新选项
             if module_name == self._current_module:
                 refresh_action = menu.addAction("刷新模块")
-                refresh_action.triggered.connect(lambda: self._refresh_current_module())
+                refresh_action.triggered.connect(lambda: self.switch_to_module(module_name, force=True))
             
             # 显示菜单
             menu.exec_(button.mapToGlobal(pos))
             
         except Exception as e:
             logging.error(f"显示右键菜单时出错: {e}")
-    
-    def _switch_to_module_by_shortcut(self, module_name: str):
-        """通过快捷键切换模块"""
-        if module_name in self._module_manager.get_available_modules():
-            self.switch_to_module(module_name, force=True)  # 快捷键切换不显示确认对话框
-        else:
-            self._show_info_message("模块不可用", f"模块 {module_name} 当前不可用")
-    
-    def _refresh_current_module(self):
-        """刷新当前模块"""
-        if self._current_module:
-            self._show_info_message("刷新模块", f"正在刷新模块: {self._current_module}")
-            # 这里可以添加实际的刷新逻辑
-            self.switch_to_module(self._current_module, force=True)
-        else:
-            self._show_info_message("无模块", "当前没有激活的模块")
     
     def _reset_interface(self):
         """重置界面"""
@@ -314,16 +257,10 @@ class MainUI(qt.QWidget):
         help_text = """
 TAVR Analytics 帮助
 
-快捷键:
-• F1: 显示此帮助
-• F5: 刷新当前模块  
-• Ctrl+1: 切换到模块一
-• Ctrl+R: 重置界面
-
 操作:
 • 点击上方按钮切换模块
 • 右键点击按钮查看更多选项
-• 查看底部状态栏了解当前状态
+• 查看右上角状态指示器了解当前状态
 
 模块说明:
 • 模块一: 数据导入与场景准备
@@ -590,7 +527,7 @@ TAVR Analytics 帮助
                 item = self.layout().itemAt(i)
                 if item and item.widget():
                     widget = item.widget()
-                    if isinstance(widget, qt.QFrame) and widget.maximumHeight() == 80:
+                    if isinstance(widget, qt.QFrame) and widget.maximumHeight() == 110:
                         nav_frame = widget
                         if nav_frame.layout():
                             for j in range(nav_frame.layout().count()):

@@ -101,19 +101,6 @@ class Module1Widget(qt.QWidget):
         # 主布局 - 使用标准化布局管理器
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
         
-        # 标题区域
-        title_label = qt.QLabel("模块一：数据导入与配置")
-        title_label.setStyleSheet(
-            "QLabel { "
-            "font-size: 18px; font-weight: bold; "
-            "padding: 10px; margin-bottom: 10px; "
-            "background-color: #3f51b5; color: white; "
-            "border-radius: 6px; "
-            "}"
-        )
-        title_label.setAlignment(qt.Qt.AlignCenter)
-        main_layout.addWidget(title_label, 0)  # 固定大小
-        
         # 状态显示组件
         self.status_display_widget = StatusDisplayWidget(self.session, self)
         LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)

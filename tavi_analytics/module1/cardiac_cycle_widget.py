@@ -177,14 +177,8 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.mark_end_systole_button.setMinimumHeight(40)
         button_layout.addWidget(self.mark_end_systole_button)
         
-        # 添加快捷键提示
-        shortcut_hint = qt.QLabel("快捷键: D-舒张末期, S-收缩末期, ←→-导航帧")
-        shortcut_hint.setAlignment(qt.Qt.AlignCenter)
-        shortcut_hint.setStyleSheet("font-size: 9px; color: #6c757d; margin-top: 4px;")
-        
-        # 将按钮布局和提示添加到容器布局
+        # 将按钮布局添加到容器布局
         button_container_layout.addLayout(button_layout)
-        button_container_layout.addWidget(shortcut_hint)
         
         parent_layout.addWidget(button_frame, 0)  # 固定大小
         
@@ -228,21 +222,6 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.end_systole_label.setToolTip("双击跳转到收缩末期")
         marked_layout.addWidget(self.end_systole_label)
         
-        # 清除标记按钮
-        clear_button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
-        clear_button_layout.setContentsMargins(0, 6, 0, 0)
-        
-        self.clear_diastole_button = LayoutManager.create_button_with_style("清除舒张末期", "danger")
-        self.clear_diastole_button.setEnabled(False)
-        self.clear_diastole_button.setMaximumHeight(25)
-        clear_button_layout.addWidget(self.clear_diastole_button)
-        
-        self.clear_systole_button = LayoutManager.create_button_with_style("清除收缩末期", "danger")
-        self.clear_systole_button.setEnabled(False)
-        self.clear_systole_button.setMaximumHeight(25)
-        clear_button_layout.addWidget(self.clear_systole_button)
-        
-        marked_layout.addLayout(clear_button_layout)
         parent_layout.addWidget(marked_frame, 1)  # 可扩展
         
     def _setup_connections(self):
@@ -254,16 +233,6 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.mark_end_systole_button.clicked.connect(
             lambda: self._mark_phase('end_systole')
         )
-        # 连接清除标记按钮
-        self.clear_diastole_button.clicked.connect(
-            lambda: self._clear_phase('end_diastole')
-        )
-        self.clear_systole_button.clicked.connect(
-            lambda: self._clear_phase('end_systole')
-        )
-        
-        # 设置键盘快捷键
-        self._setup_keyboard_shortcuts()
     
     def _setup_label_click_events(self):
         """设置标签点击事件"""
@@ -283,29 +252,6 @@ class CardiacCycleWidget(qt.QGroupBox):
         # QGroupBox没有eventFilter方法，直接返回False让事件继续传播
         return False
     
-    def _setup_keyboard_shortcuts(self):
-        """设置键盘快捷键"""
-        try:
-            # D键: 标记舒张末期
-            diastole_shortcut = qt.QShortcut(qt.QKeySequence("D"), self)
-            diastole_shortcut.activated.connect(lambda: self._mark_phase('end_diastole'))
-            
-            # S键: 标记收缩末期
-            systole_shortcut = qt.QShortcut(qt.QKeySequence("S"), self)
-            systole_shortcut.activated.connect(lambda: self._mark_phase('end_systole'))
-            
-            # 左右箭头键: 导航帧
-            left_shortcut = qt.QShortcut(qt.QKeySequence("Left"), self)
-            left_shortcut.activated.connect(self._previous_frame)
-            
-            right_shortcut = qt.QShortcut(qt.QKeySequence("Right"), self)
-            right_shortcut.activated.connect(self._next_frame)
-            
-            logging.info("心动周期管理快捷键设置完成")
-            
-        except Exception as e:
-            logging.warning(f"设置快捷键时出错: {e}")
-    
     def _previous_frame(self):
         """切换到上一帧"""
         if self.timeline_slider.isEnabled():
@@ -319,26 +265,6 @@ class CardiacCycleWidget(qt.QGroupBox):
             current_value = self.timeline_slider.value()
             if current_value < self.timeline_slider.maximum():
                 self.timeline_slider.setValue(current_value + 1)
-    
-    def _clear_phase(self, phase_name: str):
-        """清除指定时相的标记"""
-        try:
-            phase_display_name = "舒张末期" if phase_name == 'end_diastole' else "收缩末期"
-            reply = qt.QMessageBox.question(
-                self, 
-                "确认清除", 
-                f"确定要清除{phase_display_name}的标记吗？",
-                qt.QMessageBox.Yes | qt.QMessageBox.No,
-                qt.QMessageBox.No
-            )
-            
-            if reply == qt.QMessageBox.Yes:
-                self.session.clear_phase(phase_name)
-                self._update_phase_labels()
-                logging.info(f"已清除{phase_display_name}标记")
-                
-        except Exception as e:
-            logging.error(f"清除时相标记时发生错误: {e}")
     
     def jump_to_marked_phase(self, phase_name: str):
         """跳转到已标记的时相"""
