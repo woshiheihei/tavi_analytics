@@ -27,6 +27,7 @@ try:
     from .status_display_widget import StatusDisplayWidget
     from ..utils.config_manager import ConfigManager
     from ..utils.qt_utils import QtUtils
+    from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
 except ImportError:
     import sys
     import os
@@ -46,6 +47,7 @@ except ImportError:
     from status_display_widget import StatusDisplayWidget
     from utils.config_manager import ConfigManager
     from utils.qt_utils import QtUtils
+    from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
 
 
 class Module1Widget(qt.QWidget):
@@ -77,6 +79,9 @@ class Module1Widget(qt.QWidget):
         self.logic = logic
         self.config_manager = ConfigManager()
         
+        # 设置组件大小策略 - 使用标准化布局管理器
+        LayoutManager.setup_widget_size_policy(self, LayoutType.MODULE_CONTAINER, SizePolicy.EXPANDING)
+        
         # 子组件
         self.data_loading_dialog = None
         self.cardiac_cycle_widget = None
@@ -93,12 +98,10 @@ class Module1Widget(qt.QWidget):
         
     def _init_ui(self):
         """初始化用户界面"""
-        # 主布局
-        main_layout = qt.QVBoxLayout(self)
-        main_layout.setSpacing(10)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        # 主布局 - 使用标准化布局管理器
+        main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
         
-        # 标题
+        # 标题区域
         title_label = qt.QLabel("模块一：数据导入与配置")
         title_label.setStyleSheet(
             "QLabel { "
@@ -109,29 +112,28 @@ class Module1Widget(qt.QWidget):
             "}"
         )
         title_label.setAlignment(qt.Qt.AlignCenter)
-        main_layout.addWidget(title_label)
+        main_layout.addWidget(title_label, 0)  # 固定大小
         
         # 状态显示组件
         self.status_display_widget = StatusDisplayWidget(self.session, self)
-        main_layout.addWidget(self.status_display_widget)
+        LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
+        main_layout.addWidget(self.status_display_widget, 0)  # 固定大小
         
         # 数据导入按钮区域
         self._create_data_import_section(main_layout)
         
-        # 心动周期管理组件
+        # 心动周期管理组件 - 主要内容区域
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
-        main_layout.addWidget(self.cardiac_cycle_widget)
+        LayoutManager.setup_widget_size_policy(self.cardiac_cycle_widget, LayoutType.CONTROL_PANEL, SizePolicy.EXPANDING)
+        main_layout.addWidget(self.cardiac_cycle_widget, 2)  # 获得最多空间
         
         # 操作按钮区域
         self._create_action_buttons_section(main_layout)
         
-        # 添加弹性空间
-        main_layout.addStretch()
-        
     def _create_data_import_section(self, parent_layout):
         """创建数据导入区域"""
-        import_group = qt.QGroupBox("数据导入")
-        import_layout = qt.QVBoxLayout(import_group)
+        import_group = LayoutManager.create_section_frame("数据导入", LayoutType.SECTION_CONTAINER)
+        import_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, import_group)
         
         # 说明文本
         instruction_label = qt.QLabel(
@@ -145,66 +147,37 @@ class Module1Widget(qt.QWidget):
         import_layout.addWidget(instruction_label)
         
         # 数据导入按钮
-        self.load_data_button = qt.QPushButton("数据导入与配置")
+        self.load_data_button = LayoutManager.create_button_with_style("数据导入与配置", "success")
         self.load_data_button.setMinimumHeight(40)
-        self.load_data_button.setStyleSheet(
-            "QPushButton { "
-            "font-size: 14px; font-weight: bold; "
-            "padding: 10px; background-color: #4caf50; color: white; "
-            "border-radius: 6px; "
-            "}"
-            "QPushButton:hover { background-color: #45a049; }"
-            "QPushButton:pressed { background-color: #3d8b40; }"
-        )
         import_layout.addWidget(self.load_data_button)
         
-        parent_layout.addWidget(import_group)
+        parent_layout.addWidget(import_group, 0)  # 固定大小
         
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
-        actions_group = qt.QGroupBox("操作")
-        actions_layout = qt.QVBoxLayout(actions_group)
+        actions_group = LayoutManager.create_section_frame("操作", LayoutType.BUTTON_GROUP)
+        actions_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, actions_group)
+        
+        # 按钮布局
+        button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
         
         # 刷新状态按钮
-        self.refresh_button = qt.QPushButton("刷新状态")
-        self.refresh_button.setStyleSheet(
-            "QPushButton { "
-            "padding: 8px; background-color: #2196f3; color: white; "
-            "border-radius: 4px; "
-            "}"
-            "QPushButton:hover { background-color: #1976d2; }"
-        )
-        actions_layout.addWidget(self.refresh_button)
+        self.refresh_button = LayoutManager.create_button_with_style("刷新状态", "primary")
+        button_layout.addWidget(self.refresh_button)
         
         # 重置数据按钮
-        self.reset_button = qt.QPushButton("重置数据")
-        self.reset_button.setStyleSheet(
-            "QPushButton { "
-            "padding: 8px; background-color: #ff9800; color: white; "
-            "border-radius: 4px; "
-            "}"
-            "QPushButton:hover { background-color: #f57c00; }"
-        )
-        actions_layout.addWidget(self.reset_button)
+        self.reset_button = LayoutManager.create_button_with_style("重置数据", "warning")
+        button_layout.addWidget(self.reset_button)
         
-        # 进入下一模块按钮
-        self.next_module_button = qt.QPushButton("进入模块二：瓣膜分割")
+        actions_layout.addLayout(button_layout)
+        
+        # 进入下一模块按钮 - 单独一行
+        self.next_module_button = LayoutManager.create_button_with_style("进入模块二：瓣膜分割", "primary")
         self.next_module_button.setEnabled(False)
-        self.next_module_button.setMinimumHeight(35)
-        self.next_module_button.setStyleSheet(
-            "QPushButton { "
-            "font-size: 13px; font-weight: bold; "
-            "padding: 10px; background-color: #9c27b0; color: white; "
-            "border-radius: 6px; "
-            "}"
-            "QPushButton:hover:enabled { background-color: #7b1fa2; }"
-            "QPushButton:disabled { "
-            "background-color: #cccccc; color: #666666; "
-            "}"
-        )
+        self.next_module_button.setMinimumHeight(40)
         actions_layout.addWidget(self.next_module_button)
         
-        parent_layout.addWidget(actions_group)
+        parent_layout.addWidget(actions_group, 0)  # 固定大小
         
     def _setup_connections(self):
         """设置信号连接"""

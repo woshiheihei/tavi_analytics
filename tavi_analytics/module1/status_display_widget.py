@@ -20,6 +20,7 @@ try:
     from ..core.session import TAVRStudySession
     from ..core.data_models import PatientData
     from ..core.enums import ImageQuality, FollowUpTimepoint
+    from ..utils.layout_manager import LayoutManager, LayoutType
 except ImportError:
     import sys
     import os
@@ -30,6 +31,7 @@ except ImportError:
     from core.session import TAVRStudySession
     from core.data_models import PatientData
     from core.enums import ImageQuality, FollowUpTimepoint
+    from utils.layout_manager import LayoutManager, LayoutType
 
 
 class StatusDisplayWidget(qt.QGroupBox):
@@ -56,7 +58,8 @@ class StatusDisplayWidget(qt.QGroupBox):
         
     def _init_ui(self):
         """初始化用户界面"""
-        layout = qt.QVBoxLayout(self)
+        # 使用标准化布局管理器
+        layout = LayoutManager.create_layout(LayoutType.INFO_DISPLAY, self)
         
         # 主状态标签
         self.status_label = qt.QLabel("未配置数据")
@@ -74,7 +77,8 @@ class StatusDisplayWidget(qt.QGroupBox):
         self.details_group.setCheckable(True)
         self.details_group.setChecked(False)  # 默认折叠
         
-        details_layout = qt.QVBoxLayout(self.details_group)
+        # 使用标准化布局管理器为详细信息组
+        details_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, self.details_group)
         
         # 患者信息显示
         self.patient_info_label = qt.QLabel("患者信息: 未加载")

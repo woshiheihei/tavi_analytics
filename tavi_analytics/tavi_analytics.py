@@ -26,6 +26,7 @@ from core.module_manager import ModuleManager, ModuleInfo
 from core.session import TAVRStudySession
 from core.data_models import PatientData
 from module1.module1_adapter import Module1Adapter
+from ui.main_ui import MainUI
 
 
 #
@@ -93,14 +94,19 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def __init__(self, parent=None) -> None:
         """初始化界面"""
-        ScriptedLoadableModuleWidget.__init__(self, parent)
-        VTKObservationMixin.__init__(self)
-        
-        # 核心组件
+        # 核心组件必须在调用父类构造函数之前初始化
+        # 因为父类构造函数会自动调用setup()方法
         self._config = PluginConfig()
         self._manager = ModuleManager()
         self._session = TAVRStudySession()
         self.logic = None
+        
+        # 主界面组件
+        self._main_ui = None
+        
+        # 调用父类构造函数（会自动调用setup方法）
+        ScriptedLoadableModuleWidget.__init__(self, parent)
+        VTKObservationMixin.__init__(self)
         
     def setup(self) -> None:
         """设置界面"""
@@ -125,28 +131,31 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def _create_main_ui(self):
         """创建主界面"""
         try:
-            # 加载UI文件作为容器
-            uiWidget = slicer.util.loadUI(self.resourcePath("UI/tavi_analytics.ui"))
-            if uiWidget:
-                self.layout.addWidget(uiWidget)
-                # 创建模块容器 - 使用UI文件的布局
-                self._module_container = uiWidget
-            else:
-                # UI文件加载失败，创建默认布局
-                self._create_default_layout()
+            # 创建主界面组件
+            self._main_ui = MainUI(self._session, self._manager, parent=self)
+            
+            # 将主界面添加到布局
+            self.layout.addWidget(self._main_ui)
+            
+            logging.info("主界面创建成功")
             
         except Exception as e:
-            logging.warning(f"加载UI文件失败，使用默认布局: {e}")
-            # 使用默认布局
+            logging.error(f"创建主界面失败: {e}")
+            # 使用默认布局作为后备
             self._create_default_layout()
     
     def _create_default_layout(self):
-        """创建默认布局"""
-        # 创建一个容器组件
+        """创建默认布局（后备方案）"""
+        # 创建一个简单的容器组件
         container_widget = qt.QWidget()
         container_layout = qt.QVBoxLayout(container_widget)
         container_layout.setContentsMargins(10, 10, 10, 10)
         container_layout.setSpacing(10)
+        
+        # 添加错误信息
+        error_label = qt.QLabel("界面加载失败，使用默认模式")
+        error_label.setStyleSheet("color: red; font-weight: bold;")
+        container_layout.addWidget(error_label)
         
         self.layout.addWidget(container_widget)
         self._module_container = container_layout
@@ -164,7 +173,18 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             sequence_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceNode')
             browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
             
-            # 激活模块一
+            # 如果主界面创建成功，使用主界面的自动激活功能
+            if self._main_ui:
+                self._main_ui.auto_activate_default_module()
+                
+                # 如果存在序列数据，自动处理
+                if sequence_nodes and browser_nodes:
+                    self._process_existing_sequences(sequence_nodes[0], browser_nodes[0])
+                
+                logging.info("通过主界面自动激活模块")
+                return
+            
+            # 后备方案：直接激活模块一（保持兼容性）
             if self._config.is_module_enabled("module1"):
                 success = self._manager.activate_module("module1")
                 if success:
@@ -182,7 +202,7 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             # 回退到主布局
                             self.layout.addWidget(module1_widget)
                         
-                        logging.info("模块一已激活并添加到界面")
+                        logging.info("模块一已激活并添加到界面（后备模式）")
                         
                         # 如果存在序列数据，自动处理
                         if sequence_nodes and browser_nodes:
@@ -229,6 +249,12 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # 重置会话
         self._session.reset()
         
+        # 更新主界面状态
+        if self._main_ui:
+            self._main_ui.update_patient_info()  # 清除患者信息
+            self._main_ui.update_session_status("空闲")
+            self._main_ui.update_status("就绪")
+        
         # 通知模块管理器场景已关闭
         # 模块组件会自动检测会话状态并更新界面
         logging.info("场景已关闭，会话已重置")
@@ -236,6 +262,11 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def cleanup(self) -> None:
         """清理资源"""
         self.removeObservers()
+        
+        # 清理主界面
+        if self._main_ui:
+            self._main_ui.cleanup()
+            self._main_ui = None
         
         # 清理所有模块
         self._manager.cleanup_all_modules()
