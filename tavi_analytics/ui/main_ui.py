@@ -55,7 +55,7 @@ class MainUI(qt.QWidget):
         main_layout = LayoutManager.create_layout(LayoutType.MAIN_CONTAINER, self)
         
         # 设置主界面响应式布局
-        LayoutManager.apply_responsive_layout(self, min_width=1000, min_height=700)
+        LayoutManager.apply_responsive_layout(self, min_width=400, min_height=700)
         
         # 创建导航区域（模块切换和状态显示）
         self._create_navigation_area(main_layout)
