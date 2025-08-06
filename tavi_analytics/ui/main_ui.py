@@ -115,8 +115,9 @@ class MainUI(qt.QWidget):
                 # 应用新的shadcn/ui样式
                 button.setStyleSheet(styles["module_button"])
                 
-                # 连接点击事件
-                button.clicked.connect(self._on_module_button_clicked)
+                # 连接点击事件  <--- START: 删除下面这一行
+                # button.clicked.connect(self._on_module_button_clicked)
+                # <--- END: 删除上面这一行
                 
                 self._module_buttons.addButton(button)
                 button_layout.addWidget(button)
@@ -180,9 +181,9 @@ class MainUI(qt.QWidget):
     
     def _setup_connections(self):
         """设置信号连接"""
-        # 连接模块切换按钮
-        for button in self._module_buttons.buttons():
-            button.clicked.connect(self._on_module_button_clicked)
+        # <--- START: 用下面这行代码替换掉之前删除的 for 循环
+        self._module_buttons.buttonClicked.connect(self._on_module_button_clicked)
+        # <--- END: 完成替换
         
         # 监听会话变化（如果需要的话）
         # TODO: 实现会话状态监听
@@ -307,12 +308,14 @@ TAVR Analytics 帮助
         except Exception as e:
             logging.warning(f"设置工具提示时出错: {e}")
     
-    def _on_module_button_clicked(self):
+    # <--- START: 修改这个方法的定义
+    def _on_module_button_clicked(self, button):
         """处理模块按钮点击"""
-        sender = self.sender()
-        if sender:
-            module_name = sender.property("module_name")
-            self.switch_to_module(module_name)
+        if button:
+            module_name = button.property("module_name")
+            if module_name:
+                self.switch_to_module(module_name)
+    # <--- END: 方法修改完成
     
     def switch_to_module(self, module_name: str, force: bool = False):
         """
@@ -542,7 +545,7 @@ TAVR Analytics 帮助
                         styles = ComponentStyleFactory.get_main_ui_styles()
                         button.setStyleSheet(styles["module_button"])
                         
-                        button.clicked.connect(self._on_module_button_clicked)
+                        # 不需要单独连接信号，使用按钮组统一处理
                         self._module_buttons.addButton(button)
                         
                         # 在弹性空间之前插入按钮
