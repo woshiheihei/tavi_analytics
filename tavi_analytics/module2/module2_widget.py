@@ -145,8 +145,48 @@ class Module2Widget(qt.QWidget):
         landmark_group.setStyleSheet(StyleManager.get_card_style())
         landmark_layout = qt.QVBoxLayout(landmark_group)
         
-        # TODO: 将在后续任务中添加具体的标志点定义控件
-        # 这里先创建基础布局结构
+        # 按照详细设计文档和开发计划任务3的要求，添加四个标志点定义按钮
+        # 使用推荐的LayoutManager.create_button_with_style()方法创建按钮
+        
+        # 1. 定义原生瓣环按钮 - 主要操作
+        native_annulus_button = LayoutManager.create_button_with_style(
+            text="定义原生瓣环",
+            button_type="primary",
+            size="default",
+            min_height=40
+        )
+        native_annulus_button.setObjectName("defineNativeAnnulusButton")
+        landmark_layout.addWidget(native_annulus_button)
+        
+        # 2. 定义原生连合按钮 - 次要操作
+        native_commissure_button = LayoutManager.create_button_with_style(
+            text="定义原生连合",
+            button_type="secondary",
+            size="default",
+            min_height=40
+        )
+        native_commissure_button.setObjectName("defineNativeCommissureButton")
+        landmark_layout.addWidget(native_commissure_button)
+        
+        # 3. 定义新连合按钮 - 次要操作
+        neo_commissure_button = LayoutManager.create_button_with_style(
+            text="定义新连合",
+            button_type="secondary",
+            size="default",
+            min_height=40
+        )
+        neo_commissure_button.setObjectName("defineNeoCommissureButton")
+        landmark_layout.addWidget(neo_commissure_button)
+        
+        # 4. 定义冠脉开口按钮 - 轮廓按钮
+        coronary_ostia_button = LayoutManager.create_button_with_style(
+            text="定义冠脉开口",
+            button_type="outline",
+            size="default",
+            min_height=35
+        )
+        coronary_ostia_button.setObjectName("defineCoronaryOstiaButton")
+        landmark_layout.addWidget(coronary_ostia_button)
         
         layout.addWidget(landmark_group)
 
