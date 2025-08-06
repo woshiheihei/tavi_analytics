@@ -76,7 +76,20 @@ class tavi_analytics(ScriptedLoadableModule):
                 manager.register_module(module1_info)
                 logging.info("模块一注册成功")
             
-            # 这里可以注册其他模块（模块二、三、四、五）
+            # 注册模块二
+            if self._config.is_module_enabled("module2"):  # 假设未来会用配置控制
+                from module2.module2_adapter import Module2Adapter  # 导入适配器
+                module2_info = ModuleInfo(
+                    name="module2",
+                    display_name="引导式分割",  # 与适配器中保持一致
+                    module_class=Module2Adapter,
+                    dependencies=["module1"],
+                    enabled=True
+                )
+                manager.register_module(module2_info)
+                logging.info("模块二注册成功")
+            
+            # 这里可以注册其他模块（模块三、四、五）
             # TODO: 注册其他模块
             
         except Exception as e:

@@ -23,7 +23,7 @@
       "default_quality": "GOOD"
     },
     "module2": {
-      "enabled": false,
+      "enabled": true,
       "auto_segment": false
     },
     "module3": {
