@@ -103,6 +103,11 @@ class TAVRStudySession:
                 }
             }
             
+            # 几何数据存储
+            self.segmentation_node_id = None  # 主分割节点ID
+            self.landmark_node_ids = {}  # 标志点节点ID字典
+            self.reconstructed_planes = {}  # 重建平面存储
+            
             # 标记已初始化
             self._initialized = True
             
@@ -171,6 +176,114 @@ class TAVRStudySession:
             'brand': self.patient_data.valveBrand,
             'model': self.patient_data.valveModel
         }
+    
+    def set_segmentation_node(self, node_id: str):
+        """
+        设置主分割节点ID
+        
+        Args:
+            node_id (str): 分割节点ID
+        """
+        self.segmentation_node_id = node_id
+        self.logger.info(f"设置分割节点: {node_id}")
+    
+    def get_segmentation_node(self):
+        """
+        获取主分割节点
+        
+        Returns:
+            vtkMRMLSegmentationNode: 分割节点，如果不存在返回None
+        """
+        if self.segmentation_node_id:
+            node = slicer.mrmlScene.GetNodeByID(self.segmentation_node_id)
+            if node is None:
+                self.logger.warning(f"分割节点不存在: {self.segmentation_node_id}")
+            return node
+        return None
+    
+    def set_landmark_node(self, landmark_name: str, node_id: str):
+        """
+        设置标志点节点ID
+        
+        Args:
+            landmark_name (str): 标志点名称
+            node_id (str): 节点ID
+        """
+        self.landmark_node_ids[landmark_name] = node_id
+        self.logger.info(f"设置标志点节点 {landmark_name}: {node_id}")
+    
+    def get_landmark_node(self, landmark_name: str):
+        """
+        获取标志点节点
+        
+        Args:
+            landmark_name (str): 标志点名称
+            
+        Returns:
+            vtkMRMLMarkupsFiducialNode: 标志点节点，如果不存在返回None
+        """
+        node_id = self.landmark_node_ids.get(landmark_name)
+        if node_id:
+            node = slicer.mrmlScene.GetNodeByID(node_id)
+            if node is None:
+                self.logger.warning(f"标志点节点不存在: {landmark_name} -> {node_id}")
+            return node
+        return None
+    
+    def set_reconstructed_plane(self, plane_name: str, plane_data: Dict[str, Any]):
+        """
+        存储重建的平面数据
+        
+        Args:
+            plane_name (str): 平面名称
+            plane_data (Dict[str, Any]): 平面数据，包含原点和法向量
+        """
+        self.reconstructed_planes[plane_name] = plane_data
+        self.logger.info(f"存储重建平面 {plane_name}")
+    
+    def get_reconstructed_plane(self, plane_name: str) -> Optional[Dict[str, Any]]:
+        """
+        获取重建的平面数据
+        
+        Args:
+            plane_name (str): 平面名称
+            
+        Returns:
+            Optional[Dict[str, Any]]: 平面数据，如果不存在返回None
+        """
+        return self.reconstructed_planes.get(plane_name)
+    
+    def get_landmark_coordinates(self, landmark_name: str) -> Optional[tuple]:
+        """
+        获取指定标志点的坐标
+        
+        Args:
+            landmark_name (str): 标志点名称
+            
+        Returns:
+            Optional[tuple]: 三维坐标(x, y, z)，如果未找到返回None
+        """
+        node = self.get_landmark_node(landmark_name)
+        if node and node.GetNumberOfFiducials() > 0:
+            coords = [0.0, 0.0, 0.0]
+            node.GetNthFiducialPosition(0, coords)
+            return tuple(coords)
+        return None
+    
+    def are_geometries_defined(self) -> bool:
+        """
+        检查几何数据是否已定义
+        
+        Returns:
+            bool: 如果所有必需的几何数据都已定义返回True
+        """
+        # 检查是否有分割节点
+        has_segmentation = self.segmentation_node_id is not None
+        
+        # 检查是否有原生瓣环平面
+        has_native_annulus_plane = 'native_annulus' in self.reconstructed_planes
+        
+        return has_segmentation and has_native_annulus_plane
     
     def mark_phase(self, phase_name: str, frame_index: int, phase_percent: float, series_description: str = ""):
         """
@@ -540,8 +653,94 @@ class TAVRStudySession:
             }
         }
         
+        # 重置几何数据
+        self.segmentation_node_id = None
+        self.landmark_node_ids = {}
+        self.reconstructed_planes = {}
+        
+        # 重置几何数据
+        self.segmentation_node_id = None
+        self.landmark_node_ids = {}
+        self.reconstructed_planes = {}
+        
         self.logger.info("会话重置完成")
     
+    def set_landmark_node(self, landmark_name: str, node_id: str):
+        """
+        设置标志点节点ID
+        
+        Args:
+            landmark_name (str): 标志点名称
+            node_id (str): 节点ID
+        """
+        self.landmark_node_ids[landmark_name] = node_id
+        self.logger.info(f"设置标志点节点: {landmark_name} -> {node_id}")
+    
+    def get_landmark_node(self, landmark_name: str):
+        """
+        获取标志点节点
+        
+        Args:
+            landmark_name (str): 标志点名称
+            
+        Returns:
+            标志点节点，如果不存在返回None
+        """
+        node_id = self.landmark_node_ids.get(landmark_name)
+        if node_id:
+            node = slicer.mrmlScene.GetNodeByID(node_id)
+            if node is None:
+                self.logger.warning(f"标志点节点不存在: {landmark_name} ({node_id})")
+            return node
+        return None
+    
+    def set_reconstructed_plane(self, plane_name: str, plane_data: Dict[str, Any]):
+        """
+        设置重建平面数据
+        
+        Args:
+            plane_name (str): 平面名称
+            plane_data (Dict[str, Any]): 平面数据，包含origin、normal等
+        """
+        self.reconstructed_planes[plane_name] = plane_data
+        self.logger.info(f"设置重建平面: {plane_name}")
+    
+    def get_reconstructed_plane(self, plane_name: str) -> Optional[Dict[str, Any]]:
+        """
+        获取重建平面数据
+        
+        Args:
+            plane_name (str): 平面名称
+            
+        Returns:
+            平面数据字典，如果不存在返回None
+        """
+        return self.reconstructed_planes.get(plane_name)
+    
+    def set_segmentation_node(self, node_id: str):
+        """
+        设置主分割节点ID
+        
+        Args:
+            node_id (str): 分割节点ID
+        """
+        self.segmentation_node_id = node_id
+        self.logger.info(f"设置分割节点: {node_id}")
+    
+    def get_segmentation_node(self):
+        """
+        获取主分割节点
+        
+        Returns:
+            分割节点，如果不存在返回None
+        """
+        if self.segmentation_node_id:
+            node = slicer.mrmlScene.GetNodeByID(self.segmentation_node_id)
+            if node is None:
+                self.logger.warning(f"分割节点不存在: {self.segmentation_node_id}")
+            return node
+        return None
+
     def get_session_info(self) -> Dict[str, Any]:
         """
         获取会话信息摘要

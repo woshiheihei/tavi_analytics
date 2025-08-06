@@ -92,13 +92,13 @@ class Module2Widget(qt.QWidget):
         # 1. 从session获取舒张末期时相信息
         end_diastole_info = self.session.get_marked_phase('end_diastole')
         if not end_diastole_info:
-            logging.warning("未找到舒张末期标记")
-            return False
+            logging.info("未找到舒张末期标记，跳过时相切换")
+            return True  # 不强制要求有时相标记
         
         frame_index = end_diastole_info.get('frame_index')
         if frame_index is None:
-            logging.warning("舒张末期标记中缺少帧索引信息")
-            return False
+            logging.info("舒张末期标记中缺少帧索引信息，跳过时相切换")
+            return True  # 不强制要求有时相标记
         
         # 2. 获取序列浏览器节点
         browser_node = self.session.get_sequence_browser_node()
@@ -212,19 +212,22 @@ class Module2Widget(qt.QWidget):
         landmark_group = LayoutManager.create_section_frame("解剖标志点定义 (Landmark Placement)")
         landmark_layout = qt.QVBoxLayout(landmark_group)
         
+        # 添加实时操作提示组件
+        self._create_landmark_instruction_panel(landmark_layout)
+        
         # 按照详细设计文档和开发计划任务3的要求，添加四个标志点定义按钮
         # 使用推荐的LayoutManager.create_button_with_style()方法创建按钮
         
-        # 1. 定义原生瓣环按钮 - 主要操作
-        native_annulus_button = LayoutManager.create_button_with_style(
+        # 1. 定义原生瓣环按钮 - 主要操作，连接到第12个任务实现的逻辑方法
+        self.native_annulus_button = LayoutManager.create_button_with_style(
             text="定义原生瓣环",
             button_type="primary",
             size="default",
             min_height=40
         )
-        native_annulus_button.setObjectName("defineNativeAnnulusButton")
-        native_annulus_button.clicked.connect(lambda: self._on_button_clicked("定义原生瓣环"))
-        landmark_layout.addWidget(native_annulus_button)
+        self.native_annulus_button.setObjectName("defineNativeAnnulusButton")
+        self.native_annulus_button.clicked.connect(self._on_define_native_annulus)
+        landmark_layout.addWidget(self.native_annulus_button)
         
         # 2. 定义原生连合按钮 - 次要操作
         native_commissure_button = LayoutManager.create_button_with_style(
@@ -314,6 +317,604 @@ class Module2Widget(qt.QWidget):
         
         layout.addWidget(operations_group)
 
+    def _create_landmark_instruction_panel(self, layout):
+        """
+        创建实时操作提示面板
+        
+        提供动态的用户操作指导和状态反馈
+        """
+        # 创建指令面板容器
+        instruction_frame = qt.QFrame()
+        instruction_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 12px;
+                margin: 4px;
+            }
+        """)
+        instruction_layout = qt.QVBoxLayout(instruction_frame)
+        instruction_layout.setSpacing(8)
+        instruction_layout.setContentsMargins(12, 12, 12, 12)
+        
+        # 添加指令标题
+        instruction_title = qt.QLabel("📍 操作指导")
+        instruction_title.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: #495057;
+                font-size: 14px;
+                margin-bottom: 4px;
+            }
+        """)
+        instruction_layout.addWidget(instruction_title)
+        
+        # 添加动态指令文本
+        self.instruction_label = qt.QLabel("请选择要定义的解剖标志点类型")
+        self.instruction_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 13px;
+                line-height: 18px;
+                margin: 0px;
+            }
+        """)
+        self.instruction_label.setWordWrap(True)
+        instruction_layout.addWidget(self.instruction_label)
+        
+        # 添加进度状态指示器
+        self.landmark_progress_label = qt.QLabel("等待用户操作...")
+        self.landmark_progress_label.setStyleSheet("""
+            QLabel {
+                color: #007bff;
+                font-size: 12px;
+                font-style: italic;
+                margin-top: 4px;
+            }
+        """)
+        instruction_layout.addWidget(self.landmark_progress_label)
+        
+        # 添加嵌入式标志点控制面板
+        self._create_embedded_markups_controls(instruction_layout)
+        
+        layout.addWidget(instruction_frame)
+
+    def _create_embedded_markups_controls(self, layout):
+        """
+        创建嵌入式标志点控制面板
+        
+        在当前模块中直接提供markups相关的控制功能，无需跳转模块
+        """
+        # 创建控制按钮面板
+        controls_frame = qt.QFrame()
+        controls_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                margin-top: 8px;
+                padding: 8px;
+            }
+        """)
+        controls_layout = qt.QHBoxLayout(controls_frame)
+        controls_layout.setSpacing(8)
+        controls_layout.setContentsMargins(8, 8, 8, 8)
+        
+        # 标志点操作按钮
+        self.place_mode_button = qt.QPushButton("🎯 放置模式")
+        self.place_mode_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
+        self.place_mode_button.clicked.connect(self._on_toggle_place_mode)
+        self.place_mode_button.setVisible(False)  # 初始隐藏
+        controls_layout.addWidget(self.place_mode_button)
+        
+        # 删除最后一个点
+        self.delete_last_button = qt.QPushButton("↶ 撤销")
+        self.delete_last_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ffc107;
+                color: #212529;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #e0a800;
+            }
+            QPushButton:pressed {
+                background-color: #d39e00;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                color: white;
+            }
+        """)
+        self.delete_last_button.clicked.connect(self._on_delete_last_point)
+        self.delete_last_button.setVisible(False)  # 初始隐藏
+        controls_layout.addWidget(self.delete_last_button)
+        
+        # 清除所有点
+        self.clear_points_button = qt.QPushButton("🗑️ 清除")
+        self.clear_points_button.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+            QPushButton:pressed {
+                background-color: #bd2130;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
+        self.clear_points_button.clicked.connect(self._on_clear_all_points)
+        self.clear_points_button.setVisible(False)  # 初始隐藏
+        controls_layout.addWidget(self.clear_points_button)
+        
+        # 添加弹性空间
+        controls_layout.addStretch()
+        
+        layout.addWidget(controls_frame)
+        
+        # 保存控制面板引用
+        self.markups_controls_frame = controls_frame
+
+    def _on_define_native_annulus(self):
+        """
+        处理定义原生瓣环按钮点击事件
+        
+        连接到第12个任务实现的平面重建算法
+        """
+        logging.info("用户点击了'定义原生瓣环'按钮")
+        
+        try:
+            # 更新UI状态
+            self._update_instruction("正在创建原生瓣环标志点节点...")
+            self._update_landmark_progress("⏳ 初始化中...")
+            
+            # 禁用按钮，防止重复点击
+            self.native_annulus_button.setEnabled(False)
+            self.native_annulus_button.setText("正在初始化...")
+            
+            # 调用逻辑层的平面重建方法
+            result = self.logic.reconstruct_native_annulus_plane()
+            
+            if result:
+                self._update_instruction(
+                    "✅ 标志点节点已创建！\n"
+                    "请在3D视图中依次放置3个原生瓣环上的点：\n"
+                    "1️⃣ 第一个点：右冠状动脉小叶对应的瓣环点\n"
+                    "2️⃣ 第二个点：左冠状动脉小叶对应的瓣环点\n" 
+                    "3️⃣ 第三个点：无冠状动脉小叶对应的瓣环点"
+                )
+                self._update_landmark_progress("📍 请在3D视图中放置3个瓣环点 (0/3)")
+                
+                # 显示嵌入式标志点控制面板
+                self._show_markups_controls()
+                
+                # 启动定时器监控标志点放置进度
+                self._start_landmark_monitoring()
+                
+                # 更新状态栏
+                self._update_status("Native_Annulus_Points节点已激活，请开始放置标志点")
+                
+                logging.info("原生瓣环平面重建流程已启动")
+                
+            else:
+                self._update_instruction("❌ 标志点节点创建失败，请重试")
+                self._update_landmark_progress("❌ 创建失败")
+                self._enable_native_annulus_button()
+                self._update_status("原生瓣环标志点创建失败")
+                logging.error("原生瓣环平面重建流程启动失败")
+                
+        except Exception as e:
+            logging.error(f"定义原生瓣环失败: {e}")
+            self._update_instruction(f"❌ 发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 操作失败")
+            self._enable_native_annulus_button()
+            self._update_status("原生瓣环定义失败，请检查日志")
+
+    def _start_landmark_monitoring(self):
+        """
+        启动标志点放置监控
+        
+        定期检查用户放置的标志点数量，并在达到3个点时自动触发平面计算
+        """
+        # 创建定时器
+        self.landmark_timer = qt.QTimer()
+        self.landmark_timer.timeout.connect(self._check_landmark_progress)
+        self.landmark_timer.start(1000)  # 每秒检查一次
+        
+        logging.info("标志点监控定时器已启动")
+
+    def _check_landmark_progress(self):
+        """
+        检查标志点放置进度
+        
+        监控用户在3D视图中放置的标志点数量，并提供实时反馈
+        """
+        try:
+            # 获取状态信息
+            status = self.logic.get_native_annulus_plane_status()
+            
+            if not status['node_exists']:
+                # 节点不存在，停止监控
+                self._stop_landmark_monitoring()
+                self._enable_native_annulus_button()
+                return
+            
+            points_placed = status['points_placed']
+            points_needed = status['points_needed']
+            
+            # 更新进度显示
+            if points_placed == 0:
+                self._update_landmark_progress("📍 请在3D视图中放置3个瓣环点 (0/3)")
+            elif points_placed == 1:
+                self._update_landmark_progress("📍 已放置1个点，还需要2个点 (1/3)")
+                self._update_instruction(
+                    "✅ 第一个点已放置！\n"
+                    "请继续放置第二个瓣环点（左冠状动脉小叶对应位置）"
+                )
+            elif points_placed == 2:
+                self._update_landmark_progress("📍 已放置2个点，还需要1个点 (2/3)")
+                self._update_instruction(
+                    "✅ 前两个点已放置！\n"
+                    "请放置第三个瓣环点（无冠状动脉小叶对应位置）"
+                )
+            elif points_placed >= 3:
+                # 检查是否已经计算了平面
+                if status['plane_computed']:
+                    # 平面已计算完成
+                    self._on_plane_calculation_completed()
+                elif status['ready_to_compute']:
+                    # 可以计算平面
+                    self._trigger_plane_calculation()
+                
+        except Exception as e:
+            logging.error(f"检查标志点进度失败: {e}")
+
+    def _trigger_plane_calculation(self):
+        """
+        触发平面计算
+        
+        当用户放置了3个点后，自动触发平面计算
+        """
+        logging.info("触发平面计算...")
+        
+        try:
+            self._update_landmark_progress("🔄 正在计算平面...")
+            self._update_instruction("⏳ 正在计算最佳拟合平面，请稍候...")
+            
+            # 调用平面计算
+            result = self.logic.check_and_compute_plane_if_ready("Native_Annulus_Points")
+            
+            if result:
+                logging.info("平面计算成功")
+                # 计算完成的处理在 _on_plane_calculation_completed 中进行
+            else:
+                logging.error("平面计算失败")
+                self._update_instruction("❌ 平面计算失败，请检查标志点位置")
+                self._update_landmark_progress("❌ 计算失败")
+                self._stop_landmark_monitoring()
+                self._enable_native_annulus_button()
+                
+        except Exception as e:
+            logging.error(f"平面计算触发失败: {e}")
+            self._update_instruction(f"❌ 平面计算失败: {str(e)}")
+            self._update_landmark_progress("❌ 计算错误")
+            self._stop_landmark_monitoring()
+            self._enable_native_annulus_button()
+
+    def _on_plane_calculation_completed(self):
+        """
+        平面计算完成的处理
+        
+        显示计算结果并提供下一步操作指导
+        """
+        logging.info("平面计算完成")
+        
+        try:
+            # 停止监控
+            self._stop_landmark_monitoring()
+            
+            # 获取计算结果
+            plane_data = self.session.get_reconstructed_plane("native_annulus")
+            
+            if plane_data:
+                # 显示成功信息
+                origin = plane_data['origin']
+                normal = plane_data['normal']
+                
+                self._update_instruction(
+                    "🎉 原生瓣环平面重建完成！\n"
+                    f"平面原点: ({origin[0]:.1f}, {origin[1]:.1f}, {origin[2]:.1f})\n"
+                    f"法向量: ({normal[0]:.3f}, {normal[1]:.3f}, {normal[2]:.3f})\n"
+                    "您可以继续定义其他解剖标志点。"
+                )
+                self._update_landmark_progress("✅ 平面重建完成")
+                self._update_status("原生瓣环平面重建成功完成")
+                
+                # 刷新视图并对准新创建的平面Model
+                self._refresh_3d_view()
+                self._center_view_on_model("Native_Annulus_Plane")
+                
+                # 重新启用按钮，允许重新定义
+                self._enable_native_annulus_button()
+                
+                # 隐藏嵌入式控制面板
+                self._hide_markups_controls()
+                
+                # 刷新3D视图以显示新创建的平面
+                self._refresh_3d_view()
+                
+                # 更新进度条
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(25)  # 假设原生瓣环完成后进度为25%
+                
+                logging.info("原生瓣环平面重建流程完成")
+                
+            else:
+                self._update_instruction("❌ 未能获取平面计算结果")
+                self._update_landmark_progress("❌ 结果获取失败")
+                self._enable_native_annulus_button()
+                
+        except Exception as e:
+            logging.error(f"平面计算完成处理失败: {e}")
+            self._update_instruction(f"❌ 处理结果时发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 处理失败")
+            self._enable_native_annulus_button()
+
+    def _stop_landmark_monitoring(self):
+        """停止标志点监控定时器"""
+        if hasattr(self, 'landmark_timer') and self.landmark_timer:
+            self.landmark_timer.stop()
+            self.landmark_timer = None
+            logging.info("标志点监控定时器已停止")
+        
+        # 同时隐藏控制面板
+        self._hide_markups_controls()
+
+    def _enable_native_annulus_button(self):
+        """重新启用原生瓣环按钮"""
+        if hasattr(self, 'native_annulus_button'):
+            self.native_annulus_button.setEnabled(True)
+            self.native_annulus_button.setText("定义原生瓣环")
+
+    def _update_instruction(self, message: str):
+        """更新操作指导文本"""
+        if hasattr(self, 'instruction_label'):
+            self.instruction_label.setText(message)
+            logging.debug(f"指导更新: {message}")
+
+    def _update_landmark_progress(self, message: str):
+        """更新标志点进度状态"""
+        if hasattr(self, 'landmark_progress_label'):
+            self.landmark_progress_label.setText(message)
+            logging.debug(f"进度更新: {message}")
+
+    def _show_markups_controls(self):
+        """显示嵌入式标志点控制面板"""
+        if hasattr(self, 'place_mode_button'):
+            self.place_mode_button.setVisible(True)
+        if hasattr(self, 'delete_last_button'):
+            self.delete_last_button.setVisible(True)
+        if hasattr(self, 'clear_points_button'):
+            self.clear_points_button.setVisible(True)
+        logging.info("标志点控制面板已显示")
+
+    def _hide_markups_controls(self):
+        """隐藏嵌入式标志点控制面板"""
+        if hasattr(self, 'place_mode_button'):
+            self.place_mode_button.setVisible(False)
+        if hasattr(self, 'delete_last_button'):
+            self.delete_last_button.setVisible(False)
+        if hasattr(self, 'clear_points_button'):
+            self.clear_points_button.setVisible(False)
+        logging.info("标志点控制面板已隐藏")
+
+    def _on_toggle_place_mode(self):
+        """切换标志点放置模式"""
+        try:
+            interaction_node = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+            if interaction_node:
+                current_mode = interaction_node.GetCurrentInteractionMode()
+                if current_mode == interaction_node.Place:
+                    # 当前是放置模式，切换到查看模式
+                    interaction_node.SetCurrentInteractionMode(interaction_node.ViewTransform)
+                    self.place_mode_button.setText("🎯 放置模式")
+                    # 设置为灰色（查看模式）
+                    self.place_mode_button.setStyleSheet("""
+                        QPushButton {
+                            background-color: #6c757d;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            padding: 6px 12px;
+                            font-size: 11px;
+                            min-width: 80px;
+                        }
+                        QPushButton:hover {
+                            background-color: #5a6268;
+                        }
+                        QPushButton:pressed {
+                            background-color: #545b62;
+                        }
+                    """)
+                    logging.info("切换到查看模式")
+                else:
+                    # 当前不是放置模式，切换到放置模式
+                    interaction_node.SetCurrentInteractionMode(interaction_node.Place)
+                    self.place_mode_button.setText("👁️ 查看模式")
+                    # 设置为绿色（放置模式）
+                    self.place_mode_button.setStyleSheet("""
+                        QPushButton {
+                            background-color: #28a745;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            padding: 6px 12px;
+                            font-size: 11px;
+                            min-width: 80px;
+                        }
+                        QPushButton:hover {
+                            background-color: #218838;
+                        }
+                        QPushButton:pressed {
+                            background-color: #1e7e34;
+                        }
+                    """)
+                    logging.info("切换到放置模式")
+        except Exception as e:
+            logging.error(f"切换放置模式失败: {e}")
+
+    def _on_delete_last_point(self):
+        """删除最后放置的标志点"""
+        try:
+            landmark_node = self.session.get_landmark_node("Native_Annulus_Points")
+            if landmark_node and landmark_node.GetNumberOfControlPoints() > 0:
+                last_index = landmark_node.GetNumberOfControlPoints() - 1
+                landmark_node.RemoveNthControlPoint(last_index)
+                logging.info(f"删除了第 {last_index + 1} 个标志点")
+                
+                # 更新进度显示
+                remaining_points = landmark_node.GetNumberOfControlPoints()
+                self._update_landmark_progress(f"📍 已放置 {remaining_points} 个点，还需要 {3 - remaining_points} 个点 ({remaining_points}/3)")
+                
+            else:
+                logging.warning("没有可删除的标志点")
+        except Exception as e:
+            logging.error(f"删除标志点失败: {e}")
+
+    def _on_clear_all_points(self):
+        """清除所有标志点"""
+        try:
+            landmark_node = self.session.get_landmark_node("Native_Annulus_Points")
+            if landmark_node:
+                landmark_node.RemoveAllControlPoints()
+                logging.info("清除了所有标志点")
+                
+                # 重置进度显示
+                self._update_landmark_progress("📍 请在3D视图中放置3个瓣环点 (0/3)")
+                self._update_instruction(
+                    "🔄 已清除所有标志点\n"
+                    "请重新在3D视图中依次放置3个原生瓣环上的点"
+                )
+            else:
+                logging.warning("未找到标志点节点")
+        except Exception as e:
+            logging.error(f"清除标志点失败: {e}")
+
+    def _refresh_3d_view(self):
+        """
+        刷新3D视图以显示新创建的markups
+        """
+        try:
+            # 获取3D视图
+            threeDWidget = slicer.app.layoutManager().threeDWidget(0)
+            if threeDWidget:
+                threeDView = threeDWidget.threeDView()
+                threeDView.resetFocalPoint()
+                
+            # 强制渲染更新
+            slicer.app.processEvents()
+            
+            # 确保markups模块的工具栏可见
+            markupsToolBar = slicer.util.findChild(slicer.util.mainWindow(), 'MarkupsToolBar')
+            if markupsToolBar:
+                markupsToolBar.setVisible(True)
+            
+            logging.info("3D视图已刷新，markups可见")
+            
+        except Exception as e:
+            logging.error(f"刷新3D视图失败: {e}")
+
+    def _center_view_on_model(self, node_name: str):
+        """将视图中心对准指定的Model节点"""
+        try:
+            node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+            if node and hasattr(node, 'GetPolyData'):
+                polydata = node.GetPolyData()
+                if polydata:
+                    bounds = [0.0] * 6
+                    polydata.GetBounds(bounds)
+                    
+                    # 计算中心点
+                    center = [(bounds[0] + bounds[1])/2, 
+                             (bounds[2] + bounds[3])/2, 
+                             (bounds[4] + bounds[5])/2]
+                    
+                    # 设置3D视图的焦点
+                    threeDWidget = slicer.app.layoutManager().threeDWidget(0)
+                    if threeDWidget:
+                        threeDView = threeDWidget.threeDView()
+                        camera = threeDView.camera()
+                        camera.SetFocalPoint(center)
+                        camera.SetPosition(center[0], center[1] - 100, center[2] + 50)
+                        camera.SetViewUp(0, 0, 1)
+                        threeDView.forceRender()
+                        
+                    logging.info(f"视图已对准Model {node_name}")
+                    
+        except Exception as e:
+            logging.error(f"对准Model视图失败: {e}")
+
+    def _center_view_on_markups(self, node_name: str):
+        """将视图中心对准指定的markups节点"""
+        try:
+            node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+            if node and hasattr(node, 'GetBounds'):
+                bounds = [0.0] * 6
+                node.GetBounds(bounds)
+                
+                # 计算中心点
+                center = [(bounds[0] + bounds[1])/2, 
+                         (bounds[2] + bounds[3])/2, 
+                         (bounds[4] + bounds[5])/2]
+                
+                # 设置3D视图的焦点
+                threeDWidget = slicer.app.layoutManager().threeDWidget(0)
+                if threeDWidget:
+                    threeDView = threeDWidget.threeDView()
+                    camera = threeDView.camera()
+                    camera.SetFocalPoint(center)
+                    camera.SetPosition(center[0], center[1] - 100, center[2] + 50)
+                    camera.SetViewUp(0, 0, 1)
+                    threeDView.forceRender()
+                    
+                logging.info(f"视图已对准 {node_name}")
+                
+        except Exception as e:
+            logging.error(f"对准视图失败: {e}")
+
     def _on_button_clicked(self, button_name: str):
         """
         通用按钮点击槽函数 - 任务5要求
@@ -333,14 +934,19 @@ class Module2Widget(qt.QWidget):
         if self.logic:
             self.logic.session = session
 
-    def on_activated(self):
-        """模块激活时调用"""
-        logging.info("模块二已激活")
-
     def on_deactivated(self):
         """模块停用时调用"""
         logging.info("模块二已停用")
+        # 停止监控定时器
+        self._stop_landmark_monitoring()
 
     def cleanup(self):
         """清理资源"""
+        # 停止标志点监控定时器
+        self._stop_landmark_monitoring()
+        
+        # 清理逻辑层资源
+        if self.logic:
+            self.logic.cleanup()
+        
         logging.info("模块二界面清理完成")
