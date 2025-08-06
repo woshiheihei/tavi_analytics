@@ -12,6 +12,7 @@ import slicer
 try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
+    from ..utils.layout_manager import LayoutManager
     from .module2_logic import Module2Logic
 except ImportError:
     import os
@@ -23,6 +24,7 @@ except ImportError:
     
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
+    from utils.layout_manager import LayoutManager
     from module2.module2_logic import Module2Logic
 
 
@@ -101,8 +103,38 @@ class Module2Widget(qt.QWidget):
         segmentation_group.setStyleSheet(StyleManager.get_card_style())
         segmentation_layout = qt.QVBoxLayout(segmentation_group)
         
-        # TODO: 将在后续任务中添加具体的分割控件
-        # 这里先创建基础布局结构
+        # 按照详细设计文档和开发计划任务2的要求，添加三个分割按钮
+        # 使用推荐的LayoutManager.create_button_with_style()方法创建按钮
+        
+        # 1. 开始主动脉根部分割按钮 - 主要操作
+        aortic_root_button = LayoutManager.create_button_with_style(
+            text="开始主动脉根部分割",
+            button_type="primary",
+            size="default",
+            min_height=40
+        )
+        aortic_root_button.setObjectName("aorticRootSegmentationButton")
+        segmentation_layout.addWidget(aortic_root_button)
+        
+        # 2. 开始瓣膜支架分割按钮 - 次要操作
+        valve_stent_button = LayoutManager.create_button_with_style(
+            text="开始瓣膜支架分割",
+            button_type="secondary",
+            size="default",
+            min_height=40
+        )
+        valve_stent_button.setObjectName("valveStentSegmentationButton")
+        segmentation_layout.addWidget(valve_stent_button)
+        
+        # 3. 验证分割结果按钮 - 轮廓按钮
+        validate_button = LayoutManager.create_button_with_style(
+            text="验证分割结果",
+            button_type="outline",
+            size="default",
+            min_height=35
+        )
+        validate_button.setObjectName("validateSegmentationButton")
+        segmentation_layout.addWidget(validate_button)
         
         layout.addWidget(segmentation_group)
 
