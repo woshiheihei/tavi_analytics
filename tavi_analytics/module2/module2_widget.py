@@ -230,15 +230,15 @@ class Module2Widget(qt.QWidget):
         landmark_layout.addWidget(self.native_annulus_button)
         
         # 2. 定义原生连合按钮 - 次要操作
-        native_commissure_button = LayoutManager.create_button_with_style(
+        self.native_commissure_button = LayoutManager.create_button_with_style(
             text="定义原生连合",
             button_type="secondary",
             size="default",
             min_height=40
         )
-        native_commissure_button.setObjectName("defineNativeCommissureButton")
-        native_commissure_button.clicked.connect(lambda: self._on_button_clicked("定义原生连合"))
-        landmark_layout.addWidget(native_commissure_button)
+        self.native_commissure_button.setObjectName("defineNativeCommissureButton")
+        self.native_commissure_button.clicked.connect(self._on_define_native_commissure)
+        landmark_layout.addWidget(self.native_commissure_button)
         
         # 3. 定义新连合按钮 - 次要操作
         neo_commissure_button = LayoutManager.create_button_with_style(
@@ -693,6 +693,189 @@ class Module2Widget(qt.QWidget):
             self._update_landmark_progress("❌ 处理失败")
             self._enable_native_annulus_button()
 
+    def _on_define_native_commissure(self):
+        """
+        处理定义原生连合按钮点击事件
+        
+        启动原生连合标志点定义流程
+        """
+        logging.info("用户点击了'定义原生连合'按钮")
+        
+        try:
+            # 更新UI状态
+            self._update_instruction("正在创建原生连合标志点节点...")
+            self._update_landmark_progress("⏳ 初始化连合定义...")
+            
+            # 禁用按钮，防止重复点击
+            self.native_commissure_button.setEnabled(False)
+            self.native_commissure_button.setText("正在初始化...")
+            
+            # 调用逻辑层的连合定义方法
+            result = self.logic.define_native_commissure_points()
+            
+            if result:
+                self._update_instruction(
+                    "✅ 原生连合标志点节点已创建！\n"
+                    "请在3D视图中依次放置3个原生连合点：\n"
+                    "1️⃣ 第一个点：右冠-左冠连合位置\n"
+                    "2️⃣ 第二个点：左冠-无冠连合位置\n" 
+                    "3️⃣ 第三个点：无冠-右冠连合位置"
+                )
+                self._update_landmark_progress("📍 请在3D视图中放置3个连合点 (0/3)")
+                
+                # 显示嵌入式标志点控制面板
+                self._show_markups_controls()
+                
+                # 启动定时器监控连合点放置进度
+                self._start_commissure_monitoring()
+                
+                # 更新状态栏
+                self._update_status("Native_Commissure_Points节点已激活，请开始放置连合点")
+                
+                logging.info("原生连合定义流程已启动")
+                
+            else:
+                self._update_instruction("❌ 连合标志点节点创建失败，请重试")
+                self._update_landmark_progress("❌ 创建失败")
+                self._enable_native_commissure_button()
+                self._update_status("原生连合标志点创建失败")
+                logging.error("原生连合定义流程启动失败")
+                
+        except Exception as e:
+            logging.error(f"定义原生连合失败: {e}")
+            self._update_instruction(f"❌ 发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 操作失败")
+            self._enable_native_commissure_button()
+            self._update_status("原生连合定义失败，请检查日志")
+
+    def _start_commissure_monitoring(self):
+        """
+        启动连合点放置监控
+        
+        定期检查用户放置的连合点数量，并在达到3个点时自动处理
+        """
+        # 创建定时器（如果还没有的话）
+        if not hasattr(self, 'commissure_timer'):
+            self.commissure_timer = qt.QTimer()
+            self.commissure_timer.timeout.connect(self._check_commissure_progress)
+        
+        self.commissure_timer.start(1000)  # 每秒检查一次
+        
+        logging.info("连合点监控定时器已启动")
+
+    def _check_commissure_progress(self):
+        """
+        检查连合点放置进度
+        
+        监控用户在3D视图中放置的连合点数量，并提供实时反馈
+        """
+        try:
+            # 获取状态信息
+            status = self.logic.get_native_commissure_status()
+            
+            if not status['node_exists']:
+                # 节点不存在，停止监控
+                self._stop_commissure_monitoring()
+                self._enable_native_commissure_button()
+                return
+            
+            points_placed = status['points_placed']
+            points_needed = status['points_needed']
+            
+            # 更新进度显示
+            if points_placed == 0:
+                self._update_landmark_progress("📍 请在3D视图中放置3个连合点 (0/3)")
+            elif points_placed == 1:
+                self._update_landmark_progress("📍 已放置1个连合点，还需要2个点 (1/3)")
+                self._update_instruction(
+                    "✅ 第一个连合点已放置！\n"
+                    "请继续放置第二个连合点（左冠-无冠连合位置）"
+                )
+            elif points_placed == 2:
+                self._update_landmark_progress("📍 已放置2个连合点，还需要1个点 (2/3)")
+                self._update_instruction(
+                    "✅ 前两个连合点已放置！\n"
+                    "请放置第三个连合点（无冠-右冠连合位置）"
+                )
+            elif points_placed >= 3:
+                # 检查是否已经完成定义
+                if status['points_complete']:
+                    self._on_commissure_definition_completed()
+                
+        except Exception as e:
+            logging.error(f"检查连合点进度失败: {e}")
+
+    def _on_commissure_definition_completed(self):
+        """
+        连合点定义完成的处理
+        
+        显示完成结果并提供后续操作指导
+        """
+        logging.info("连合点定义完成")
+        
+        try:
+            # 停止监控
+            self._stop_commissure_monitoring()
+            
+            # 获取连合点信息
+            landmark_node = self.session.get_landmark_node("Native_Commissure_Points")
+            
+            if landmark_node:
+                # 显示成功信息
+                self._update_instruction(
+                    "🎉 原生连合点定义完成！\n"
+                    "✅ 已自动命名3个连合点：\n"
+                    "• RCC_LCC: 右冠-左冠连合\n"
+                    "• LCC_NCC: 左冠-无冠连合\n"
+                    "• NCC_RCC: 无冠-右冠连合\n"
+                    "您可以继续定义其他解剖标志点。"
+                )
+                self._update_landmark_progress("✅ 连合点定义完成")
+                self._update_status("原生连合点定义成功完成")
+                
+                # 刷新视图
+                self._refresh_3d_view()
+                self._center_view_on_markups("Native_Commissure_Points")
+                
+                # 重新启用按钮，允许重新定义
+                self._enable_native_commissure_button()
+                
+                # 隐藏嵌入式控制面板
+                self._hide_markups_controls()
+                
+                # 更新进度条
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(50)  # 假设连合点完成后进度为50%
+                
+                logging.info("原生连合点定义流程完成")
+                
+            else:
+                self._update_instruction("❌ 未能获取连合点信息")
+                self._update_landmark_progress("❌ 获取信息失败")
+                self._enable_native_commissure_button()
+                
+        except Exception as e:
+            logging.error(f"连合定义完成处理失败: {e}")
+            self._update_instruction(f"❌ 处理结果时发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 处理失败")
+            self._enable_native_commissure_button()
+
+    def _stop_commissure_monitoring(self):
+        """停止连合点监控定时器"""
+        if hasattr(self, 'commissure_timer') and self.commissure_timer:
+            self.commissure_timer.stop()
+            self.commissure_timer = None
+            logging.info("连合点监控定时器已停止")
+        
+        # 同时隐藏控制面板
+        self._hide_markups_controls()
+
+    def _enable_native_commissure_button(self):
+        """重新启用原生连合按钮"""
+        if hasattr(self, 'native_commissure_button'):
+            self.native_commissure_button.setEnabled(True)
+            self.native_commissure_button.setText("定义原生连合")
+
     def _stop_landmark_monitoring(self):
         """停止标志点监控定时器"""
         if hasattr(self, 'landmark_timer') and self.landmark_timer:
@@ -702,6 +885,16 @@ class Module2Widget(qt.QWidget):
         
         # 同时隐藏控制面板
         self._hide_markups_controls()
+
+    def _stop_all_monitoring(self):
+        """停止所有监控定时器"""
+        # 停止瓣环监控
+        self._stop_landmark_monitoring()
+        
+        # 停止连合点监控
+        self._stop_commissure_monitoring()
+        
+        logging.info("所有监控定时器已停止")
 
     def _enable_native_annulus_button(self):
         """重新启用原生瓣环按钮"""
@@ -799,37 +992,79 @@ class Module2Widget(qt.QWidget):
     def _on_delete_last_point(self):
         """删除最后放置的标志点"""
         try:
-            landmark_node = self.session.get_landmark_node("Native_Annulus_Points")
-            if landmark_node and landmark_node.GetNumberOfControlPoints() > 0:
-                last_index = landmark_node.GetNumberOfControlPoints() - 1
-                landmark_node.RemoveNthControlPoint(last_index)
-                logging.info(f"删除了第 {last_index + 1} 个标志点")
+            # 确定当前活动的标志点节点
+            active_landmark_node = None
+            active_node_name = ""
+            
+            # 检查瓣环点
+            annulus_node = self.session.get_landmark_node("Native_Annulus_Points")
+            if annulus_node and hasattr(self, 'landmark_timer') and self.landmark_timer and self.landmark_timer.isActive():
+                active_landmark_node = annulus_node
+                active_node_name = "Native_Annulus_Points"
+            
+            # 检查连合点
+            commissure_node = self.session.get_landmark_node("Native_Commissure_Points")
+            if commissure_node and hasattr(self, 'commissure_timer') and self.commissure_timer and self.commissure_timer.isActive():
+                active_landmark_node = commissure_node
+                active_node_name = "Native_Commissure_Points"
+            
+            if active_landmark_node and active_landmark_node.GetNumberOfControlPoints() > 0:
+                last_index = active_landmark_node.GetNumberOfControlPoints() - 1
+                active_landmark_node.RemoveNthControlPoint(last_index)
+                logging.info(f"删除了{active_node_name}的第 {last_index + 1} 个标志点")
                 
                 # 更新进度显示
-                remaining_points = landmark_node.GetNumberOfControlPoints()
-                self._update_landmark_progress(f"📍 已放置 {remaining_points} 个点，还需要 {3 - remaining_points} 个点 ({remaining_points}/3)")
+                remaining_points = active_landmark_node.GetNumberOfControlPoints()
+                if active_node_name == "Native_Annulus_Points":
+                    self._update_landmark_progress(f"📍 已放置 {remaining_points} 个点，还需要 {3 - remaining_points} 个点 ({remaining_points}/3)")
+                elif active_node_name == "Native_Commissure_Points":
+                    self._update_landmark_progress(f"📍 已放置 {remaining_points} 个连合点，还需要 {3 - remaining_points} 个点 ({remaining_points}/3)")
                 
             else:
-                logging.warning("没有可删除的标志点")
+                logging.warning("没有可删除的标志点或没有活动的标志点节点")
+                
         except Exception as e:
             logging.error(f"删除标志点失败: {e}")
 
     def _on_clear_all_points(self):
         """清除所有标志点"""
         try:
-            landmark_node = self.session.get_landmark_node("Native_Annulus_Points")
-            if landmark_node:
-                landmark_node.RemoveAllControlPoints()
-                logging.info("清除了所有标志点")
+            # 确定当前活动的标志点节点
+            active_landmark_node = None
+            active_node_name = ""
+            
+            # 检查瓣环点
+            annulus_node = self.session.get_landmark_node("Native_Annulus_Points")
+            if annulus_node and hasattr(self, 'landmark_timer') and self.landmark_timer and self.landmark_timer.isActive():
+                active_landmark_node = annulus_node
+                active_node_name = "Native_Annulus_Points"
+            
+            # 检查连合点
+            commissure_node = self.session.get_landmark_node("Native_Commissure_Points")
+            if commissure_node and hasattr(self, 'commissure_timer') and self.commissure_timer and self.commissure_timer.isActive():
+                active_landmark_node = commissure_node
+                active_node_name = "Native_Commissure_Points"
+            
+            if active_landmark_node:
+                active_landmark_node.RemoveAllControlPoints()
+                logging.info(f"清除了{active_node_name}的所有标志点")
                 
                 # 重置进度显示
-                self._update_landmark_progress("📍 请在3D视图中放置3个瓣环点 (0/3)")
-                self._update_instruction(
-                    "🔄 已清除所有标志点\n"
-                    "请重新在3D视图中依次放置3个原生瓣环上的点"
-                )
+                if active_node_name == "Native_Annulus_Points":
+                    self._update_landmark_progress("📍 请在3D视图中放置3个瓣环点 (0/3)")
+                    self._update_instruction(
+                        "🔄 已清除所有瓣环标志点\n"
+                        "请重新在3D视图中依次放置3个原生瓣环上的点"
+                    )
+                elif active_node_name == "Native_Commissure_Points":
+                    self._update_landmark_progress("📍 请在3D视图中放置3个连合点 (0/3)")
+                    self._update_instruction(
+                        "🔄 已清除所有连合标志点\n"
+                        "请重新在3D视图中依次放置3个原生连合点"
+                    )
             else:
-                logging.warning("未找到标志点节点")
+                logging.warning("未找到活动的标志点节点")
+                
         except Exception as e:
             logging.error(f"清除标志点失败: {e}")
 
@@ -937,13 +1172,13 @@ class Module2Widget(qt.QWidget):
     def on_deactivated(self):
         """模块停用时调用"""
         logging.info("模块二已停用")
-        # 停止监控定时器
-        self._stop_landmark_monitoring()
+        # 停止所有监控定时器
+        self._stop_all_monitoring()
 
     def cleanup(self):
         """清理资源"""
-        # 停止标志点监控定时器
-        self._stop_landmark_monitoring()
+        # 停止所有监控定时器
+        self._stop_all_monitoring()
         
         # 清理逻辑层资源
         if self.logic:
