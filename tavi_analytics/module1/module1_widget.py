@@ -17,6 +17,7 @@ import qt
 import slicer
 from typing import Optional
 import logging
+import vtk
 
 try:
     from ..core.session import TAVRStudySession
@@ -91,10 +92,22 @@ class Module1Widget(qt.QWidget):
         self.cardiac_cycle_widget = None
         self.status_display_widget = None
         self.step_checklist = None
+
+        # 事件监听/去抖
+        self._scene_observer_tags = []
+        self._browser_observer_tag = None
+        self._browser_node_ref = None
+        self._refresh_timer = qt.QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(120)  # 轻量去抖
+        self._refresh_timer.timeout.connect(self._update_interface_state)
         
         # 初始化界面
         self._init_ui()
         self._setup_connections()
+        
+        # 初始化自动刷新监听
+        self._init_auto_refresh()
         
         # 检查现有数据
         self._check_existing_data()
@@ -168,13 +181,14 @@ class Module1Widget(qt.QWidget):
         # 按钮布局
         button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
         
-        # 刷新状态按钮 - 使用统一的按钮创建方法
+        # 重新检测按钮（原“刷新状态”） - 次要样式，兜底自检入口
         self.refresh_button = LayoutManager.create_button_with_style(
-            text="刷新状态", 
+            text="重新检测", 
             button_type="secondary", 
             size="default", 
             min_height=35
         )
+        self.refresh_button.setToolTip("手动触发一次完整状态自检并刷新界面（当自动刷新不生效时使用）")
         button_layout.addWidget(self.refresh_button)
         
         # 重置数据按钮 - 使用统一的按钮创建方法
@@ -188,15 +202,20 @@ class Module1Widget(qt.QWidget):
         
         actions_layout.addLayout(button_layout)
         
-        # 进入下一模块按钮 - 单独一行，使用统一的按钮创建方法
+        # 主CTA：继续（与后续模块解耦）
         self.next_module_button = LayoutManager.create_button_with_style(
-            text="进入模块二：瓣膜分割", 
+            text="继续", 
             button_type="primary", 
             size="default", 
             min_height=40
         )
         self.next_module_button.setEnabled(False)
         actions_layout.addWidget(self.next_module_button)
+
+        # 进度提示（小字）
+        self.next_progress_label = qt.QLabel("")
+        self.next_progress_label.setStyleSheet(StyleManager.get_label_style("muted"))
+        actions_layout.addWidget(self.next_progress_label)
         
         parent_layout.addWidget(actions_group, 0)  # 固定大小
         
@@ -208,6 +227,76 @@ class Module1Widget(qt.QWidget):
         self.reset_button.clicked.connect(self._on_reset_clicked)
         self.next_module_button.clicked.connect(self._on_next_module_clicked)
         
+    def _init_auto_refresh(self):
+        """初始化MRML场景与关键节点的自动刷新监听"""
+        try:
+            self._attach_scene_observers()
+            self._ensure_browser_observer()
+        except Exception as e:
+            logging.error(f"初始化自动刷新监听失败: {e}")
+
+    def _attach_scene_observers(self):
+        """监听场景级别事件，驱动界面状态的自动刷新"""
+        self._detach_scene_observers()
+        scene = slicer.mrmlScene
+        try:
+            for ev in [scene.NodeAddedEvent, scene.NodeRemovedEvent, scene.EndBatchProcessEvent]:
+                tag = scene.AddObserver(ev, self._on_scene_event)
+                self._scene_observer_tags.append(tag)
+        except Exception as e:
+            logging.error(f"绑定场景事件失败: {e}")
+
+    def _detach_scene_observers(self):
+        scene = slicer.mrmlScene
+        for tag in self._scene_observer_tags:
+            try:
+                scene.RemoveObserver(tag)
+            except Exception:
+                pass
+        self._scene_observer_tags = []
+
+    def _on_scene_event(self, caller, event):
+        """场景事件回调：节点增删/批处理结束后调度刷新，并确保浏览器监听"""
+        try:
+            self._ensure_browser_observer()
+            self._schedule_interface_refresh()
+        except Exception as e:
+            logging.debug(f"场景事件回调异常: {e}")
+
+    def _ensure_browser_observer(self):
+        """确保监听当前序列浏览器节点的修改事件"""
+        try:
+            browser = self.session.get_sequence_browser_node()
+            # 若节点改变或之前未监听，则重新绑定
+            if browser is not self._browser_node_ref:
+                self._detach_browser_observer()
+                if browser:
+                    try:
+                        self._browser_observer_tag = browser.AddObserver(vtk.vtkCommand.ModifiedEvent, self._on_browser_modified)
+                        self._browser_node_ref = browser
+                    except Exception as e:
+                        logging.debug(f"绑定浏览器节点事件失败: {e}")
+        except Exception as e:
+            logging.debug(f"确保浏览器监听失败: {e}")
+
+    def _detach_browser_observer(self):
+        if self._browser_node_ref and self._browser_observer_tag:
+            try:
+                self._browser_node_ref.RemoveObserver(self._browser_observer_tag)
+            except Exception:
+                pass
+        self._browser_observer_tag = None
+        self._browser_node_ref = None
+
+    def _on_browser_modified(self, caller, event):
+        """浏览器节点修改（如当前帧变化），调度轻量刷新"""
+        self._schedule_interface_refresh()
+
+    def _schedule_interface_refresh(self):
+        """去抖调度界面刷新，避免频繁事件导致抖动"""
+        if not self._refresh_timer.isActive():
+            self._refresh_timer.start()
+
     def _check_existing_data(self):
         """检查现有数据并更新界面状态"""
         try:
@@ -259,7 +348,8 @@ class Module1Widget(qt.QWidget):
         """处理数据加载完成"""
         try:
             logging.info("数据加载完成，激活心动周期管理")
-            
+            # 确保刷新监听绑定到新浏览器节点
+            self._ensure_browser_observer()
             # 激活心动周期管理
             success = self.cardiac_cycle_widget.activate()
             if success:
@@ -277,9 +367,19 @@ class Module1Widget(qt.QWidget):
             logging.error(f"处理数据加载完成时发生错误: {str(e)}")
             
     def _on_refresh_clicked(self):
-        """处理刷新按钮点击"""
+        """处理重新检测按钮点击（兜底自检）"""
         try:
-            logging.info("刷新模块一状态")
+            logging.info("执行模块一重新检测：重绑观察者、刷新状态与子组件")
+            self.refresh_button.setEnabled(False)
+            qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
+
+            # 重新绑定场景与浏览器观察者，确保自动刷新可用
+            try:
+                self._detach_scene_observers()
+                self._attach_scene_observers()
+                self._ensure_browser_observer()
+            except Exception as e:
+                logging.debug(f"重新绑定观察者时发生问题: {e}")
             
             # 刷新状态显示
             self.status_display_widget.update_status()
@@ -287,11 +387,17 @@ class Module1Widget(qt.QWidget):
             # 刷新心动周期显示
             self.cardiac_cycle_widget.refresh_display()
             
-            # 更新界面状态
+            # 更新界面状态（含步骤清单、CTA）
             self._update_interface_state()
             
         except Exception as e:
-            logging.error(f"刷新状态时发生错误: {str(e)}")
+            logging.error(f"重新检测时发生错误: {str(e)}")
+        finally:
+            try:
+                qt.QApplication.restoreOverrideCursor()
+            except Exception:
+                pass
+            self.refresh_button.setEnabled(True)
             
     def _on_reset_clicked(self):
         """处理重置按钮点击"""
@@ -373,20 +479,30 @@ class Module1Widget(qt.QWidget):
 
             # 更新步骤清单
             if self.step_checklist:
-                self.step_checklist.update_steps(self._get_step_status())
+                step_status = self._get_step_status()
+                self.step_checklist.update_steps(step_status)
+            else:
+                step_status = self._get_step_status()
             
-            # 检查是否可以进入下一模块
+            # 计算完成度
+            completed = sum(1 for v in step_status.values() if v)
+            total = 4
+            if hasattr(self, 'next_progress_label') and self.next_progress_label:
+                self.next_progress_label.setText(f"已完成 {completed}/{total} 项")
+            
+            # CTA可用性
             ready_for_next = self._check_ready_for_next_module()
             self.next_module_button.setEnabled(ready_for_next)
-            
+            self.next_module_button.setText("继续")
+
+            # 样式与提示
             if ready_for_next:
-                self.next_module_button.setText("进入模块二：瓣膜分割")
-                # 使用统一的样式更新方法
                 self._update_button_style(self.next_module_button, "primary", "default")
+                self.next_module_button.setToolTip("继续到下一步")
             else:
-                self.next_module_button.setText("等待数据配置完成...")
-                # 使用统一的样式更新方法，secondary样式表示未就绪
                 self._update_button_style(self.next_module_button, "secondary", "default")
+                missing_items = self._get_missing_requirements()
+                self.next_module_button.setToolTip("需要完成：\n" + "\n".join(missing_items))
                 
         except Exception as e:
             logging.error(f"更新界面状态时发生错误: {str(e)}")
@@ -486,6 +602,11 @@ class Module1Widget(qt.QWidget):
     def cleanup(self):
         """清理资源"""
         try:
+            # 清理监听
+            self._detach_browser_observer()
+            self._detach_scene_observers()
+            if self._refresh_timer and self._refresh_timer.isActive():
+                self._refresh_timer.stop()
             # 清理子组件
             if self.cardiac_cycle_widget:
                 self.cardiac_cycle_widget.deactivate()

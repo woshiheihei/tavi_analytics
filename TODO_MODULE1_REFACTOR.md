@@ -10,24 +10,26 @@
 
 ## 1) 实时步骤清单/进度条（P0 / M）
 
-- [ ] 在主界面固定位置展示步骤完成度（数据导入、患者信息、舒张末期、收缩末期）。
-  - [ ] 复用 `Module1Widget._check_ready_for_next_module()` 和 `_get_missing_requirements()` 计算状态。
-  - [ ] 可选：新建 `StepChecklistWidget`，或将其集成到 `StatusDisplayWidget` 中。
-  - [ ] UI 要求：已完成显示勾选，未完成显示提示与跳转操作（如“去导入/去标记”）。
-- 关联文件：`tavi_analytics/module1/module1_widget.py`，`tavi_analytics/module1/status_display_widget.py`
+- [x] 在主界面固定位置展示步骤完成度（数据导入、患者信息、舒张末期、收缩末期）。
+  - [x] 新建 `StepChecklistWidget` 并集成到 `Module1Widget`。
+  - [x] 复用状态计算逻辑，新增 `_get_step_status()` 并在 `_update_interface_state()` 中刷新。
+  - [x] 心动周期标记完成后即时刷新（`CardiacCycleWidget.phaseMarked` → `_update_interface_state()`）。
+- 关联文件：`tavi_analytics/module1/module1_widget.py`，`tavi_analytics/module1/step_checklist_widget.py`
 
 ## 2) 订阅事件自动刷新（P0 / M）
 
-- [ ] 订阅 MRML/Session 相关事件，自动更新状态与按钮可用性，减少“刷新状态”依赖。
-  - [ ] 监听序列节点增删、患者信息变更、关键相位标记事件。
-  - [ ] 统一触发 `_update_interface_state()`。
-- [ ] 将“刷新状态”降级为“重新检测”，或保留为二级入口（不再是主按钮）。
-- 关联文件：`module1_widget.py`，`status_display_widget.py`，`core/session.py`
+- [x] 订阅 MRML Scene 事件，自动更新状态与按钮可用性，减少“刷新状态”依赖。
+  - [x] 监听 `NodeAddedEvent` / `NodeRemovedEvent` / `EndBatchProcessEvent` → `_update_interface_state()` 去抖更新。
+  - [x] 已连接 `CardiacCycleWidget.phaseMarked` 实时反映关键相位标记。
+- [x] 订阅序列浏览器节点 `NodeModifiedEvent`（选择帧变化/驱动端变化时的必要刷新）。
+- [x] 将“刷新状态”降级为“重新检测”（保留为兜底，次要样式，带 tooltip，点击执行自检与完整刷新）。
+- [ ] Session 事件总线设计：为患者信息/配置变化提供信号（或在保存入口统一触发）。
+- 关联文件：`module1_widget.py`，`cardiac_cycle_widget.py`，`core/session.py`
 
 ## 3) CTA 文案与导航解耦（P0 / S）
 
-- [ ] 将“进入模块二：瓣膜分割”调整为主 CTA “继续”。
-- [ ] 在按钮下方以小字显示“已完成 X/4 项”。
+- [x] 将“进入模块二：瓣膜分割”调整为主 CTA “继续”。
+- [x] 在按钮下方以小字显示“已完成 X/4 项”。
 - [ ] 如存在流程分支，再提供分支入口（次要按钮或菜单）。
 - 关联文件：`module1_widget.py`
 
@@ -91,7 +93,7 @@
 
 ## 交付验收（Definition of Done）
 
-- [ ] 无需点击“刷新”即可在导入/标记后实时更新主 CTA 与步骤清单。
+- [ ] 无需点击“重新检测”即可在导入/标记后实时更新主 CTA 与步骤清单（仅在极端场景使用“重新检测”）。
 - [ ] 未满足条件时，主界面能直观看到缺失项与操作入口，无需点“继续”才发现。
 - [ ] 重置支持分项与撤销；危险操作需二次确认。
 - [ ] 错误主要以横幅方式呈现；弹窗仅用于阻断型确认。
