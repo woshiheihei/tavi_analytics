@@ -72,11 +72,11 @@ class DataLoadingDialog(qt.QDialog):
         
         # DICOM相关组件
         self.dicom_browser = None
-        self.dicom_panel_visible = False
+        self.dicom_panel_visible = True  # 默认显示DICOM面板
         
         self.setWindowTitle("数据加载与配置")
         self.setModal(True)
-        self.setMinimumSize(800, 700)  # 增加最小宽度以容纳DICOM面板
+        self.setMinimumSize(1300, 750)  # 优化最小尺寸以适应新布局
         
         self.setup_ui()
         self.setup_connections()
@@ -113,19 +113,19 @@ class DataLoadingDialog(qt.QDialog):
         # 按钮区域
         self.create_button_section(left_layout)
         
-        # 设置左侧面板最小宽度
-        left_panel.setMinimumWidth(400)
-        left_panel.setMaximumWidth(500)
+        # 设置左侧面板宽度范围
+        left_panel.setMinimumWidth(480)
+        left_panel.setMaximumWidth(600)
         
         # 右侧：DICOM面板
         self.right_panel = qt.QWidget()
-        self.right_panel.setVisible(False)  # 初始隐藏
+        self.right_panel.setVisible(True)  # 默认显示
         right_layout = qt.QVBoxLayout(self.right_panel)
         
         # DICOM面板标题
         dicom_title = qt.QLabel("DICOM 数据库")
         dicom_title.setAlignment(qt.Qt.AlignCenter)
-        dicom_title.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 5px; }")
+        dicom_title.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 5px; color: #2c3e50; }")
         right_layout.addWidget(dicom_title)
         
         # DICOM浏览器容器
@@ -133,35 +133,39 @@ class DataLoadingDialog(qt.QDialog):
         container_layout = qt.QVBoxLayout(self.dicom_container)
         right_layout.addWidget(self.dicom_container)
         
-        # 设置右侧面板最小宽度
-        self.right_panel.setMinimumWidth(600)
+        # 设置右侧面板宽度
+        self.right_panel.setMinimumWidth(650)
+        self.right_panel.setMaximumWidth(800)
         
         # 添加到主布局
         main_layout.addWidget(left_panel)
         main_layout.addWidget(self.right_panel)
         
+        # 默认创建并显示DICOM面板
+        self.create_dicom_browser()
+        
     def create_data_loading_section(self, parent_layout):
-        """创建数据加载区域"""
-        group_box = qt.QGroupBox("数据加载")
+        """创建数据状态显示区域"""
+        group_box = qt.QGroupBox("数据状态")
         layout = qt.QVBoxLayout(group_box)
         
-        # 加载按钮
-        self.load_button = qt.QPushButton("加载4D DICOM序列")
-        self.load_button.setStyleSheet("QPushButton { font-size: 14px; padding: 10px; }")
-        self.load_button.clicked.connect(self.on_load_data)
-        layout.addWidget(self.load_button)
-        
-        # 显示DICOM数据库按钮
-        self.show_dicom_button = qt.QPushButton("显示 DICOM 数据库")
-        self.show_dicom_button.setStyleSheet("QPushButton { font-size: 12px; padding: 8px; background-color: #2196F3; color: white; }")
-        self.show_dicom_button.clicked.connect(self.toggle_dicom_panel)
-        layout.addWidget(self.show_dicom_button)
+        # 使用说明
+        info_label = qt.QLabel("💡 使用右侧DICOM数据库导入和加载4D心脏CT序列")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("QLabel { font-size: 12px; color: #666; padding: 8px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; }")
+        layout.addWidget(info_label)
         
         # 序列信息显示
-        self.sequence_info_label = qt.QLabel("未加载序列")
+        self.sequence_info_label = qt.QLabel("等待加载DICOM序列...")
         self.sequence_info_label.setWordWrap(True)
-        self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 5px; border: 1px solid #ccc; }")
+        self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }")
         layout.addWidget(self.sequence_info_label)
+        
+        # 可选：收起DICOM面板的小按钮
+        self.show_dicom_button = qt.QPushButton("🗕 收起数据库面板")
+        self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; border: none; border-radius: 3px; }")
+        self.show_dicom_button.clicked.connect(self.toggle_dicom_panel)
+        layout.addWidget(self.show_dicom_button)
         
         parent_layout.addWidget(group_box)
         
@@ -447,12 +451,12 @@ class DataLoadingDialog(qt.QDialog):
             self.right_panel.setVisible(True)
             self.dicom_panel_visible = True
             
-            # 更新按钮文本
-            self.show_dicom_button.setText("隐藏 DICOM 数据库")
-            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 12px; padding: 8px; background-color: #f44336; color: white; }")
+            # 更新按钮文本和样式
+            self.show_dicom_button.setText("🗕 收起数据库面板")
+            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; }")
             
             # 调整对话框大小
-            self.resize(1400, 700)
+            self.resize(1400, 750)
             
             logging.info("DICOM数据库面板已显示")
             
@@ -467,12 +471,12 @@ class DataLoadingDialog(qt.QDialog):
             self.right_panel.setVisible(False)
             self.dicom_panel_visible = False
             
-            # 更新按钮文本
-            self.show_dicom_button.setText("显示 DICOM 数据库")
-            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 12px; padding: 8px; background-color: #2196F3; color: white; }")
+            # 更新按钮文本和样式
+            self.show_dicom_button.setText("🗖 展开数据库面板")
+            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #2196F3; color: white; }")
             
-            # 调整对话框大小
-            self.resize(800, 700)
+            # 调整对话框大小（紧凑模式）
+            self.resize(900, 750)
             
             logging.info("DICOM数据库面板已隐藏")
             
@@ -496,10 +500,10 @@ class DataLoadingDialog(qt.QDialog):
             
             container_layout.addWidget(self.dicom_browser)
             
-            # 添加说明标签
-            info_label = qt.QLabel("使用上方完整的DICOM数据库面板导入和加载4D心脏CT序列。\n该面板包含Import、Load等完整功能，加载完成后数据将自动在左侧显示。")
+            # 添加操作指南
+            info_label = qt.QLabel("📝 操作步骤：\n1. 点击 Import 导入DICOM文件\n2. 选择4D心脏CT序列\n3. 点击 Load 加载数据\n4. 数据加载后左侧将自动更新")
             info_label.setWordWrap(True)
-            info_label.setStyleSheet("QLabel { font-size: 11px; color: #333; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; }")
+            info_label.setStyleSheet("QLabel { font-size: 11px; color: #2c3e50; padding: 12px; background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 6px; line-height: 1.4; }")
             container_layout.addWidget(info_label)
             
             # 监听DICOM数据库变化和场景变化
