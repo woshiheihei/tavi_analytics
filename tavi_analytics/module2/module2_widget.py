@@ -241,15 +241,15 @@ class Module2Widget(qt.QWidget):
         landmark_layout.addWidget(self.native_commissure_button)
         
         # 3. 定义新连合按钮 - 次要操作
-        neo_commissure_button = LayoutManager.create_button_with_style(
+        self.neo_commissure_button = LayoutManager.create_button_with_style(
             text="定义新连合",
             button_type="secondary",
             size="default",
             min_height=40
         )
-        neo_commissure_button.setObjectName("defineNeoCommissureButton")
-        neo_commissure_button.clicked.connect(lambda: self._on_button_clicked("定义新连合"))
-        landmark_layout.addWidget(neo_commissure_button)
+        self.neo_commissure_button.setObjectName("defineNeoCommissureButton")
+        self.neo_commissure_button.clicked.connect(self._on_define_neo_commissure)
+        landmark_layout.addWidget(self.neo_commissure_button)
         
         # 4. 定义冠脉开口按钮 - 轮廓按钮
         coronary_ostia_button = LayoutManager.create_button_with_style(
@@ -748,6 +748,58 @@ class Module2Widget(qt.QWidget):
             self._enable_native_commissure_button()
             self._update_status("原生连合定义失败，请检查日志")
 
+    def _on_define_neo_commissure(self):
+        """
+        处理定义新连合按钮点击事件
+        
+        启动新连合标志点定义流程
+        """
+        logging.info("用户点击了'定义新连合'按钮")
+        
+        try:
+            # 更新UI状态
+            self._update_instruction("正在创建新连合标志点节点...")
+            self._update_landmark_progress("⏳ 初始化新连合定义...")
+            
+            # 禁用按钮，防止重复点击
+            self.neo_commissure_button.setEnabled(False)
+            self.neo_commissure_button.setText("正在初始化...")
+            
+            # 调用逻辑层的新连合定义方法
+            result = self.logic.define_neo_commissure_points()
+            
+            if result:
+                self._update_instruction(
+                    "✅ 新连合标志点节点已创建！\n"
+                    "请在3D视图中依次放置3个新连合点：\n"
+                    "1️⃣ 第一个点：新右冠-左冠连合位置\n"
+                    "2️⃣ 第二个点：新左冠-无冠连合位置\n" 
+                    "3️⃣ 第三个点：新无冠-右冠连合位置"
+                )
+                self._update_landmark_progress("📍 请在3D视图中放置3个新连合点 (0/3)")
+                
+                # 启动监控
+                self._start_neo_commissure_monitoring()
+                
+                # 更新状态栏
+                self._update_status("Neo_Commissure_Points节点已激活，请开始放置新连合点")
+                
+                logging.info("新连合定义流程已启动")
+                
+            else:
+                self._update_instruction("❌ 新连合标志点节点创建失败，请重试")
+                self._update_landmark_progress("❌ 创建失败")
+                self._enable_neo_commissure_button()
+                self._update_status("新连合标志点创建失败")
+                logging.error("新连合定义流程启动失败")
+                
+        except Exception as e:
+            logging.error(f"定义新连合失败: {e}")
+            self._update_instruction(f"❌ 发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 操作失败")
+            self._enable_neo_commissure_button()
+            self._update_status("新连合定义失败，请检查日志")
+
     def _start_commissure_monitoring(self):
         """
         启动连合点放置监控
@@ -876,6 +928,122 @@ class Module2Widget(qt.QWidget):
             self.native_commissure_button.setEnabled(True)
             self.native_commissure_button.setText("定义原生连合")
 
+    def _start_neo_commissure_monitoring(self):
+        """
+        启动新连合点放置监控
+        
+        定期检查用户放置的新连合点数量，并在达到3个点时自动处理
+        """
+        # 创建定时器（如果还没有的话）
+        if not hasattr(self, 'neo_commissure_timer'):
+            self.neo_commissure_timer = qt.QTimer()
+            self.neo_commissure_timer.timeout.connect(self._check_neo_commissure_progress)
+        
+        # 启动定时器，每500ms检查一次
+        self.neo_commissure_timer.start(500)
+        logging.info("新连合点监控定时器已启动")
+        
+        # 显示控制面板
+        self._show_markups_controls()
+
+    def _check_neo_commissure_progress(self):
+        """
+        检查新连合点放置进度
+        
+        定期调用，监控用户的新连合点放置进度
+        """
+        try:
+            # 获取新连合状态
+            status = self.logic.get_neo_commissure_status()
+            
+            if not status['node_exists']:
+                # 节点不存在，停止监控
+                self._stop_neo_commissure_monitoring()
+                return
+                
+            points_placed = status['points_placed']
+            points_needed = status['points_needed']
+            
+            # 更新进度显示
+            progress_text = f"📍 请在3D视图中放置3个新连合点 ({points_placed}/{points_needed})"
+            
+            if points_placed < points_needed:
+                progress_text += f"\n当前需要放置第 {points_placed + 1} 个新连合点"
+                self._update_landmark_progress(progress_text)
+            elif points_placed >= points_needed and not status['points_complete']:
+                # 达到所需数量但还未完成
+                self._update_landmark_progress("⏳ 正在处理新连合点...")
+            elif status['points_complete']:
+                # 新连合点已完成
+                self._on_neo_commissure_definition_completed()
+                
+        except Exception as e:
+            logging.error(f"检查新连合进度失败: {e}")
+
+    def _on_neo_commissure_definition_completed(self):
+        """
+        新连合定义完成的回调
+        
+        当检测到新连合点定义已完成时调用
+        """
+        try:
+            logging.info("新连合点定义已完成，开始处理结果")
+            
+            # 停止监控
+            self._stop_neo_commissure_monitoring()
+            
+            # 获取新连合点信息
+            landmark_node = self.session.get_landmark_node("Neo_Commissure_Points")
+            
+            if landmark_node:
+                # 显示成功信息
+                self._update_instruction(
+                    "🎉 新连合点定义完成！\n"
+                    "✅ 已自动命名3个新连合点：\n"
+                    "• Neo_RCC_LCC: 新右冠-左冠连合\n"
+                    "• Neo_LCC_NCC: 新左冠-无冠连合\n"
+                    "• Neo_NCC_RCC: 新无冠-右冠连合\n"
+                    "您可以继续定义其他解剖标志点。"
+                )
+                self._update_landmark_progress("✅ 新连合点定义完成")
+                self._update_status("新连合点定义成功完成")
+                
+                # 刷新视图
+                self._refresh_3d_view()
+                self._center_view_on_markups("Neo_Commissure_Points")
+                
+                # 重新启用按钮
+                self._enable_neo_commissure_button()
+                
+                logging.info("新连合定义完成处理成功")
+            else:
+                logging.error("无法获取新连合点节点")
+                self._update_instruction("❌ 无法获取新连合点信息")
+                self._update_landmark_progress("❌ 处理失败")
+                self._enable_neo_commissure_button()
+                
+        except Exception as e:
+            logging.error(f"新连合定义完成处理失败: {e}")
+            self._update_instruction(f"❌ 处理结果时发生错误: {str(e)}")
+            self._update_landmark_progress("❌ 处理失败")
+            self._enable_neo_commissure_button()
+
+    def _stop_neo_commissure_monitoring(self):
+        """停止新连合点监控定时器"""
+        if hasattr(self, 'neo_commissure_timer') and self.neo_commissure_timer:
+            self.neo_commissure_timer.stop()
+            self.neo_commissure_timer = None
+            logging.info("新连合点监控定时器已停止")
+        
+        # 同时隐藏控制面板
+        self._hide_markups_controls()
+
+    def _enable_neo_commissure_button(self):
+        """重新启用新连合按钮"""
+        if hasattr(self, 'neo_commissure_button'):
+            self.neo_commissure_button.setEnabled(True)
+            self.neo_commissure_button.setText("定义新连合")
+
     def _stop_landmark_monitoring(self):
         """停止标志点监控定时器"""
         if hasattr(self, 'landmark_timer') and self.landmark_timer:
@@ -893,6 +1061,9 @@ class Module2Widget(qt.QWidget):
         
         # 停止连合点监控
         self._stop_commissure_monitoring()
+        
+        # 停止新连合点监控
+        self._stop_neo_commissure_monitoring()
         
         logging.info("所有监控定时器已停止")
 

@@ -629,6 +629,13 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     # 连合点修改后的处理
                     if num_points >= 3:
                         self._handle_commissure_points_complete(landmark_node)
+                
+                elif node_name == "Neo_Commissure_Points":
+                    logging.info(f"检测到新连合标志点修改，当前点数: {num_points}")
+                    
+                    # 新连合点修改后的处理
+                    if num_points >= 3:
+                        self._handle_neo_commissure_points_complete(landmark_node)
                     
         except Exception as e:
             logging.error(f"处理标志点修改事件失败: {e}")
@@ -656,6 +663,13 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     # 连合点添加后的处理
                     if num_points >= 3:
                         self._handle_commissure_points_complete(landmark_node)
+                
+                elif node_name == "Neo_Commissure_Points":
+                    logging.info(f"检测到新连合标志点添加，当前点数: {num_points}")
+                    
+                    # 新连合点添加后的处理
+                    if num_points >= 3:
+                        self._handle_neo_commissure_points_complete(landmark_node)
                     
         except Exception as e:
             logging.error(f"处理标志点添加事件失败: {e}")
@@ -688,6 +702,15 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         # 点数不足，重置完成状态
                         landmark_node.SetAttribute("DefinitionComplete", "false")
                         landmark_node.SetAttribute("CommissurePointsNamed", "false")
+                
+                elif node_name == "Neo_Commissure_Points":
+                    logging.info(f"检测到新连合标志点删除，当前点数: {num_points}")
+                    
+                    # 新连合点删除后的处理
+                    if num_points < 3:
+                        # 点数不足，重置完成状态
+                        landmark_node.SetAttribute("DefinitionComplete", "false")
+                        landmark_node.SetAttribute("NeoCommissurePointsNamed", "false")
                     
         except Exception as e:
             logging.error(f"处理标志点删除事件失败: {e}")
@@ -711,6 +734,26 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             
         except Exception as e:
             logging.error(f"处理连合点完成事件失败: {e}")
+    
+    def _handle_neo_commissure_points_complete(self, landmark_node):
+        """
+        处理新连合点完成事件
+        
+        当新连合点达到3个时，自动执行命名和完成流程
+        
+        Args:
+            landmark_node: 新连合标志点节点
+        """
+        try:
+            # 检查是否已经处理过
+            if landmark_node.GetAttribute("DefinitionComplete") == "true":
+                return
+            
+            # 自动完成新连合定义
+            self.finalize_neo_commissure_definition()
+            
+        except Exception as e:
+            logging.error(f"处理新连合点完成事件失败: {e}")
     
     def _update_plane_from_landmarks(self, landmark_node):
         """
@@ -1119,4 +1162,241 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             
         except Exception as e:
             logging.error(f"计算连合中心失败: {e}")
+            return None
+
+    def define_neo_commissure_points(self) -> bool:
+        """
+        定义新连合标志点
+        
+        根据设计文档要求，创建Neo_Commissure_Points标志点节点，
+        用于标记植入的TAVR瓣膜的三个新连合位置。
+        
+        Returns:
+            bool: 创建成功返回True，失败返回False
+        """
+        try:
+            logging.info("开始定义新连合标志点")
+            
+            # 1. 创建并激活标志点节点
+            landmark_node = self._create_landmark_node("Neo_Commissure_Points")
+            if not landmark_node:
+                logging.error("创建Neo_Commissure_Points节点失败")
+                return False
+            
+            # 设置节点特殊属性
+            landmark_node.GetDisplayNode().SetTextScale(2.2)  # 稍大的文本
+            landmark_node.GetDisplayNode().SetGlyphScale(3.5)  # 稍大的标志点
+            landmark_node.GetDisplayNode().SetSelectedColor(0.0, 0.8, 1.0)  # 青蓝色显示
+            
+            # 将节点ID存储到会话中
+            self.session.set_landmark_node("Neo_Commissure_Points", landmark_node.GetID())
+            
+            # 添加观察者来监听标志点变化
+            self._add_landmark_observer(landmark_node)
+            
+            # 激活标志点放置模式
+            self._activate_landmark_placement(landmark_node)
+            
+            logging.info("Neo_Commissure_Points节点已创建并激活，等待用户放置3个新连合点")
+            return True
+            
+        except Exception as e:
+            logging.error(f"定义新连合标志点失败: {e}")
+            return False
+
+    def get_neo_commissure_status(self) -> dict:
+        """
+        获取新连合标志点的状态信息
+        
+        Returns:
+            dict: 包含状态信息的字典
+        """
+        try:
+            # 获取标志点节点
+            landmark_node = self.session.get_landmark_node("Neo_Commissure_Points")
+            
+            if not landmark_node:
+                return {
+                    'node_exists': False,
+                    'points_placed': 0,
+                    'points_needed': 3,
+                    'points_complete': False,
+                    'points_named': False
+                }
+            
+            points_placed = landmark_node.GetNumberOfControlPoints()
+            points_complete = points_placed >= 3
+            
+            # 检查点是否已命名
+            points_named = False
+            if points_complete:
+                points_named = self._check_neo_commissure_points_named(landmark_node)
+            
+            return {
+                'node_exists': True,
+                'points_placed': points_placed,
+                'points_needed': 3,
+                'points_complete': points_complete,
+                'points_named': points_named
+            }
+            
+        except Exception as e:
+            logging.error(f"获取新连合状态失败: {e}")
+            return {
+                'node_exists': False,
+                'points_placed': 0,
+                'points_needed': 3,
+                'points_complete': False,
+                'points_named': False
+            }
+
+    def _check_neo_commissure_points_named(self, landmark_node) -> bool:
+        """
+        检查新连合点是否已经命名
+        
+        Args:
+            landmark_node: 标志点节点
+            
+        Returns:
+            bool: 所有点都已命名返回True
+        """
+        try:
+            if landmark_node.GetNumberOfControlPoints() < 3:
+                return False
+            
+            expected_names = ['Neo_RCC_LCC', 'Neo_LCC_NCC', 'Neo_NCC_RCC']  # 新连合命名
+            
+            for i in range(3):
+                label = landmark_node.GetNthControlPointLabel(i)
+                if not label or label not in expected_names:
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"检查新连合点命名失败: {e}")
+            return False
+
+    def auto_name_neo_commissure_points(self) -> bool:
+        """
+        自动为新连合点命名
+        
+        当用户放置了3个新连合点后，按照解剖学顺序自动命名
+        
+        Returns:
+            bool: 命名成功返回True
+        """
+        try:
+            landmark_node = self.session.get_landmark_node("Neo_Commissure_Points")
+            if not landmark_node or landmark_node.GetNumberOfControlPoints() < 3:
+                logging.warning("新连合点不足3个，无法自动命名")
+                return False
+            
+            # 新连合点命名：按照解剖学位置
+            commissure_names = [
+                'Neo_RCC_LCC',  # 新右冠-左冠连合
+                'Neo_LCC_NCC',  # 新左冠-无冠连合  
+                'Neo_NCC_RCC'   # 新无冠-右冠连合
+            ]
+            
+            commissure_descriptions = [
+                '新右冠-左冠连合',
+                '新左冠-无冠连合',
+                '新无冠-右冠连合'
+            ]
+            
+            # 为前3个点命名
+            for i in range(min(3, landmark_node.GetNumberOfControlPoints())):
+                landmark_node.SetNthControlPointLabel(i, commissure_names[i])
+                landmark_node.SetNthControlPointDescription(i, commissure_descriptions[i])
+                logging.info(f"新连合点 {i+1} 已命名为: {commissure_names[i]} ({commissure_descriptions[i]})")
+            
+            # 设置节点属性，标记为已命名
+            landmark_node.SetAttribute("NeoCommissurePointsNamed", "true")
+            landmark_node.SetAttribute("NamingTimestamp", str(slicer.app.timeStamp()))
+            
+            logging.info("新连合点自动命名完成")
+            return True
+            
+        except Exception as e:
+            logging.error(f"自动命名新连合点失败: {e}")
+            return False
+
+    def finalize_neo_commissure_definition(self) -> bool:
+        """
+        完成新连合定义
+        
+        当用户放置完3个新连合点后，执行最终确认和数据整理
+        
+        Returns:
+            bool: 完成成功返回True
+        """
+        try:
+            landmark_node = self.session.get_landmark_node("Neo_Commissure_Points")
+            if not landmark_node:
+                logging.error("未找到新连合标志点节点")
+                return False
+            
+            if landmark_node.GetNumberOfControlPoints() < 3:
+                logging.error("新连合点数量不足3个")
+                return False
+            
+            # 自动命名新连合点
+            if not self.auto_name_neo_commissure_points():
+                logging.warning("自动命名失败，但继续完成定义")
+            
+            # 计算新连合点的几何中心
+            center = self._calculate_neo_commissure_center(landmark_node)
+            if center:
+                # 存储新连合中心到会话
+                self.session.set_landmark_node("Neo_Commissure_Center", center)
+                logging.info(f"新连合中心计算完成: ({center[0]:.2f}, {center[1]:.2f}, {center[2]:.2f})")
+            
+            # 设置完成标记
+            landmark_node.SetAttribute("DefinitionComplete", "true")
+            landmark_node.SetAttribute("CompletionTimestamp", str(slicer.app.timeStamp()))
+            
+            # 停用放置模式
+            interaction_node = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+            if interaction_node:
+                interaction_node.SetCurrentInteractionMode(interaction_node.ViewTransform)
+            
+            logging.info("新连合定义已完成")
+            return True
+            
+        except Exception as e:
+            logging.error(f"完成新连合定义失败: {e}")
+            return False
+
+    def _calculate_neo_commissure_center(self, landmark_node) -> Optional[List[float]]:
+        """
+        计算新连合点的几何中心
+        
+        Args:
+            landmark_node: 新连合标志点节点
+            
+        Returns:
+            List[float]: 中心坐标[x, y, z]，失败返回None
+        """
+        try:
+            if landmark_node.GetNumberOfControlPoints() < 3:
+                return None
+            
+            # 获取3个新连合点的坐标
+            total_x, total_y, total_z = 0.0, 0.0, 0.0
+            
+            for i in range(3):
+                coords = [0.0, 0.0, 0.0]
+                landmark_node.GetNthControlPointPosition(i, coords)
+                total_x += coords[0]
+                total_y += coords[1]
+                total_z += coords[2]
+            
+            # 计算平均值（几何中心）
+            center = [total_x / 3.0, total_y / 3.0, total_z / 3.0]
+            
+            return center
+            
+        except Exception as e:
+            logging.error(f"计算新连合中心失败: {e}")
             return None
