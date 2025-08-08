@@ -490,9 +490,18 @@ class Module1Widget(qt.QWidget):
         """计算步骤清单状态"""
         status = {"data_imported": False, "patient_info": False, "phase_ed": False, "phase_es": False}
         try:
-            status["data_imported"] = bool(self.session.is_ready())
+            # 数据导入状态：只检查序列数据是否已加载
+            status["data_imported"] = bool(self.session.volume_sequence_node_id is not None)
+            
+            # 患者信息状态：检查患者ID和瓣膜信息是否完整
             patient_data = self.session.patient_data
-            status["patient_info"] = bool(patient_data and getattr(patient_data, 'patientID', None))
+            has_patient_id = bool(patient_data and getattr(patient_data, 'patientID', None))
+            has_valve_info = bool(patient_data and 
+                                getattr(patient_data, 'valveBrand', None) and 
+                                getattr(patient_data, 'valveModel', None))
+            status["patient_info"] = has_patient_id and has_valve_info
+            
+            # 时相标记状态
             ed = self.session.get_marked_phase('end_diastole')
             es = self.session.get_marked_phase('end_systole')
             status["phase_ed"] = ed.get('frame_index') is not None if isinstance(ed, dict) else False

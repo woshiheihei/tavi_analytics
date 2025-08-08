@@ -430,6 +430,10 @@ class DataLoadingDialog(qt.QDialog):
         euro_value = self._get_widget_value(self.euro_score_edit, 'value')
         data.euroScoreII = euro_value if euro_value > 0 else None
         
+        # 记录保存的数据用于调试
+        logging.info(f"保存患者数据到session: ID='{data.patientID}', 瓣膜品牌='{data.valveBrand}', 瓣膜型号='{data.valveModel}'")
+        logging.info(f"保存后session状态: 序列节点ID={self.session.volume_sequence_node_id}, is_ready={self.session.is_ready()}")
+        
     def toggle_dicom_panel(self):
         """切换DICOM面板的显示状态"""
         try:
@@ -560,11 +564,40 @@ class DataLoadingDialog(qt.QDialog):
                 for seq_node in sequence_nodes:
                     if seq_node.GetNumberOfDataNodes() > 1:  # 确保是多帧序列
                         if not self.session.volume_sequence_node_id or self.session.volume_sequence_node_id != seq_node.GetID():
-                            self.session.volume_sequence_node_id = seq_node.GetID()
+                            # 查找对应的序列浏览器节点
+                            browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
+                            browser_node_id = None
+                            for browser_node in browser_nodes:
+                                if browser_node.GetMasterSequenceNode() == seq_node:
+                                    browser_node_id = browser_node.GetID()
+                                    break
+                            
+                            # 使用session的标准方法设置序列数据
+                            if browser_node_id:
+                                self.session.set_volume_sequence_data(seq_node.GetID(), browser_node_id)
+                                logging.info(f"检测到新的序列节点: {seq_node.GetName()}, 浏览器节点: {browser_node_id}")
+                            else:
+                                # 如果没有找到浏览器节点，仍设置序列节点ID
+                                self.session.volume_sequence_node_id = seq_node.GetID()
+                                logging.warning(f"检测到新的序列节点: {seq_node.GetName()}, 但未找到对应的浏览器节点")
+                                # 尝试创建浏览器节点
+                                try:
+                                    browser_logic = slicer.modules.sequences.logic()
+                                    browser_node = browser_logic.AddSynchronizedNode(seq_node, None, None)
+                                    if browser_node:
+                                        browser_node_id = browser_node.GetID()
+                                        self.session.set_volume_sequence_data(seq_node.GetID(), browser_node_id)
+                                        logging.info(f"已为序列节点创建浏览器节点: {browser_node_id}")
+                                except Exception as e:
+                                    logging.warning(f"创建浏览器节点失败: {e}")
+                            
+                            # 记录当前session状态用于调试
+                            logging.info(f"Session状态 - 序列节点ID: {self.session.volume_sequence_node_id}, 浏览器节点ID: {self.session.sequence_browser_node_id}")
+                            logging.info(f"Session is_ready: {self.session.is_ready()}")
+                            
                             self.update_sequence_info()
                             self.parse_dicom_metadata()
                             self.check_confirm_button_state()
-                            logging.info(f"检测到新的序列节点: {seq_node.GetName()}")
                             break
             elif len(volume_nodes) > 1:
                 # 如果有多个容积节点但没有序列节点，询问用户是否创建序列

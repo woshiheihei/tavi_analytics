@@ -185,15 +185,30 @@ class StatusDisplayWidget(qt.QGroupBox):
         """计算四项任务的完成状态"""
         status = {"data_imported": False, "patient_info": False, "phase_ed": False, "phase_es": False}
         try:
-            status["data_imported"] = bool(self.session.is_ready())
+            # 数据导入状态：只检查序列数据是否已加载
+            status["data_imported"] = bool(self.session.volume_sequence_node_id is not None)
+            
+            # 患者信息状态：检查患者ID和瓣膜信息是否完整
             patient_data = getattr(self.session, 'patient_data', None)
-            status["patient_info"] = bool(patient_data and getattr(patient_data, 'patientID', None))
+            has_patient_id = bool(patient_data and getattr(patient_data, 'patientID', None))
+            has_valve_info = bool(patient_data and 
+                                getattr(patient_data, 'valveBrand', None) and 
+                                getattr(patient_data, 'valveModel', None))
+            status["patient_info"] = has_patient_id and has_valve_info
+            
+            # 时相标记状态
             ed = self.session.get_marked_phase('end_diastole')
             es = self.session.get_marked_phase('end_systole')
             status["phase_ed"] = ed.get('frame_index') is not None if isinstance(ed, dict) else False
             status["phase_es"] = es.get('frame_index') is not None if isinstance(es, dict) else False
-        except Exception:
-            pass
+            
+            # 记录详细状态用于调试
+            logging.info(f"步骤状态计算: 数据导入={status['data_imported']} (序列节点ID={self.session.volume_sequence_node_id}), "
+                        f"患者信息={status['patient_info']} (患者ID={has_patient_id}, 瓣膜信息={has_valve_info}), "
+                        f"舒张末期={status['phase_ed']}, 收缩末期={status['phase_es']}")
+            
+        except Exception as e:
+            logging.error(f"计算步骤状态时出错: {e}")
         return status
     
     def _update_progress(self):

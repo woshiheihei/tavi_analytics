@@ -584,14 +584,18 @@ class TAVRStudySession:
             self.patient_data.valveModel != ""
         )
         
+        # 详细记录状态用于调试
+        self.logger.info(f"Session is_ready检查: 序列节点ID={self.volume_sequence_node_id}, 瓣膜品牌='{self.patient_data.valveBrand}', 瓣膜型号='{self.patient_data.valveModel}', 结果={ready}")
+        
         if not ready:
-            self.logger.debug("会话未准备完成")
+            missing_items = []
             if self.volume_sequence_node_id is None:
-                self.logger.debug("- 缺少4D CT数据")
+                missing_items.append("4D CT数据")
             if self.patient_data.valveBrand == "":
-                self.logger.debug("- 缺少瓣膜品牌")
+                missing_items.append("瓣膜品牌")
             if self.patient_data.valveModel == "":
-                self.logger.debug("- 缺少瓣膜型号")
+                missing_items.append("瓣膜型号")
+            self.logger.info(f"会话未准备完成，缺少: {', '.join(missing_items)}")
         
         return ready
     
