@@ -38,6 +38,9 @@ class CardiacCycleWidget(qt.QGroupBox):
     提供4D心脏CT序列的时间轴管理和关键时相标记功能
     """
     
+    # 新增：标记完成信号，参数为相位名 'end_diastole' 或 'end_systole'
+    phaseMarked = qt.Signal(str)
+    
     def __init__(self, session: TAVRStudySession, parent=None):
         """初始化心动周期管理组件
         
@@ -344,6 +347,12 @@ class CardiacCycleWidget(qt.QGroupBox):
             
             # 更新界面显示
             self._update_phase_labels()
+            
+            # 通知外部：相位已标记
+            try:
+                self.phaseMarked.emit(phase_name)
+            except Exception as _:
+                pass
             
             phase_display_name = "舒张末期" if phase_name == 'end_diastole' else "收缩末期"
             logging.info(f"已标记{phase_display_name}: 帧{frame_index}, {phase_percent:.1f}%")

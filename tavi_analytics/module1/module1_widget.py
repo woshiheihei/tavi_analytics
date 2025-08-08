@@ -123,6 +123,12 @@ class Module1Widget(qt.QWidget):
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
         LayoutManager.setup_widget_size_policy(self.cardiac_cycle_widget, LayoutType.CONTROL_PANEL, SizePolicy.EXPANDING)
         main_layout.addWidget(self.cardiac_cycle_widget, 2)  # 获得最多空间
+
+        # 连接相位标记信号以实时刷新步骤清单
+        try:
+            self.cardiac_cycle_widget.phaseMarked.connect(lambda _: self._update_interface_state())
+        except Exception:
+            pass
         
         # 操作按钮区域
         self._create_action_buttons_section(main_layout)
