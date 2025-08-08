@@ -65,29 +65,32 @@ class StepChecklistWidget(qt.QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("StepChecklistWidget")
+        # 避免过度拉伸
+        self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
         self._build_ui()
 
     def _build_ui(self):
-        container = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, self)
+        # 外层容器（附着到自身）
+        outer = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, self)
 
-        title = qt.QLabel("任务进度")
-        title.setStyleSheet(StyleManager.get_label_style("default"))
-        container.addWidget(title)
+        # 使用标准分组框，保证标题与边框一致
+        group = LayoutManager.create_section_frame("任务进度", LayoutType.SECTION_CONTAINER)
+        group_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, group)
 
+        # 行项目
         self.row_data = _StepRow("数据导入")
         self.row_patient = _StepRow("患者信息")
         self.row_ed = _StepRow("舒张末期时相")
         self.row_es = _StepRow("收缩末期时相")
 
-        # 逐项添加
-        container.addWidget(self.row_data)
-        container.addWidget(self.row_patient)
-        container.addWidget(self.row_ed)
-        container.addWidget(self.row_es)
+        group_layout.addWidget(self.row_data)
+        group_layout.addWidget(self.row_patient)
+        group_layout.addWidget(self.row_ed)
+        group_layout.addWidget(self.row_es)
 
-        self.setLayout(container)
+        outer.addWidget(group)
         # 轻量边框风格
-        self.setFrameShape(qt.QFrame.StyledPanel)
+        self.setFrameShape(qt.QFrame.NoFrame)
 
     def update_steps(self, status: Dict[str, bool]):
         """根据状态字典更新清单显示
@@ -102,3 +105,7 @@ class StepChecklistWidget(qt.QFrame):
         self.row_patient.set_status(patient_ok, None if patient_ok else "完善患者信息")
         self.row_ed.set_status(ed_ok, None if ed_ok else "标记舒张末期")
         self.row_es.set_status(es_ok, None if es_ok else "标记收缩末期")
+
+        # 自适应高度（防止留下大空白）
+        self.updateGeometry()
+        self.adjustSize()

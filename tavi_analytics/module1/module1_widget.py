@@ -26,7 +26,6 @@ try:
     from .data_loading_dialog import DataLoadingDialog
     from .cardiac_cycle_widget import CardiacCycleWidget
     from .status_display_widget import StatusDisplayWidget
-    from .step_checklist_widget import StepChecklistWidget
     from ..utils.config_manager import ConfigManager
     from ..utils.qt_utils import QtUtils
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
@@ -49,7 +48,6 @@ except ImportError:
     from data_loading_dialog import DataLoadingDialog
     from cardiac_cycle_widget import CardiacCycleWidget
     from status_display_widget import StatusDisplayWidget
-    from step_checklist_widget import StepChecklistWidget
     from utils.config_manager import ConfigManager
     from utils.qt_utils import QtUtils
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
@@ -91,7 +89,6 @@ class Module1Widget(qt.QWidget):
         self.data_loading_dialog = None
         self.cardiac_cycle_widget = None
         self.status_display_widget = None
-        self.step_checklist = None
 
         # 事件监听/去抖
         self._scene_observer_tags = []
@@ -115,36 +112,69 @@ class Module1Widget(qt.QWidget):
         logging.info("模块一界面初始化完成")
         
     def _init_ui(self):
-        """初始化用户界面"""
-        # 主布局 - 使用标准化布局管理器
+        """初始化用户界面（方案C：右侧信息侧栏）"""
+        # 根布局
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
-        
-        # 状态显示组件
-        self.status_display_widget = StatusDisplayWidget(self.session, self)
-        LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
-        main_layout.addWidget(self.status_display_widget, 0)  # 固定大小
 
-        # 步骤清单组件（实时进度）
-        self.step_checklist = StepChecklistWidget(self)
-        LayoutManager.setup_widget_size_policy(self.step_checklist, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
-        main_layout.addWidget(self.step_checklist, 0)
-        
-        # 数据导入按钮区域
-        self._create_data_import_section(main_layout)
-        
-        # 心动周期管理组件 - 主要内容区域
+        # 水平分栏：左主区 + 右侧栏
+        self._splitter = qt.QSplitter(qt.Qt.Horizontal)
+        self._splitter.setChildrenCollapsible(False)
+        self._splitter.setHandleWidth(6)
+
+        # 左侧：主工作区（数据导入 + 心动周期管理）
+        left_container = qt.QWidget()
+        left_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, left_container)
+
+        # 数据导入区域（置于主区顶部）
+        self._create_data_import_section(left_layout)
+
+        # 心动周期管理组件（主要内容，扩展占位）
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
         LayoutManager.setup_widget_size_policy(self.cardiac_cycle_widget, LayoutType.CONTROL_PANEL, SizePolicy.EXPANDING)
-        main_layout.addWidget(self.cardiac_cycle_widget, 2)  # 获得最多空间
+        left_layout.addWidget(self.cardiac_cycle_widget, 1)
 
-        # 连接相位标记信号以实时刷新步骤清单
+        # 右侧：信息侧栏（状态 + 进度 + CTA）
+        right_container = qt.QWidget()
+        right_container.setMinimumWidth(260)
+        right_container.setMaximumWidth(380)
+        right_layout = LayoutManager.create_layout(LayoutType.INFO_DISPLAY, right_container)
+
+        # 状态与进度（紧凑展示，默认收起详情）
+        self.status_display_widget = StatusDisplayWidget(self.session, self, compact=True)
+        LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
+        self.status_display_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
+        # 连接进度变更，更新底部进度标签
+        try:
+            self.status_display_widget.progressChanged.connect(self._on_progress_changed)
+        except Exception:
+            pass
+        right_layout.addWidget(self.status_display_widget, 0)
+
+        # 使用弹性空白将操作区推到底部
+        right_layout.addStretch(1)
+
+        # 操作按钮区域（侧栏底部，包含继续/重置/重新检测/进度）
+        self._create_action_buttons_section(right_layout)
+
+        # 装配分栏并设置伸缩比例
+        self._splitter.addWidget(left_container)
+        self._splitter.addWidget(right_container)
+        self._splitter.setStretchFactor(0, 3)
+        self._splitter.setStretchFactor(1, 1)
+
+        # 将分栏加入根布局
+        main_layout.addWidget(self._splitter, 1)
+
+        # 连接相位标记信号以实时刷新
         try:
             self.cardiac_cycle_widget.phaseMarked.connect(lambda _: self._update_interface_state())
         except Exception:
             pass
-        
-        # 操作按钮区域
-        self._create_action_buttons_section(main_layout)
+
+    def _on_progress_changed(self, completed: int, total: int):
+        """侧栏进度变化时更新底部提示"""
+        if hasattr(self, 'next_progress_label') and self.next_progress_label:
+            self.next_progress_label.setText(f"已完成 {completed}/{total} 项")
         
     def _create_data_import_section(self, parent_layout):
         """创建数据导入区域"""
@@ -474,22 +504,9 @@ class Module1Widget(qt.QWidget):
     def _update_interface_state(self):
         """更新界面状态"""
         try:
-            # 更新状态显示
+            # 统一由状态组件内部更新状态与进度
             self.status_display_widget.update_status()
 
-            # 更新步骤清单
-            if self.step_checklist:
-                step_status = self._get_step_status()
-                self.step_checklist.update_steps(step_status)
-            else:
-                step_status = self._get_step_status()
-            
-            # 计算完成度
-            completed = sum(1 for v in step_status.values() if v)
-            total = 4
-            if hasattr(self, 'next_progress_label') and self.next_progress_label:
-                self.next_progress_label.setText(f"已完成 {completed}/{total} 项")
-            
             # CTA可用性
             ready_for_next = self._check_ready_for_next_module()
             self.next_module_button.setEnabled(ready_for_next)
