@@ -25,6 +25,7 @@ try:
     from .data_loading_dialog import DataLoadingDialog
     from .cardiac_cycle_widget import CardiacCycleWidget
     from .status_display_widget import StatusDisplayWidget
+    from .step_checklist_widget import StepChecklistWidget
     from ..utils.config_manager import ConfigManager
     from ..utils.qt_utils import QtUtils
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
@@ -47,6 +48,7 @@ except ImportError:
     from data_loading_dialog import DataLoadingDialog
     from cardiac_cycle_widget import CardiacCycleWidget
     from status_display_widget import StatusDisplayWidget
+    from step_checklist_widget import StepChecklistWidget
     from utils.config_manager import ConfigManager
     from utils.qt_utils import QtUtils
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
@@ -88,6 +90,7 @@ class Module1Widget(qt.QWidget):
         self.data_loading_dialog = None
         self.cardiac_cycle_widget = None
         self.status_display_widget = None
+        self.step_checklist = None
         
         # 初始化界面
         self._init_ui()
@@ -107,6 +110,11 @@ class Module1Widget(qt.QWidget):
         self.status_display_widget = StatusDisplayWidget(self.session, self)
         LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
         main_layout.addWidget(self.status_display_widget, 0)  # 固定大小
+
+        # 步骤清单组件（实时进度）
+        self.step_checklist = StepChecklistWidget(self)
+        LayoutManager.setup_widget_size_policy(self.step_checklist, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
+        main_layout.addWidget(self.step_checklist, 0)
         
         # 数据导入按钮区域
         self._create_data_import_section(main_layout)
@@ -336,11 +344,30 @@ class Module1Widget(qt.QWidget):
         # 使用LayoutManager提供的统一样式更新接口
         LayoutManager.update_button_style(button, button_type, size)
     
+    def _get_step_status(self) -> dict:
+        """计算步骤清单状态"""
+        status = {"data_imported": False, "patient_info": False, "phase_ed": False, "phase_es": False}
+        try:
+            status["data_imported"] = bool(self.session.is_ready())
+            patient_data = self.session.patient_data
+            status["patient_info"] = bool(patient_data and getattr(patient_data, 'patientID', None))
+            ed = self.session.get_marked_phase('end_diastole')
+            es = self.session.get_marked_phase('end_systole')
+            status["phase_ed"] = ed.get('frame_index') is not None if isinstance(ed, dict) else False
+            status["phase_es"] = es.get('frame_index') is not None if isinstance(es, dict) else False
+        except Exception as e:
+            logging.error(f"计算步骤状态时发生错误: {str(e)}")
+        return status
+
     def _update_interface_state(self):
         """更新界面状态"""
         try:
             # 更新状态显示
             self.status_display_widget.update_status()
+
+            # 更新步骤清单
+            if self.step_checklist:
+                self.step_checklist.update_steps(self._get_step_status())
             
             # 检查是否可以进入下一模块
             ready_for_next = self._check_ready_for_next_module()
