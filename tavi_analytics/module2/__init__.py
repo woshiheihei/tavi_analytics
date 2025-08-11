@@ -5,11 +5,13 @@
 以及关键解剖标志点的定义和管理。
 """
 
-# 模块二组件导入将在后续开发时添加
-# from .module2_widget import Module2Widget
-# from .module2_logic import Module2Logic
+# 模块二组件导入
+from .module2_widget import Module2Widget
+from .module2_logic import Module2Logic
+from .module2_adapter import Module2Adapter
 
 __all__ = [
-    # "Module2Widget",
-    # "Module2Logic"
+    "Module2Widget",
+    "Module2Logic",
+    "Module2Adapter"
 ]

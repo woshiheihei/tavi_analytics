@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAVR-Analytics Workflow - 模块四 UI设计</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .ui-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1400px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 95vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 32px;
+            text-align: center;
+        }
+        
+        .progress-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        
+        .nav-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-step.active {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+        
+        .nav-step.completed {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        
+        .nav-step.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .nav-step:not(.disabled) {
+            cursor: pointer;
+        }
+        
+        .nav-step:not(.disabled):hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        /* 审核控制台侧边栏 */
+        .review-sidebar {
+            width: 400px;
+            background: #f8f9fa;
+            border-right: 2px solid #e9ecef;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .data-tree {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .tree-section {
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .tree-section:last-child {
+            border-bottom: none;
+        }
+        
+        .tree-header {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #495057;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .tree-header:hover {
+            background: #e9ecef;
+        }
+        
+        .tree-content {
+            padding: 0;
+        }
+        
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            border-bottom: 1px solid #f8f9fa;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .data-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .data-item:last-child {
+            border-bottom: none;
+        }
+        
+        .data-item.clickable:hover {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .data-label {
+            font-size: 13px;
+            color: #495057;
+            font-weight: 500;
+            flex: 1;
+        }
+        
+        .data-value {
+            font-size: 13px;
+            color: #1f2937;
+            font-weight: 600;
+            text-align: right;
+            min-width: 80px;
+        }
+        
+        .data-value.editable {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px dashed #ffc107;
+            cursor: text;
+        }
+        
+        .data-value.modified {
+            background: #f8d7da;
+            color: #721c24;
+            position: relative;
+        }
+        
+        .data-value.modified::after {
+            content: "*";
+            color: #dc3545;
+            font-weight: bold;
+            margin-left: 2px;
+        }
+        
+        .data-value.auto {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .data-value.manual {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        /* 主工作区域 */
+        .work-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            overflow: hidden;
+        }
+        
+        .review-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .review-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .status-text {
+            font-size: 14px;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .review-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        /* 可视化预览区域 */
+        .visualization-area {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .viz-header {
+            background: white;
+            padding: 16px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .viz-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .viz-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .viz-btn {
+            padding: 6px 12px;
+            background: #f8f9fa;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .viz-btn:hover {
+            background: #e9ecef;
+        }
+        
+        .viz-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .viz-content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            line-height: 1.6;
+        }
+        
+        /* 报告生成区域 */
+        .report-generation {
+            margin-top: 24px;
+            padding: 24px;
+            background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+            border-radius: 12px;
+            border: 2px solid #28a745;
+        }
+        
+        .report-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #155724;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .report-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .option-card {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #d4edda;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .option-card:hover {
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+            border-color: #28a745;
+        }
+        
+        .option-card.selected {
+            border-color: #28a745;
+            box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2);
+        }
+        
+        .option-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .option-title {
+            font-weight: 600;
+            color: #155724;
+        }
+        
+        .option-desc {
+            font-size: 13px;
+            color: #495057;
+            line-height: 1.4;
+        }
+        
+        .generate-button {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .generate-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+        }
+        
+        .generate-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .generate-button.processing {
+            background: linear-gradient(135deg, #ffc107 0%, #ff8c00 100%);
+            animation: pulse 2s infinite;
+        }
+        
+        /* 底部状态栏 */
+        .status-bar {
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .progress-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .progress-text {
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .validation-summary {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .validation-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        
+        .validation-item.success {
+            color: #28a745;
+        }
+        
+        .validation-item.warning {
+            color: #ffc107;
+        }
+        
+        .validation-item.error {
+            color: #dc3545;
+        }
+        
+        /* 弹出式编辑器 */
+        .edit-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .edit-modal.show {
+            display: flex;
+        }
+        
+        .edit-content {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90vw;
+        }
+        
+        .edit-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1f2937;
+        }
+        
+        .edit-field {
+            margin-bottom: 16px;
+        }
+        
+        .edit-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 6px;
+        }
+        
+        .edit-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .edit-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+        }
+        
+        .edit-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .collapsed .tree-content {
+            display: none;
+        }
+        
+        .expand-icon {
+            transition: transform 0.2s ease;
+        }
+        
+        .collapsed .expand-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="ui-container">
+        <div class="header">
+            <div class="progress-nav">
+                <div class="nav-step completed" onclick="window.location.href='module1.html'">
+                    <span>1️⃣</span>
+                    <span>数据加载</span>
+                </div>
+                <div class="nav-step completed" onclick="window.location.href='module2.html'">
+                    <span>2️⃣</span>
+                    <span>自动分割</span>
+                </div>
+                <div class="nav-step completed" onclick="window.location.href='module3.html'">
+                    <span>3️⃣</span>
+                    <span>量化测量</span>
+                </div>
+                <div class="nav-step active" onclick="window.location.href='module4.html'">
+                    <span>4️⃣</span>
+                    <span>报告生成</span>
+                </div>
+            </div>
+            <h1>TAVR-Analytics Workflow</h1>
+            <p>模块四：交互式审核与报告生成</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- 审核控制台侧边栏 -->
+            <div class="review-sidebar">
+                <div class="sidebar-title">
+                    <span>🔍</span>
+                    数据审核控制台
+                </div>
+                
+                <div class="data-tree">
+                    <!-- 基本情况 -->
+                    <div class="tree-section">
+                        <div class="tree-header" onclick="toggleSection(this)">
+                            <span>一、基本情况</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="tree-content">
+                            <div class="data-item">
+                                <span class="data-label">受试者编号</span>
+                                <span class="data-value auto">TAVR-2024-001</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">性别</span>
+                                <span class="data-value auto">男</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">年龄</span>
+                                <span class="data-value auto">73岁</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">手术时间</span>
+                                <span class="data-value editable" onclick="editField('surgery-date', '2024-01-15')">2024-01-15</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">CT扫描时间</span>
+                                <span class="data-value auto">2024-07-20</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">瓣膜品牌</span>
+                                <span class="data-value manual">Medtronic</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">瓣膜型号</span>
+                                <span class="data-value manual">Evolut PRO</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">瓣膜尺寸</span>
+                                <span class="data-value manual">26mm</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 瓣膜瓣叶评估 -->
+                    <div class="tree-section">
+                        <div class="tree-header" onclick="toggleSection(this)">
+                            <span>二、人工瓣膜瓣叶评估</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="tree-content">
+                            <div class="data-item clickable" onclick="focusVisualization('halt-lc')">
+                                <span class="data-label">HALT分级: LC</span>
+                                <span class="data-value auto">≤25%</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('halt-rc')">
+                                <span class="data-label">HALT分级: RC</span>
+                                <span class="data-value modified">50-75%</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('halt-nc')">
+                                <span class="data-label">HALT分级: NC</span>
+                                <span class="data-value auto">25-50%</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('relm-lc')">
+                                <span class="data-label">RELM分级: LC</span>
+                                <span class="data-value auto">轻度</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('relm-rc')">
+                                <span class="data-label">RELM分级: RC</span>
+                                <span class="data-value auto">中度</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('relm-nc')">
+                                <span class="data-label">RELM分级: NC</span>
+                                <span class="data-value auto">轻度</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">SFD: 受累主动脉窦</span>
+                                <span class="data-value manual">RC</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('pfd')">
+                                <span class="data-label">PFD: 最大充盈缺损厚度</span>
+                                <span class="data-value auto">2.3 mm</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 瓣膜支架评估 -->
+                    <div class="tree-section">
+                        <div class="tree-header" onclick="toggleSection(this)">
+                            <span>三、人工瓣膜支架评估</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="tree-content">
+                            <div class="data-item clickable" onclick="focusVisualization('stent-perimeter')">
+                                <span class="data-label">瓣叶窦底平面 周长</span>
+                                <span class="data-value auto">72.4 mm</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('stent-area')">
+                                <span class="data-label">瓣叶窦底平面 面积</span>
+                                <span class="data-value auto">398.2 mm²</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('stent-longest')">
+                                <span class="data-label">瓣叶窦底平面 最长径</span>
+                                <span class="data-value auto">23.8 mm</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('stent-shortest')">
+                                <span class="data-label">瓣叶窦底平面 最短径</span>
+                                <span class="data-value auto">21.2 mm</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('depth-nc')">
+                                <span class="data-label">植入深度: NC</span>
+                                <span class="data-value auto">4.2 mm</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('depth-lc')">
+                                <span class="data-label">植入深度: LC</span>
+                                <span class="data-value auto">4.8 mm</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('depth-rc')">
+                                <span class="data-label">植入深度: RC</span>
+                                <span class="data-value auto">4.5 mm</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 交接对齐 -->
+                    <div class="tree-section">
+                        <div class="tree-header" onclick="toggleSection(this)">
+                            <span>四、交接对齐</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="tree-content">
+                            <div class="data-item clickable" onclick="focusVisualization('angle-rca-rcc-lcc')">
+                                <span class="data-label">Angle RCA to RCC/LCC</span>
+                                <span class="data-value auto">12.5°</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('angle-rca-lcc-ncc')">
+                                <span class="data-label">Angle RCA to LCC/NCC</span>
+                                <span class="data-value auto">8.7°</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('angle-rca-ncc-rcc')">
+                                <span class="data-label">Angle RCA to NCC/RCC</span>
+                                <span class="data-value auto">15.2°</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('angle-lca-rcc-lcc')">
+                                <span class="data-label">Angle LCA to RCC/LCC</span>
+                                <span class="data-value auto">18.9°</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('angle-lca-lcc-ncc')">
+                                <span class="data-label">Angle LCA to LCC/NCC</span>
+                                <span class="data-value auto">6.3°</span>
+                            </div>
+                            <div class="data-item clickable" onclick="focusVisualization('angle-lca-ncc-rcc')">
+                                <span class="data-label">Angle LCA to NCC/RCC</span>
+                                <span class="data-value auto">22.1°</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 主工作区域 -->
+            <div class="work-area">
+                <!-- 审核控制区 -->
+                <div class="review-controls">
+                    <div class="review-status">
+                        <div class="status-indicator"></div>
+                        <span class="status-text">数据审核中 - 已验证 28/32 项测量</span>
+                    </div>
+                    
+                    <div class="review-actions">
+                        <button class="btn btn-secondary">
+                            <span>🔄</span>
+                            重新计算
+                        </button>
+                        <button class="btn btn-primary">
+                            <span>⚙️</span>
+                            高级设置
+                        </button>
+                        <button class="btn btn-warning">
+                            <span>📝</span>
+                            添加备注
+                        </button>
+                        <button class="btn btn-success" id="completeBtn">
+                            <span>✅</span>
+                            标记完成
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 可视化预览区域 -->
+                <div class="visualization-area">
+                    <div class="viz-header">
+                        <div class="viz-title">测量可视化预览</div>
+                        <div class="viz-controls">
+                            <button class="viz-btn active" onclick="switchView('2D')">2D视图</button>
+                            <button class="viz-btn" onclick="switchView('3D')">3D视图</button>
+                            <button class="viz-btn" onclick="switchView('MPR')">MPR视图</button>
+                            <button class="viz-btn" onclick="switchView('overlay')">叠加显示</button>
+                            <button class="viz-btn" onclick="takeScreenshot()">📸 截图</button>
+                        </div>
+                    </div>
+                    
+                    <div class="viz-content" id="vizContent">
+                        <div>
+                            <div style="font-size: 18px; margin-bottom: 12px;">📊 "所点即所见" 可视化</div>
+                            <div>点击左侧审核控制台中的任意测量项目</div>
+                            <div>系统将自动跳转到相应的解剖位置并显示测量细节</div>
+                            <div style="margin-top: 16px; font-size: 14px; color: #999;">
+                                • 高亮显示测量区域<br>
+                                • 标注关键数值<br>
+                                • 提供视觉证据
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 报告生成区域 -->
+                <div class="report-generation">
+                    <div class="report-title">
+                        <span>📄</span>
+                        报告生成配置
+                    </div>
+                    
+                    <div class="report-options">
+                        <div class="option-card selected" onclick="selectOption(this)">
+                            <div class="option-header">
+                                <span>📋</span>
+                                <span class="option-title">标准评估表单</span>
+                            </div>
+                            <div class="option-desc">
+                                生成符合杭州方案标准的评估表单PDF，包含所有测量数据和基本信息
+                            </div>
+                        </div>
+                        
+                        <div class="option-card" onclick="selectOption(this)">
+                            <div class="option-header">
+                                <span>🖼️</span>
+                                <span class="option-title">图文并茂报告</span>
+                            </div>
+                            <div class="option-desc">
+                                增强型报告，包含关键测量的可视化截图和详细标注
+                            </div>
+                        </div>
+                        
+                        <div class="option-card" onclick="selectOption(this)">
+                            <div class="option-header">
+                                <span>📊</span>
+                                <span class="option-title">完整分析报告</span>
+                            </div>
+                            <div class="option-desc">
+                                包含数据表单、影像证据、统计分析和临床建议的综合报告
+                            </div>
+                        </div>
+                        
+                        <div class="option-card" onclick="selectOption(this)">
+                            <div class="option-header">
+                                <span>🔗</span>
+                                <span class="option-title">数据导出</span>
+                            </div>
+                            <div class="option-desc">
+                                导出结构化数据（CSV/JSON格式），便于后续研究分析
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="generate-button" id="generateBtn" onclick="generateReport()">
+                        <span>🚀</span>
+                        生成报告
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 底部状态栏 -->
+        <div class="status-bar">
+            <div class="progress-info">
+                <span class="progress-text">工作流进度：模块四（4/4）- 审核与报告生成</span>
+            </div>
+            
+            <div class="validation-summary">
+                <div class="validation-item success">
+                    <span>✅</span>
+                    <span>28项已验证</span>
+                </div>
+                <div class="validation-item warning">
+                    <span>⚠️</span>
+                    <span>1项手动修正</span>
+                </div>
+                <div class="validation-item success">
+                    <span>📸</span>
+                    <span>12张截图已保存</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 弹出式编辑器 -->
+    <div class="edit-modal" id="editModal">
+        <div class="edit-content">
+            <div class="edit-header">编辑数据</div>
+            
+            <div class="edit-field">
+                <label class="edit-label" id="editLabel">字段名称</label>
+                <input type="text" class="edit-input" id="editInput" placeholder="请输入新值">
+            </div>
+            
+            <div class="edit-field">
+                <label class="edit-label">修改原因（可选）</label>
+                <input type="text" class="edit-input" id="editReason" placeholder="说明修改原因">
+            </div>
+            
+            <div class="edit-actions">
+                <button class="btn btn-secondary" onclick="closeEdit()">取消</button>
+                <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentEditField = null;
+        let currentEditValue = null;
+        
+        // 切换树状结构展开/折叠
+        function toggleSection(header) {
+            const section = header.parentElement;
+            section.classList.toggle('collapsed');
+        }
+        
+        // 聚焦可视化
+        function focusVisualization(measurementId) {
+            const vizContent = document.getElementById('vizContent');
+            
+            // 移除所有高亮
+            document.querySelectorAll('.data-item').forEach(item => {
+                item.classList.remove('highlight');
+            });
+            
+            // 高亮当前项
+            event.target.closest('.data-item').classList.add('highlight');
+            
+            // 更新可视化内容
+            const visualizations = {
+                'halt-lc': {
+                    title: 'HALT分析 - 左冠瓣叶 (LC)',
+                    content: '🫀 舒张末期 - 瓣叶增厚区域分割<br>增厚面积：28.5 mm²<br>瓣叶总面积：156.3 mm²<br>面积占比：18.2% (≤25%)',
+                    phase: '28% R-R间期'
+                },
+                'halt-rc': {
+                    title: 'HALT分析 - 右冠瓣叶 (RC)',
+                    content: '🫀 舒张末期 - 瓣叶增厚区域分割<br>增厚面积：84.2 mm²<br>瓣叶总面积：162.8 mm²<br>面积占比：51.7% (50-75%) *手动修正',
+                    phase: '28% R-R间期'
+                },
+                'stent-perimeter': {
+                    title: '支架框架 - 瓣叶窦底平面周长',
+                    content: '⚙️ 瓣叶窦底平面测量<br>周长：72.4 mm<br>平面位置：从底部向上1.5个菱形格<br>测量时相：舒张末期',
+                    phase: '28% R-R间期'
+                },
+                'depth-nc': {
+                    title: '植入深度 - 无冠瓣尖 (NC)',
+                    content: '📏 植入深度测量<br>NC瓣尖到原生瓣环距离：4.2 mm<br>参考平面：三个原生瓣尖最低点<br>测量方向：垂直距离',
+                    phase: '28% R-R间期'
+                },
+                'angle-rca-rcc-lcc': {
+                    title: '连合对齐 - RCA to RCC/LCC角度',
+                    content: '🎯 连合对齐分析<br>RCA到RCC/LCC连合角度：12.5°<br>对齐质量：良好<br>冠脉风险：低风险',
+                    phase: '静态测量'
+                }
+            };
+            
+            const viz = visualizations[measurementId] || {
+                title: '测量详情',
+                content: '正在加载可视化数据...',
+                phase: '处理中'
+            };
+            
+            vizContent.innerHTML = `
+                <div style="text-align: left; max-width: 500px;">
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #1f2937;">
+                        ${viz.title}
+                    </div>
+                    <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+                        <strong>测量时相：</strong> ${viz.phase}
+                    </div>
+                    <div style="line-height: 1.8; color: #495057;">
+                        ${viz.content}
+                    </div>
+                    <div style="margin-top: 20px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 13px; color: #6c757d;">
+                        💡 提示：在3D Slicer中，此测量将高亮显示相关解剖结构和测量线条
+                    </div>
+                </div>
+            `;
+            
+            console.log('聚焦可视化:', measurementId);
+        }
+        
+        // 编辑字段
+        function editField(fieldId, currentValue) {
+            currentEditField = fieldId;
+            currentEditValue = currentValue;
+            
+            document.getElementById('editLabel').textContent = '修改值：';
+            document.getElementById('editInput').value = currentValue;
+            document.getElementById('editReason').value = '';
+            document.getElementById('editModal').classList.add('show');
+        }
+        
+        // 关闭编辑
+        function closeEdit() {
+            document.getElementById('editModal').classList.remove('show');
+            currentEditField = null;
+            currentEditValue = null;
+        }
+        
+        // 保存编辑
+        function saveEdit() {
+            const newValue = document.getElementById('editInput').value;
+            const reason = document.getElementById('editReason').value;
+            
+            if (newValue && newValue !== currentEditValue) {
+                // 找到对应的数据项并更新
+                const dataItems = document.querySelectorAll('.data-item');
+                dataItems.forEach(item => {
+                    const label = item.querySelector('.data-label').textContent;
+                    if (label.includes('手术时间') && currentEditField === 'surgery-date') {
+                        const valueSpan = item.querySelector('.data-value');
+                        valueSpan.textContent = newValue;
+                        valueSpan.classList.add('modified');
+                        valueSpan.classList.remove('auto', 'manual');
+                    }
+                });
+                
+                console.log('保存编辑:', currentEditField, newValue, reason);
+            }
+            
+            closeEdit();
+        }
+        
+        // 切换视图
+        function switchView(viewType) {
+            // 移除所有按钮的active状态
+            document.querySelectorAll('.viz-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 激活当前按钮
+            event.target.classList.add('active');
+            
+            console.log('切换视图:', viewType);
+        }
+        
+        // 截图
+        function takeScreenshot() {
+            alert('📸 当前视图截图已保存\n\n截图将用于最终报告的影像证据部分');
+            
+            // 更新状态栏中的截图数量
+            const screenshotStatus = document.querySelector('.validation-item:last-child span:last-child');
+            const currentCount = parseInt(screenshotStatus.textContent.match(/\d+/)[0]);
+            screenshotStatus.textContent = `${currentCount + 1}张截图已保存`;
+        }
+        
+        // 选择报告选项
+        function selectOption(card) {
+            // 移除所有选中状态
+            document.querySelectorAll('.option-card').forEach(c => {
+                c.classList.remove('selected');
+            });
+            
+            // 选中当前卡片
+            card.classList.add('selected');
+        }
+        
+        // 生成报告
+        function generateReport() {
+            const btn = document.getElementById('generateBtn');
+            const originalText = btn.innerHTML;
+            
+            // 开始处理
+            btn.innerHTML = '<span>⏳</span>正在生成报告...';
+            btn.classList.add('processing');
+            btn.disabled = true;
+            
+            // 模拟报告生成过程
+            setTimeout(() => {
+                // 第一阶段：数据收集
+                btn.innerHTML = '<span>📊</span>收集测量数据...';
+                
+                setTimeout(() => {
+                    // 第二阶段：生成可视化
+                    btn.innerHTML = '<span>🖼️</span>生成可视化截图...';
+                    
+                    setTimeout(() => {
+                        // 第三阶段：合成PDF
+                        btn.innerHTML = '<span>📄</span>合成PDF报告...';
+                        
+                        setTimeout(() => {
+                            // 完成
+                            btn.innerHTML = '<span>✅</span>报告生成完成！';
+                            btn.classList.remove('processing');
+                            btn.classList.add('completed');
+                            
+                            // 显示成功消息
+                            setTimeout(() => {
+                                alert('🎉 报告生成成功！\n\n文件已保存到：\nTAVR_Report_2024-07-20_Patient-001.pdf\n\n报告包含：\n• 完整的评估表单数据\n• 12张关键测量截图\n• 可视化标注和说明\n• 临床建议和风险评估');
+                                
+                                // 重置按钮
+                                btn.innerHTML = originalText;
+                                btn.classList.remove('completed');
+                                btn.disabled = false;
+                            }, 2000);
+                        }, 1500);
+                    }, 1500);
+                }, 1500);
+            }, 1000);
+        }
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('TAVR-Analytics Module 4 UI Loaded');
+            
+            // 模拟一些已完成的验证
+            setTimeout(() => {
+                const firstItem = document.querySelector('.data-item.clickable');
+                if (firstItem) {
+                    firstItem.click();
+                }
+            }, 1000);
+        });
+        
+        // 标记完成按钮功能
+        document.getElementById('completeBtn').addEventListener('click', function() {
+            if (confirm('确认完成TAVR分析流程？这将结束当前会话并生成最终报告。')) {
+                alert('TAVR-Analytics 流程已完成！\n\n所有模块分析已完成，最终报告已生成。\n\n点击确定返回模块一开始新的分析。');
+                window.location.href = 'module1.html';
+            }
+        });
+        
+        // 添加全局点击事件来处理数据项的高亮
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.data-item.clickable')) {
+                // 移除所有高亮
+                document.querySelectorAll('.data-item').forEach(item => {
+                    item.style.background = '';
+                    item.style.borderLeft = '';
+                });
+                
+                // 高亮当前项
+                const item = e.target.closest('.data-item');
+                item.style.background = '#e3f2fd';
+                item.style.borderLeft = '4px solid #2196f3';
+            }
+        });
+    </script>
+</body>
+</html>

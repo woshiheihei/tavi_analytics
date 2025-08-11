@@ -1,9 +1,11 @@
 import logging
 import datetime
+import os
 from typing import Optional, Dict, Any
 
 import qt
 import slicer
+import ctk
 
 # 导入重构后的核心模块
 try:
@@ -68,9 +70,13 @@ class DataLoadingDialog(qt.QDialog):
         self.valve_config = valve_config or {}
         self.logic = logic
         
+        # DICOM相关组件
+        self.dicom_browser = None
+        self.dicom_panel_visible = True  # 默认显示DICOM面板
+        
         self.setWindowTitle("数据加载与配置")
         self.setModal(True)
-        self.setMinimumSize(500, 700)
+        self.setMinimumSize(1300, 750)  # 优化最小尺寸以适应新布局
         
         self.setup_ui()
         self.setup_connections()
@@ -85,39 +91,81 @@ class DataLoadingDialog(qt.QDialog):
         
     def setup_ui(self):
         """设置对话框界面"""
-        layout = qt.QVBoxLayout(self)
+        # 创建主水平布局
+        main_layout = qt.QHBoxLayout(self)
+        
+        # 左侧：原有的配置面板
+        left_panel = qt.QWidget()
+        left_layout = qt.QVBoxLayout(left_panel)
         
         # 标题
         title_label = qt.QLabel("TAVR-Analytics 数据导入与配置")
         title_label.setAlignment(qt.Qt.AlignCenter)
         title_label.setStyleSheet("QLabel { font-size: 18px; font-weight: bold; margin: 10px; }")
-        layout.addWidget(title_label)
+        left_layout.addWidget(title_label)
         
         # 数据加载区域
-        self.create_data_loading_section(layout)
+        self.create_data_loading_section(left_layout)
         
         # 患者信息区域
-        self.create_patient_info_section(layout)
+        self.create_patient_info_section(left_layout)
         
         # 按钮区域
-        self.create_button_section(layout)
+        self.create_button_section(left_layout)
+        
+        # 设置左侧面板宽度范围
+        left_panel.setMinimumWidth(480)
+        left_panel.setMaximumWidth(600)
+        
+        # 右侧：DICOM面板
+        self.right_panel = qt.QWidget()
+        self.right_panel.setVisible(True)  # 默认显示
+        right_layout = qt.QVBoxLayout(self.right_panel)
+        
+        # DICOM面板标题
+        dicom_title = qt.QLabel("DICOM 数据库")
+        dicom_title.setAlignment(qt.Qt.AlignCenter)
+        dicom_title.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 5px; color: #2c3e50; }")
+        right_layout.addWidget(dicom_title)
+        
+        # DICOM浏览器容器
+        self.dicom_container = qt.QWidget()
+        container_layout = qt.QVBoxLayout(self.dicom_container)
+        right_layout.addWidget(self.dicom_container)
+        
+        # 设置右侧面板宽度
+        self.right_panel.setMinimumWidth(650)
+        self.right_panel.setMaximumWidth(800)
+        
+        # 添加到主布局
+        main_layout.addWidget(left_panel)
+        main_layout.addWidget(self.right_panel)
+        
+        # 默认创建并显示DICOM面板
+        self.create_dicom_browser()
         
     def create_data_loading_section(self, parent_layout):
-        """创建数据加载区域"""
-        group_box = qt.QGroupBox("数据加载")
+        """创建数据状态显示区域"""
+        group_box = qt.QGroupBox("数据状态")
         layout = qt.QVBoxLayout(group_box)
         
-        # 加载按钮
-        self.load_button = qt.QPushButton("加载4D DICOM序列")
-        self.load_button.setStyleSheet("QPushButton { font-size: 14px; padding: 10px; }")
-        self.load_button.clicked.connect(self.on_load_data)
-        layout.addWidget(self.load_button)
+        # 使用说明
+        info_label = qt.QLabel("💡 使用右侧DICOM数据库导入和加载4D心脏CT序列")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("QLabel { font-size: 12px; color: #666; padding: 8px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; }")
+        layout.addWidget(info_label)
         
         # 序列信息显示
-        self.sequence_info_label = qt.QLabel("未加载序列")
+        self.sequence_info_label = qt.QLabel("等待加载DICOM序列...")
         self.sequence_info_label.setWordWrap(True)
-        self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 5px; border: 1px solid #ccc; }")
+        self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }")
         layout.addWidget(self.sequence_info_label)
+        
+        # 可选：收起DICOM面板的小按钮
+        self.show_dicom_button = qt.QPushButton("🗕 收起数据库面板")
+        self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; border: none; border-radius: 3px; }")
+        self.show_dicom_button.clicked.connect(self.toggle_dicom_panel)
+        layout.addWidget(self.show_dicom_button)
         
         parent_layout.addWidget(group_box)
         
@@ -381,3 +429,268 @@ class DataLoadingDialog(qt.QDialog):
         data.stsScore = sts_value if sts_value > 0 else None
         euro_value = self._get_widget_value(self.euro_score_edit, 'value')
         data.euroScoreII = euro_value if euro_value > 0 else None
+        
+        # 记录保存的数据用于调试
+        logging.info(f"保存患者数据到session: ID='{data.patientID}', 瓣膜品牌='{data.valveBrand}', 瓣膜型号='{data.valveModel}'")
+        logging.info(f"保存后session状态: 序列节点ID={self.session.volume_sequence_node_id}, is_ready={self.session.is_ready()}")
+        
+    def toggle_dicom_panel(self):
+        """切换DICOM面板的显示状态"""
+        try:
+            if self.dicom_panel_visible:
+                self.hide_dicom_panel()
+            else:
+                self.show_dicom_panel()
+        except Exception as e:
+            logging.error(f"Failed to toggle DICOM panel: {e}")
+            qt.QMessageBox.warning(self, "错误", f"无法切换DICOM面板: {str(e)}")
+    
+    def show_dicom_panel(self):
+        """显示DICOM数据库面板"""
+        try:
+            if not self.dicom_browser:
+                self.create_dicom_browser()
+            
+            # 显示右侧面板
+            self.right_panel.setVisible(True)
+            self.dicom_panel_visible = True
+            
+            # 更新按钮文本和样式
+            self.show_dicom_button.setText("🗕 收起数据库面板")
+            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; }")
+            
+            # 调整对话框大小
+            self.resize(1400, 750)
+            
+            logging.info("DICOM数据库面板已显示")
+            
+        except Exception as e:
+            logging.error(f"Failed to show DICOM panel: {e}")
+            qt.QMessageBox.warning(self, "错误", f"无法显示DICOM面板: {str(e)}")
+    
+    def hide_dicom_panel(self):
+        """隐藏DICOM数据库面板"""
+        try:
+            # 隐藏右侧面板
+            self.right_panel.setVisible(False)
+            self.dicom_panel_visible = False
+            
+            # 更新按钮文本和样式
+            self.show_dicom_button.setText("🗖 展开数据库面板")
+            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #2196F3; color: white; }")
+            
+            # 调整对话框大小（紧凑模式）
+            self.resize(900, 750)
+            
+            logging.info("DICOM数据库面板已隐藏")
+            
+        except Exception as e:
+            logging.error(f"Failed to hide DICOM panel: {e}")
+    
+    def create_dicom_browser(self):
+        """创建DICOM浏览器"""
+        try:
+            # 创建完整的Slicer DICOM数据库浏览器
+            import DICOMLib
+            self.dicom_browser = DICOMLib.SlicerDICOMBrowser()
+            
+            # 设置浏览器的一些属性
+            self.dicom_browser.setMinimumSize(580, 600)
+            
+            # 将浏览器添加到容器中
+            container_layout = self.dicom_container.layout()
+            if container_layout is None:
+                container_layout = qt.QVBoxLayout(self.dicom_container)
+            
+            container_layout.addWidget(self.dicom_browser)
+            
+            # 添加操作指南
+            info_label = qt.QLabel("📝 操作步骤：\n1. 点击 Import 导入DICOM文件\n2. 选择4D心脏CT序列\n3. 点击 Load 加载数据\n4. 数据加载后左侧将自动更新")
+            info_label.setWordWrap(True)
+            info_label.setStyleSheet("QLabel { font-size: 11px; color: #2c3e50; padding: 12px; background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 6px; line-height: 1.4; }")
+            container_layout.addWidget(info_label)
+            
+            # 监听DICOM数据库变化和场景变化
+            self.setup_dicom_monitoring()
+            
+            logging.info("完整的Slicer DICOM浏览器创建成功")
+            
+        except Exception as e:
+            logging.error(f"Failed to create DICOM browser: {e}")
+            raise
+    
+    def setup_dicom_monitoring(self):
+        """设置DICOM数据监听"""
+        try:
+            # 监听DICOM数据库变化
+            if slicer.dicomDatabase:
+                slicer.dicomDatabase.databaseChanged.connect(self.on_dicom_database_changed)
+            
+            # 监听3D Slicer场景中节点的添加
+            if slicer.mrmlScene:
+                slicer.mrmlScene.AddObserver(slicer.mrmlScene.NodeAddedEvent, self.on_node_added)
+            
+            logging.info("DICOM监听设置完成")
+            
+        except Exception as e:
+            logging.warning(f"Failed to setup DICOM monitoring: {e}")
+    
+    def on_dicom_database_changed(self):
+        """DICOM数据库变化时的处理"""
+        try:
+            logging.info("DICOM数据库发生变化")
+            # 延迟检查，给3D Slicer时间处理加载
+            qt.QTimer.singleShot(1000, self.check_for_new_sequences)
+        except Exception as e:
+            logging.warning(f"Error handling DICOM database change: {e}")
+    
+    def on_node_added(self, caller, event):
+        """当3D Slicer场景中添加新节点时的处理"""
+        try:
+            # 延迟检查，避免在节点创建过程中检查
+            qt.QTimer.singleShot(500, self.check_for_new_sequences)
+        except Exception as e:
+            logging.warning(f"Error handling node added: {e}")
+    
+    def check_for_new_sequences(self):
+        """检查是否有新的序列被加载"""
+        try:
+            # 检查是否有新的序列节点
+            sequence_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceNode')
+            volume_nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+            
+            if sequence_nodes:
+                # 如果有序列节点，优先使用序列节点
+                for seq_node in sequence_nodes:
+                    if seq_node.GetNumberOfDataNodes() > 1:  # 确保是多帧序列
+                        if not self.session.volume_sequence_node_id or self.session.volume_sequence_node_id != seq_node.GetID():
+                            # 查找对应的序列浏览器节点
+                            browser_nodes = slicer.util.getNodesByClass('vtkMRMLSequenceBrowserNode')
+                            browser_node_id = None
+                            for browser_node in browser_nodes:
+                                if browser_node.GetMasterSequenceNode() == seq_node:
+                                    browser_node_id = browser_node.GetID()
+                                    break
+                            
+                            # 使用session的标准方法设置序列数据
+                            if browser_node_id:
+                                self.session.set_volume_sequence_data(seq_node.GetID(), browser_node_id)
+                                logging.info(f"检测到新的序列节点: {seq_node.GetName()}, 浏览器节点: {browser_node_id}")
+                            else:
+                                # 如果没有找到浏览器节点，仍设置序列节点ID
+                                self.session.volume_sequence_node_id = seq_node.GetID()
+                                logging.warning(f"检测到新的序列节点: {seq_node.GetName()}, 但未找到对应的浏览器节点")
+                                # 尝试创建浏览器节点
+                                try:
+                                    browser_logic = slicer.modules.sequences.logic()
+                                    browser_node = browser_logic.AddSynchronizedNode(seq_node, None, None)
+                                    if browser_node:
+                                        browser_node_id = browser_node.GetID()
+                                        self.session.set_volume_sequence_data(seq_node.GetID(), browser_node_id)
+                                        logging.info(f"已为序列节点创建浏览器节点: {browser_node_id}")
+                                except Exception as e:
+                                    logging.warning(f"创建浏览器节点失败: {e}")
+                            
+                            # 记录当前session状态用于调试
+                            logging.info(f"Session状态 - 序列节点ID: {self.session.volume_sequence_node_id}, 浏览器节点ID: {self.session.sequence_browser_node_id}")
+                            logging.info(f"Session is_ready: {self.session.is_ready()}")
+                            
+                            self.update_sequence_info()
+                            self.parse_dicom_metadata()
+                            self.check_confirm_button_state()
+                            break
+            elif len(volume_nodes) > 1:
+                # 如果有多个容积节点但没有序列节点，询问用户是否创建序列
+                self.offer_sequence_creation_from_volumes()
+            elif len(volume_nodes) == 1:
+                # 如果只有一个容积节点，也更新信息
+                volume_node = volume_nodes[0]
+                if not self.session.volume_sequence_node_id:
+                    # 为单个容积节点创建一个临时的"序列"标识
+                    logging.info(f"检测到新的容积节点: {volume_node.GetName()}")
+                    self.update_volume_info(volume_node)
+                    self.parse_dicom_metadata()
+                    self.check_confirm_button_state()
+                    
+        except Exception as e:
+            logging.warning(f"Error checking for new sequences: {e}")
+    
+    def offer_sequence_creation_from_volumes(self):
+        """询问用户是否要从多个容积创建序列"""
+        try:
+            volume_nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+            
+            # 避免重复询问
+            if hasattr(self, '_sequence_creation_offered'):
+                return
+            self._sequence_creation_offered = True
+            
+            reply = qt.QMessageBox.question(
+                self, "创建4D序列", 
+                f"检测到{len(volume_nodes)}个容积节点。\n这些可能是4D心脏CT的不同时相。\n\n是否要将它们组合成4D序列？",
+                qt.QMessageBox.Yes | qt.QMessageBox.No,
+                qt.QMessageBox.Yes
+            )
+            
+            if reply == qt.QMessageBox.Yes and self.logic:
+                success = self.logic.create_sequence_from_volumes()
+                if success:
+                    logging.info("从容积节点成功创建4D序列")
+                    # 重新检查序列
+                    qt.QTimer.singleShot(500, self.check_for_new_sequences)
+                    
+        except Exception as e:
+            logging.warning(f"Failed to offer sequence creation: {e}")
+    
+    def update_volume_info(self, volume_node):
+        """更新单个容积节点的信息显示"""
+        try:
+            node_name = volume_node.GetName()
+            self.sequence_info_label.setText(f"已加载容积: {node_name}")
+            self.sequence_info_label.setStyleSheet("QLabel { background-color: #fff3cd; padding: 5px; border: 1px solid #ffeaa7; }")
+        except Exception as e:
+            logging.warning(f"Failed to update volume info: {e}")
+    
+    def on_dicom_series_selected(self):
+        """当DICOM序列被选择时的处理（保留用于将来扩展）"""
+        try:
+            if self.dicom_browser:
+                # 完整的SlicerDICOMBrowser已经包含所有必要的功能
+                # 这里可以添加额外的选择处理逻辑
+                logging.debug("DICOM序列选择事件")
+        except Exception as e:
+            logging.debug(f"Error handling DICOM series selection: {e}")
+    
+    def create_sequence_from_loaded_volumes(self):
+        """从已加载的容积创建序列（由自动监听调用）"""
+        try:
+            if self.logic:
+                success = self.logic.create_sequence_from_volumes()
+                if success:
+                    logging.info("从容积节点成功创建4D序列")
+                    # 重置标记，允许下次询问
+                    if hasattr(self, '_sequence_creation_offered'):
+                        delattr(self, '_sequence_creation_offered')
+        except Exception as e:
+            logging.warning(f"Failed to create sequence from loaded volumes: {e}")
+    
+    def cleanup_dicom_monitoring(self):
+        """清理DICOM监听"""
+        try:
+            # 断开信号连接
+            if slicer.dicomDatabase:
+                slicer.dicomDatabase.databaseChanged.disconnect(self.on_dicom_database_changed)
+            
+            if slicer.mrmlScene:
+                slicer.mrmlScene.RemoveObserver(slicer.mrmlScene.NodeAddedEvent)
+                
+        except Exception as e:
+            logging.debug(f"Error cleaning up DICOM monitoring: {e}")
+    
+    def closeEvent(self, event):
+        """对话框关闭时清理资源"""
+        try:
+            self.cleanup_dicom_monitoring()
+        except:
+            pass
+        super().closeEvent(event)

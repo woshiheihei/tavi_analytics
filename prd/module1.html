@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAVR-Analytics Workflow - 模块一 UI设计</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .ui-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 900px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 32px;
+            text-align: center;
+        }
+        
+        .progress-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        
+        .nav-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-step.active {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+        
+        .nav-step.completed {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        
+        .nav-step.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .nav-step:not(.disabled) {
+            cursor: pointer;
+        }
+        
+        .nav-step:not(.disabled):hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 32px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            padding: 24px;
+            border: 2px solid #f0f4f8;
+            border-radius: 12px;
+            background: #fbfcfd;
+        }
+        
+        .section.data-loading {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+        }
+        
+        .section.patient-info {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #d1fae5 0%, #dcfdf7 100%);
+        }
+        
+        .section.valve-config {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+        }
+        
+        .section.timeline {
+            border-color: #8b5cf6;
+            background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .icon {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        
+        .required {
+            color: #dc2626;
+            font-weight: bold;
+        }
+        
+        .input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .input[readonly] {
+            background-color: #f9fafb;
+            color: #6b7280;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-outline {
+            background: white;
+            color: #6b7280;
+            border: 2px solid #d1d5db;
+        }
+        
+        .btn-outline:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-pending {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        .patient-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        
+        .patient-table th,
+        .patient-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .patient-table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .patient-table input {
+            width: 100%;
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .auto-filled {
+            background: #ecfdf5 !important;
+            color: #065f46;
+        }
+        
+        .valve-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .timeline-control {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 16px;
+        }
+        
+        .slider-container {
+            margin: 20px 0;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #e5e7eb;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .phase-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .phase-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .phase-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .phase-marker {
+            background: #8b5cf6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .phase-marker:hover {
+            background: #7c3aed;
+            transform: translateY(-1px);
+        }
+        
+        .phase-marker.marked {
+            background: #10b981;
+        }
+        
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 2px solid #e5e7eb;
+        }
+        
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #6b7280;
+        }
+        
+        .validation-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 14px;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
+        .sequence-info {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .sequence-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 12px;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .detail-label {
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        .detail-value {
+            color: #6b7280;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .section {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        .section:nth-child(2) { animation-delay: 0.1s; }
+        .section:nth-child(3) { animation-delay: 0.2s; }
+        .section:nth-child(4) { animation-delay: 0.3s; }
+        .section:nth-child(5) { animation-delay: 0.4s; }
+    </style>
+</head>
+<body>
+    <div class="ui-container">
+        <div class="header">
+            <div class="progress-nav">
+                <div class="nav-step active" onclick="window.location.href='module1.html'">
+                    <span>1️⃣</span>
+                    <span>数据加载</span>
+                </div>
+                <div class="nav-step disabled">
+                    <span>2️⃣</span>
+                    <span>自动分割</span>
+                </div>
+                <div class="nav-step disabled">
+                    <span>3️⃣</span>
+                    <span>量化测量</span>
+                </div>
+                <div class="nav-step disabled">
+                    <span>4️⃣</span>
+                    <span>报告生成</span>
+                </div>
+            </div>
+            <h1>TAVR-Analytics Workflow</h1>
+            <p>模块一：数据导入与场景准备</p>
+        </div>
+        
+        <div class="content">
+            <!-- 数据加载部分 -->
+            <div class="section data-loading">
+                <h2 class="section-title">
+                    <span class="icon">📁</span>
+                    1. 数据加载与验证
+                </h2>
+                
+                <div class="form-group">
+                    <button class="btn btn-primary" id="loadButton">
+                        <span>📂</span>
+                        加载4D DICOM序列
+                    </button>
+                    <div class="help-text">选择TAVR术后4D心脏CT DICOM数据序列</div>
+                </div>
+                
+                <div class="sequence-info" id="sequenceInfo" style="display: none;">
+                    <div class="status-indicator status-success">
+                        <span>✅</span>
+                        序列加载成功
+                    </div>
+                    <div class="sequence-details">
+                        <div class="detail-item">
+                            <span class="detail-label">序列名称:</span>
+                            <span class="detail-value">CardiacCT_4D_Series_001</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">帧数:</span>
+                            <span class="detail-value">20 帧</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">时间分辨率:</span>
+                            <span class="detail-value">5% R-R间期</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">扫描厚度:</span>
+                            <span class="detail-value">0.625mm</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 患者信息部分 -->
+            <div class="section patient-info">
+                <h2 class="section-title">
+                    <span class="icon">👤</span>
+                    2. 患者基本信息
+                    <span class="status-indicator status-success">
+                        <span>✅</span>
+                        已从DICOM自动填充
+                    </span>
+                </h2>
+                
+                <table class="patient-table">
+                    <thead>
+                        <tr>
+                            <th>字段名称</th>
+                            <th>数值</th>
+                            <th>数据来源</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>受试者编号</strong> <span class="required">*</span></td>
+                            <td><input type="text" value="TAVR2024001" class="auto-filled" readonly></td>
+                            <td>DICOM自动填充</td>
+                            <td><span class="status-indicator status-success">✅ 已填充</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>患者姓名</strong></td>
+                            <td><input type="text" value="张某某" class="auto-filled"></td>
+                            <td>DICOM自动填充</td>
+                            <td><span class="status-indicator status-success">✅ 可编辑</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>年龄</strong></td>
+                            <td><input type="number" value="72" class="auto-filled"></td>
+                            <td>计算所得</td>
+                            <td><span class="status-indicator status-success">✅ 可编辑</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>性别</strong></td>
+                            <td>
+                                <select class="input">
+                                    <option value="男" selected>男</option>
+                                    <option value="女">女</option>
+                                </select>
+                            </td>
+                            <td>DICOM自动填充</td>
+                            <td><span class="status-indicator status-success">✅ 可编辑</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>CT扫描时间</strong></td>
+                            <td><input type="date" value="2024-08-08" class="auto-filled"></td>
+                            <td>DICOM自动填充</td>
+                            <td><span class="status-indicator status-success">✅ 可编辑</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>手术时间</strong> <span class="required">*</span></td>
+                            <td><input type="date" value="2024-07-15"></td>
+                            <td>用户手动输入</td>
+                            <td><span class="status-indicator status-success">✅ 已填充</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>图像质量</strong></td>
+                            <td>
+                                <select class="input">
+                                    <option value="优" selected>优</option>
+                                    <option value="一般">一般</option>
+                                    <option value="差">差</option>
+                                </select>
+                            </td>
+                            <td>用户评估</td>
+                            <td><span class="status-indicator status-success">✅ 已选择</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>随访时间节点</strong></td>
+                            <td>
+                                <select class="input">
+                                    <option value="1月" selected>1月</option>
+                                    <option value="3月">3月</option>
+                                    <option value="6月">6月</option>
+                                    <option value="1年">1年</option>
+                                    <option value="其他">其他</option>
+                                </select>
+                            </td>
+                            <td>用户选择</td>
+                            <td><span class="status-indicator status-success">✅ 已选择</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 瓣膜配置部分 -->
+            <div class="section valve-config">
+                <h2 class="section-title">
+                    <span class="icon">🫀</span>
+                    3. 瓣膜配置 <span class="required">*必填项</span>
+                </h2>
+                
+                <div class="valve-selector">
+                    <div class="form-group">
+                        <label class="label">瓣膜品牌 <span class="required">*</span></label>
+                        <select class="input" id="valveBrand">
+                            <option value="">请选择瓣膜品牌...</option>
+                            <option value="Medtronic" selected>Medtronic (美敦力)</option>
+                            <option value="Edwards">Edwards Lifesciences (爱德华)</option>
+                            <option value="Venus">Venus Medtech (启明医疗)</option>
+                            <option value="MicroPort">MicroPort (微创)</option>
+                            <option value="Peijia">Peijia Medical (沛佳医疗)</option>
+                        </select>
+                        <div class="help-text">选择植入的TAVR瓣膜制造商</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">瓣膜型号 <span class="required">*</span></label>
+                        <select class="input" id="valveModel">
+                            <option value="Evolut R" selected>Evolut R</option>
+                            <option value="Evolut PRO">Evolut PRO</option>
+                            <option value="Evolut PRO+">Evolut PRO+</option>
+                        </select>
+                        <div class="help-text">具体的瓣膜型号（根据品牌自动过滤）</div>
+                    </div>
+                </div>
+                
+                <div class="status-indicator status-success" style="margin-top: 16px;">
+                    <span>✅</span>
+                    瓣膜配置已完成 - 将启用Medtronic Evolut特异性测量算法
+                </div>
+            </div>
+            
+            <!-- 心动周期管理部分 -->
+            <div class="section timeline">
+                <h2 class="section-title">
+                    <span class="icon">⏱️</span>
+                    4. 心动周期管理
+                </h2>
+                
+                <div class="timeline-control">
+                    <div class="phase-display">
+                        <span><strong>当前时相:</strong></span>
+                        <span class="phase-value">73.0% R-R间期</span>
+                        <span class="status-indicator status-success">
+                            <span>▶️</span>
+                            实时同步视图
+                        </span>
+                    </div>
+                    
+                    <div class="slider-container">
+                        <input type="range" min="0" max="100" value="73" class="slider" id="timelineSlider">
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #6b7280;">
+                            <span>0% (舒张期开始)</span>
+                            <span>50% (收缩期)</span>
+                            <span>100% (舒张期结束)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="phase-buttons">
+                        <button class="phase-marker marked" id="diastoleBtn">
+                            <span>✅</span> 标记舒张末期
+                            <small style="display: block; margin-top: 4px;">已标记 @ 28.0%</small>
+                        </button>
+                        <button class="phase-marker marked" id="systoleBtn">
+                            <span>✅</span> 标记收缩末期  
+                            <small style="display: block; margin-top: 4px;">已标记 @ 73.0%</small>
+                        </button>
+                    </div>
+                    
+                    <div class="help-text" style="margin-top: 16px; text-align: center;">
+                        💡 拖动滑块查看整个心动周期，点击按钮标记关键时相用于后续测量
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="actions">
+                <div class="progress-indicator">
+                    <span>🔄</span>
+                    <span>模块一准备完成，可进入下一步骤</span>
+                </div>
+                
+                <div style="display: flex; gap: 16px;">
+                    <button class="btn btn-outline">
+                        <span>❌</span>
+                        取消
+                    </button>
+                    <button class="btn btn-success" id="continueBtn">
+                        <span>➡️</span>
+                        确认并继续
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟交互效果
+        document.getElementById('loadButton').addEventListener('click', function() {
+            document.getElementById('sequenceInfo').style.display = 'block';
+            this.innerHTML = '<span>✅</span> 重新加载序列';
+            this.className = 'btn btn-success';
+        });
+        
+        document.getElementById('timelineSlider').addEventListener('input', function() {
+            const phaseDisplay = document.querySelector('.phase-value');
+            phaseDisplay.textContent = this.value + '.0% R-R间期';
+        });
+        
+        document.getElementById('valveBrand').addEventListener('change', function() {
+            const valveModel = document.getElementById('valveModel');
+            const brand = this.value;
+            
+            // 清空型号选择
+            valveModel.innerHTML = '';
+            
+            // 根据品牌更新型号选项
+            const models = {
+                'Medtronic': ['Evolut R', 'Evolut PRO', 'Evolut PRO+'],
+                'Edwards': ['SAPIEN 3', 'SAPIEN 3 Ultra'],
+                'Venus': ['VenusA-Valve', 'VenusA-Plus'],
+                'MicroPort': ['VitaFlow'],
+                'Peijia': ['Taurus']
+            };
+            
+            if (models[brand]) {
+                models[brand].forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    valveModel.appendChild(option);
+                });
+                valveModel.selectedIndex = 0;
+            }
+        });
+        
+        // 时相标记按钮交互
+        document.getElementById('diastoleBtn').addEventListener('click', function() {
+            const currentPhase = document.querySelector('.phase-value').textContent.split('.')[0];
+            this.innerHTML = `<span>✅</span> 标记舒张末期<small style="display: block; margin-top: 4px;">已标记 @ ${currentPhase}.0%</small>`;
+        });
+        
+        document.getElementById('systoleBtn').addEventListener('click', function() {
+            const currentPhase = document.querySelector('.phase-value').textContent.split('.')[0];
+            this.innerHTML = `<span>✅</span> 标记收缩末期<small style="display: block; margin-top: 4px;">已标记 @ ${currentPhase}.0%</small>`;
+        });
+        
+        // 继续到模块二按钮
+        document.getElementById('continueBtn').addEventListener('click', function() {
+            window.location.href = 'module2.html';
+        });
+    </script>
+</body>
+</html>

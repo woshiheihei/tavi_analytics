@@ -21,6 +21,7 @@ try:
     from ..core.data_models import PatientData
     from ..core.enums import ImageQuality, FollowUpTimepoint
     from ..utils.layout_manager import LayoutManager, LayoutType
+    from .step_checklist_widget import StepChecklistWidget
 except ImportError:
     import sys
     import os
@@ -32,6 +33,7 @@ except ImportError:
     from core.data_models import PatientData
     from core.enums import ImageQuality, FollowUpTimepoint
     from utils.layout_manager import LayoutManager, LayoutType
+    from step_checklist_widget import StepChecklistWidget
 
 
 class StatusDisplayWidget(qt.QGroupBox):
@@ -40,15 +42,21 @@ class StatusDisplayWidget(qt.QGroupBox):
     显示当前TAVR分析的状态信息，包括患者信息、序列状态和分析进度
     """
     
-    def __init__(self, session: TAVRStudySession, parent=None):
+    # 进度变更信号：completed, total
+    progressChanged = qt.Signal(int, int)
+    
+    def __init__(self, session: TAVRStudySession, parent=None, compact: bool = False):
         """初始化状态显示组件
         
         Args:
             session: TAVR研究会话对象
             parent: 父窗口对象
+            compact: 是否启用紧凑模式（仅显示摘要，详细信息可展开）
         """
         super().__init__("当前状态", parent)
         self.session = session
+        self._compact = compact
+        self._details_visible = not compact
         
         # 初始化UI组件
         self._init_ui()
@@ -56,26 +64,46 @@ class StatusDisplayWidget(qt.QGroupBox):
         # 初始更新状态
         self.update_status()
         
+        # 应用紧凑模式
+        self.set_compact_mode(compact)
+        
     def _init_ui(self):
         """初始化用户界面"""
         # 使用标准化布局管理器
         layout = LayoutManager.create_layout(LayoutType.INFO_DISPLAY, self)
         
-        # 主状态标签
+        # 顶部摘要 + 展开按钮
+        header_layout = LayoutManager.create_horizontal_layout(LayoutType.INFO_DISPLAY)
+        
         self.status_label = qt.QLabel("未配置数据")
-        self.status_label.setWordWrap(True)
+        self.status_label.setWordWrap(False)  # 摘要行尽量一行
         self.status_label.setStyleSheet(
             "QLabel { "
-            "padding: 10px; background-color: #f0f0f0; "
+            "padding: 8px; background-color: #f0f0f0; "
             "border: 1px solid #ccc; border-radius: 4px; "
             "}"
         )
-        layout.addWidget(self.status_label)
+        header_layout.addWidget(self.status_label, 1)
         
-        # 详细信息面板（可折叠）
+        self.toggle_btn = qt.QToolButton()
+        self.toggle_btn.setText("详细信息")
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setChecked(self._details_visible)
+        self.toggle_btn.setArrowType(qt.Qt.DownArrow if self._details_visible else qt.Qt.RightArrow)
+        self.toggle_btn.setToolButtonStyle(qt.Qt.ToolButtonTextBesideIcon)
+        self.toggle_btn.toggled.connect(self._on_toggle_details)
+        header_layout.addWidget(self.toggle_btn, 0)
+        
+        layout.addLayout(header_layout)
+        
+        # 任务进度（常显，紧凑不拉伸）
+        self.step_checklist = StepChecklistWidget(self)
+        self.step_checklist.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
+        layout.addWidget(self.step_checklist, 0)
+        
+        # 详细信息面板（自管可见性）
         self.details_group = qt.QGroupBox("详细信息")
-        self.details_group.setCheckable(True)
-        self.details_group.setChecked(False)  # 默认折叠
+        self.details_group.setCheckable(False)
         
         # 使用标准化布局管理器为详细信息组
         details_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, self.details_group)
@@ -111,22 +139,111 @@ class StatusDisplayWidget(qt.QGroupBox):
         details_layout.addWidget(self.sequence_info_label)
         
         layout.addWidget(self.details_group)
+        self.details_group.setVisible(self._details_visible)
         
+    def set_compact_mode(self, compact: bool):
+        """切换紧凑模式"""
+        self._compact = compact
+        if compact:
+            # 紧凑模式始终收起详情
+            self.toggle_btn.setChecked(False)
+            self.details_group.setVisible(False)
+            self.toggle_btn.setArrowType(qt.Qt.RightArrow)
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
+            self.status_label.setWordWrap(False)
+            self.status_label.setMaximumHeight(40)
+        else:
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Preferred)
+            self.status_label.setWordWrap(True)
+            self.status_label.setMaximumHeight(16777215)
+        
+        self.updateGeometry()
+        self.adjustSize()
+    
+    def _on_toggle_details(self, checked: bool):
+        self.details_group.setVisible(checked)
+        self.toggle_btn.setArrowType(qt.Qt.DownArrow if checked else qt.Qt.RightArrow)
+        self.updateGeometry()
+        self.adjustSize()
+    
     def update_status(self):
-        """更新状态显示"""
+        """统一更新：摘要、任务进度、详情"""
+        # 先更新摘要文本（依赖 session.is_ready）
         if self.session.is_ready():
             self._update_ready_status()
         else:
             self._update_not_ready_status()
-            
+        
+        # 更新任务进度（合并计算，发信号）
+        self._update_progress()
+        
         # 更新详细信息
         self._update_patient_info()
         self._update_sequence_info()
-        
+    
+    def _compute_step_status(self) -> dict:
+        """计算四项任务的完成状态"""
+        status = {"data_imported": False, "patient_info": False, "phase_ed": False, "phase_es": False}
+        try:
+            # 数据导入状态：只检查序列数据是否已加载
+            status["data_imported"] = bool(self.session.volume_sequence_node_id is not None)
+            
+            # 患者信息状态：检查患者ID和瓣膜信息是否完整
+            patient_data = getattr(self.session, 'patient_data', None)
+            has_patient_id = bool(patient_data and getattr(patient_data, 'patientID', None))
+            has_valve_info = bool(patient_data and 
+                                getattr(patient_data, 'valveBrand', None) and 
+                                getattr(patient_data, 'valveModel', None))
+            status["patient_info"] = has_patient_id and has_valve_info
+            
+            # 时相标记状态
+            ed = self.session.get_marked_phase('end_diastole')
+            es = self.session.get_marked_phase('end_systole')
+            status["phase_ed"] = ed.get('frame_index') is not None if isinstance(ed, dict) else False
+            status["phase_es"] = es.get('frame_index') is not None if isinstance(es, dict) else False
+            
+            # 记录详细状态用于调试
+            logging.info(f"步骤状态计算: 数据导入={status['data_imported']} (序列节点ID={self.session.volume_sequence_node_id}), "
+                        f"患者信息={status['patient_info']} (患者ID={has_patient_id}, 瓣膜信息={has_valve_info}), "
+                        f"舒张末期={status['phase_ed']}, 收缩末期={status['phase_es']}")
+            
+        except Exception as e:
+            logging.error(f"计算步骤状态时出错: {e}")
+        return status
+    
+    def _update_progress(self):
+        """更新任务进度UI并发出进度信号"""
+        try:
+            status = self._compute_step_status()
+            if hasattr(self, 'step_checklist') and self.step_checklist:
+                self.step_checklist.update_steps(status)
+            completed = sum(1 for v in status.values() if v)
+            total = 4
+            self.progressChanged.emit(completed, total)
+        except Exception:
+            # 静默失败以免影响主流程
+            pass
+    
     def _update_ready_status(self):
         """更新就绪状态显示"""
         patient_data = self.session.patient_data
         sequence_node = self.session.get_volume_sequence_node()
+        
+        # 先生成摘要用于工具提示
+        summary = self.get_summary_text()
+        
+        # 紧凑模式：显示简短摘要
+        if self._compact:
+            self.status_label.setText("数据已配置 - " + summary)
+            self.status_label.setToolTip("数据已配置 - " + summary)
+            self.status_label.setStyleSheet(
+                "QLabel { "
+                "padding: 6px; background-color: #e8f5e8; "
+                "border: 1px solid #4caf50; border-radius: 4px; "
+                "font-size: 12px; "
+                "}"
+            )
+            return
         
         status_parts = []
         
@@ -157,6 +274,7 @@ class StatusDisplayWidget(qt.QGroupBox):
             
         main_status = "数据已配置 - " + " | ".join(status_parts)
         self.status_label.setText(main_status)
+        self.status_label.setToolTip("数据已配置 - " + summary)
         self.status_label.setStyleSheet(
             "QLabel { "
             "padding: 10px; background-color: #e8f5e8; "
@@ -166,11 +284,17 @@ class StatusDisplayWidget(qt.QGroupBox):
         
     def _update_not_ready_status(self):
         """更新未就绪状态显示"""
-        self.status_label.setText("未配置数据 - 请点击'数据导入与配置'按钮开始分析")
+        text = "未配置数据 - 请点击'数据导入与配置'按钮开始分析"
+        tooltip = "未配置数据：请先导入4D心脏CT并完善患者信息"
+        if self._compact:
+            text = "未配置数据"
+        self.status_label.setText(text)
+        self.status_label.setToolTip(tooltip)
         self.status_label.setStyleSheet(
             "QLabel { "
-            "padding: 10px; background-color: #ffebee; "
+            "padding: 6px; background-color: #ffebee; "
             "border: 1px solid #f44336; border-radius: 4px; "
+            "font-size: 12px; "
             "}"
         )
         
@@ -286,7 +410,7 @@ class StatusDisplayWidget(qt.QGroupBox):
         """
         if not self.session.is_ready():
             return "未配置数据"
-            
+        
         patient_data = self.session.patient_data
         sequence_node = self.session.get_volume_sequence_node()
         
