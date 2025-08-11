@@ -10,7 +10,7 @@ import traceback
 from core.session import TAVRStudySession
 from core.module_manager import ModuleManager
 from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-from ui.styles import ComponentStyleFactory, StyleManager
+from ui.styles import ComponentStyleFactory
 
 
 class MainUI(qt.QWidget):
@@ -66,32 +66,14 @@ class MainUI(qt.QWidget):
         self._create_content_area(main_layout)
     
     def _create_navigation_area(self, parent_layout):
-        """创建导航区域（包含模块切换和状态显示）"""
+        """创建导航区域（模块切换按钮）"""
         nav_frame = LayoutManager.create_section_frame("模块导航", LayoutType.BUTTON_GROUP)
-        nav_frame.setMaximumHeight(110)  # 稍微增加高度以容纳状态行
+        nav_frame.setMaximumHeight(60)  # 降低高度，只需要容纳按钮行
         
         nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_frame)
         
         # 获取样式集合
         styles = ComponentStyleFactory.get_main_ui_styles()
-        
-        # 创建顶部状态行（状态指示器）
-        status_layout = qt.QHBoxLayout()
-        
-        # 简洁的应用标识
-        # app_label = qt.QLabel("TAVR Analytics")
-        # app_label.setStyleSheet(styles["app_title"])
-        # status_layout.addWidget(app_label)
-        
-        # 添加弹性空间
-        status_layout.addStretch()
-        
-        # 全局状态指示器
-        self._status_indicator = qt.QLabel("就绪")
-        self._status_indicator.setStyleSheet(styles["status_indicator"])
-        status_layout.addWidget(self._status_indicator)
-        
-        nav_layout.addLayout(status_layout)
         
         # 创建按钮行
         button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
@@ -260,7 +242,7 @@ TAVR Analytics 帮助
 操作:
 • 点击上方按钮切换模块
 • 右键点击按钮查看更多选项
-• 查看右上角状态指示器了解当前状态
+• 关键操作信息会在控制台中显示
 
 模块说明:
 • 模块一: 数据导入与场景准备
@@ -285,10 +267,6 @@ TAVR Analytics 帮助
     def _setup_tooltips(self):
         """设置工具提示"""
         try:
-            # 为状态指示器添加工具提示
-            if hasattr(self, '_status_indicator'):
-                self._status_indicator.setToolTip("显示当前系统状态和操作进度")
-            
             # 为模块按钮添加工具提示
             for button in self._module_buttons.buttons():
                 module_name = button.property("module_name")
@@ -405,8 +383,8 @@ TAVR Analytics 帮助
     
     def _show_loading_state(self, message: str):
         """显示加载状态"""
-        self.update_status(message, "normal")
-        # 可以在这里添加加载动画或禁用按钮
+        logging.info(f"加载状态: {message}")
+        # 禁用按钮防止重复操作
         for button in self._module_buttons.buttons():
             button.setEnabled(False)
     
@@ -469,17 +447,21 @@ TAVR Analytics 帮助
     
     def update_status(self, message: str, status_type: str = "normal"):
         """
-        更新状态指示器
+        记录状态到控制台日志
         
         Args:
             message: 状态消息
             status_type: 状态类型 ("normal", "warning", "error", "success")
         """
-        self._status_indicator.setText(message)
-        
-        # 使用统一样式系统
-        style = StyleManager.get_status_indicator_style(status_type)
-        self._status_indicator.setStyleSheet(style)
+        # 根据状态类型选择日志级别
+        if status_type == "error":
+            logging.error(f"状态更新: {message}")
+        elif status_type == "warning":
+            logging.warning(f"状态更新: {message}")
+        elif status_type == "success":
+            logging.info(f"状态更新: {message}")
+        else:
+            logging.info(f"状态更新: {message}")
     
     def auto_activate_default_module(self):
         """自动激活默认模块（模块一）"""
@@ -514,7 +496,7 @@ TAVR Analytics 帮助
                 item = self.layout().itemAt(i)
                 if item and item.widget():
                     widget = item.widget()
-                    if isinstance(widget, qt.QFrame) and widget.maximumHeight() == 110:
+                    if isinstance(widget, qt.QFrame) and widget.maximumHeight() == 60:
                         nav_frame = widget
                         if nav_frame.layout():
                             for j in range(nav_frame.layout().count()):
