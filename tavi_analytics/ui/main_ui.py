@@ -125,13 +125,7 @@ class MainUI(qt.QWidget):
         # 添加弹性空间
         LayoutManager.add_stretch_with_ratio(button_layout, 1)
         
-        # 添加导航提示
-        nav_hint = qt.QLabel("点击上方按钮切换模块")
-        nav_hint.setStyleSheet(styles["nav_hint"])
-        nav_hint.setAlignment(qt.Qt.AlignCenter)
-        
         nav_layout.addLayout(button_layout)
-        nav_layout.addWidget(nav_hint)
         
         # 添加到主布局，固定高度
         parent_layout.addWidget(nav_frame, 0)  # 0 表示固定大小
