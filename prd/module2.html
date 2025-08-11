@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAVR-Analytics Workflow - 模块二全自动版本 UI设计</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .ui-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1000px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 32px;
+            text-align: center;
+        }
+        
+        .progress-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        
+        .nav-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-step.active {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+        
+        .nav-step.completed {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        
+        .nav-step.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .nav-step:not(.disabled) {
+            cursor: pointer;
+        }
+        
+        .nav-step:not(.disabled):hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 32px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            padding: 24px;
+            border: 2px solid #f0f4f8;
+            border-radius: 12px;
+            background: #fbfcfd;
+        }
+        
+        .section.auto-segmentation {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        }
+        
+        .section.results {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .icon {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+        }
+        
+        .auto-button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 20px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .auto-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+        }
+        
+        .auto-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .auto-button.processing {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            animation: pulse 2s infinite;
+        }
+        
+        .auto-button.completed {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .progress-container {
+            margin-top: 24px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .progress-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .step-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .step-item.active {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+        }
+        
+        .step-item.completed {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+        }
+        
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .step-icon.pending {
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+        
+        .step-icon.active {
+            background: #3b82f6;
+            color: white;
+            animation: spin 1s linear infinite;
+        }
+        
+        .step-icon.completed {
+            background: #10b981;
+            color: white;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .step-text {
+            font-size: 14px;
+            color: #374151;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .result-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .result-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .result-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .result-status.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .result-status.processing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .result-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+        
+        .result-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 2px solid #e5e7eb;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-outline {
+            background: white;
+            color: #6b7280;
+            border: 2px solid #d1d5db;
+        }
+        
+        .btn-outline:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="ui-container">
+        <div class="header">
+            <div class="progress-nav">
+                <div class="nav-step completed" onclick="window.location.href='module1.html'">
+                    <span>1️⃣</span>
+                    <span>数据加载</span>
+                </div>
+                <div class="nav-step active" onclick="window.location.href='module2.html'">
+                    <span>2️⃣</span>
+                    <span>自动分割</span>
+                </div>
+                <div class="nav-step disabled">
+                    <span>3️⃣</span>
+                    <span>量化测量</span>
+                </div>
+                <div class="nav-step disabled">
+                    <span>4️⃣</span>
+                    <span>报告生成</span>
+                </div>
+            </div>
+            <h1>TAVR-Analytics Workflow</h1>
+            <p>模块二：全自动分割与标志点定位</p>
+        </div>
+        
+        <div class="content">
+            <!-- 全自动分割控制区域 -->
+            <div class="section auto-segmentation">
+                <h2 class="section-title">
+                    <span class="icon">🤖</span>
+                    AI全自动分割与定位
+                </h2>
+                
+                <button class="auto-button" id="autoSegmentBtn">
+                    <span>⚡</span>
+                    一键启动全自动分割
+                    <small style="display: block; margin-top: 4px; font-weight: 400; font-size: 14px;">
+                        基于深度学习的智能分割与标志点定位 • 预计耗时约1分钟
+                    </small>
+                </button>
+                
+                <div class="progress-container hidden" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">准备启动AI处理流程... 预计需要约1分钟</div>
+                    
+                    <div class="progress-steps">
+                        <div class="step-item" id="step1">
+                            <div class="step-icon pending" id="stepIcon1">1</div>
+                            <div class="step-text">图像预处理</div>
+                        </div>
+                        <div class="step-item" id="step2">
+                            <div class="step-icon pending" id="stepIcon2">2</div>
+                            <div class="step-text">主动脉根部分割</div>
+                        </div>
+                        <div class="step-item" id="step3">
+                            <div class="step-icon pending" id="stepIcon3">3</div>
+                            <div class="step-text">瓣膜支架分割</div>
+                        </div>
+                        <div class="step-item" id="step4">
+                            <div class="step-icon pending" id="stepIcon4">4</div>
+                            <div class="step-text">平面重建</div>
+                        </div>
+                        <div class="step-item" id="step5">
+                            <div class="step-icon pending" id="stepIcon5">5</div>
+                            <div class="step-text">标志点定位</div>
+                        </div>
+                        <div class="step-item" id="step6">
+                            <div class="step-icon pending" id="stepIcon6">6</div>
+                            <div class="step-text">质量验证</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 结果展示区域 -->
+            <div class="section results hidden" id="resultsSection">
+                <h2 class="section-title">
+                    <span class="icon">✅</span>
+                    自动分割结果
+                </h2>
+                
+                <div class="results-grid">
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">主动脉根部</div>
+                            <div class="result-status success">已完成</div>
+                        </div>
+                        <div class="result-value">3D模型</div>
+                        <div class="result-desc">高精度分割，体积 45.2 ml</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">瓣膜支架</div>
+                            <div class="result-status success">已完成</div>
+                        </div>
+                        <div class="result-value">3D模型</div>
+                        <div class="result-desc">支架型号：Evolut PRO+</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">原生瓣环平面</div>
+                            <div class="result-status success">已重建</div>
+                        </div>
+                        <div class="result-value">3个基准点</div>
+                        <div class="result-desc">平面拟合误差 < 0.5mm</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">瓣膜特异性平面</div>
+                            <div class="result-status success">已重建</div>
+                        </div>
+                        <div class="result-value">4个平面</div>
+                        <div class="result-desc">流入道、窦底、对合、外裙边</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">原生连合</div>
+                            <div class="result-status success">已定位</div>
+                        </div>
+                        <div class="result-value">3个标志点</div>
+                        <div class="result-desc">RCC-LCC, LCC-NCC, NCC-RCC</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">新连合</div>
+                            <div class="result-status success">已定位</div>
+                        </div>
+                        <div class="result-value">3个标志点</div>
+                        <div class="result-desc">Neo连合对齐分析就绪</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">冠脉开口</div>
+                            <div class="result-status success">已定位</div>
+                        </div>
+                        <div class="result-value">2个标志点</div>
+                        <div class="result-desc">LCA, RCA 精确坐标</div>
+                    </div>
+                    
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">处理时间</div>
+                            <div class="result-status success">优化</div>
+                        </div>
+                        <div class="result-value">42秒</div>
+                        <div class="result-desc">比手动操作快95%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="actions">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="color: #6b7280; font-size: 14px;">
+                        <span>🔄</span>
+                        AI自动化处理完成，可进入量化分析
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 16px;">
+                    <button class="btn btn-outline" id="reviewBtn" disabled>
+                        <span>🔍</span>
+                        审核结果
+                    </button>
+                    <button class="btn btn-outline" id="adjustBtn" disabled>
+                        <span>⚙️</span>
+                        手动调整
+                    </button>
+                    <button class="btn btn-success" id="continueBtn" disabled>
+                        <span>➡️</span>
+                        继续到模块三
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟全自动分割流程
+        document.getElementById('autoSegmentBtn').addEventListener('click', function() {
+            startAutoSegmentation();
+        });
+        
+        function startAutoSegmentation() {
+            const btn = document.getElementById('autoSegmentBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            
+            // 更新按钮状态
+            btn.className = 'auto-button processing';
+            btn.innerHTML = '<span>⏳</span>AI处理中...<small style="display: block; margin-top: 4px; font-weight: 400; font-size: 14px;">请稍候，正在进行智能分割与定位 • 预计剩余约1分钟</small>';
+            btn.disabled = true;
+            
+            // 显示进度容器
+            progressContainer.classList.remove('hidden');
+            progressContainer.classList.add('fade-in');
+            
+            // 模拟处理步骤
+            simulateProcessingSteps();
+        }
+        
+        function simulateProcessingSteps() {
+            const steps = [
+                { id: 1, name: '图像预处理', duration: 600, progress: 15 },
+                { id: 2, name: '主动脉根部分割', duration: 1000, progress: 35 },
+                { id: 3, name: '瓣膜支架分割', duration: 800, progress: 55 },
+                { id: 4, name: '平面重建', duration: 700, progress: 75 },
+                { id: 5, name: '标志点定位', duration: 800, progress: 90 },
+                { id: 6, name: '质量验证', duration: 500, progress: 100 }
+            ];
+            
+            let currentStep = 0;
+            
+            function processNextStep() {
+                if (currentStep < steps.length) {
+                    const step = steps[currentStep];
+                    
+                    // 激活当前步骤
+                    activateStep(step.id, step.name);
+                    
+                    // 更新进度
+                    setTimeout(() => {
+                        updateProgress(step.progress, `正在${step.name}...`);
+                        
+                        // 完成当前步骤
+                        setTimeout(() => {
+                            completeStep(step.id);
+                            currentStep++;
+                            
+                            if (currentStep < steps.length) {
+                                processNextStep();
+                            } else {
+                                onProcessingComplete();
+                            }
+                        }, step.duration * 0.8);
+                        
+                    }, step.duration * 0.2);
+                }
+            }
+            
+            processNextStep();
+        }
+        
+        function activateStep(stepId, stepName) {
+            const stepElement = document.getElementById(`step${stepId}`);
+            const stepIcon = document.getElementById(`stepIcon${stepId}`);
+            
+            stepElement.className = 'step-item active';
+            stepIcon.className = 'step-icon active';
+            stepIcon.innerHTML = '⚡';
+            
+            updateProgress((stepId - 1) * 16.67, `正在${stepName}...`);
+        }
+        
+        function completeStep(stepId) {
+            const stepElement = document.getElementById(`step${stepId}`);
+            const stepIcon = document.getElementById(`stepIcon${stepId}`);
+            
+            stepElement.className = 'step-item completed';
+            stepIcon.className = 'step-icon completed';
+            stepIcon.innerHTML = '✓';
+        }
+        
+        function updateProgress(percentage, text) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressFill.style.width = percentage + '%';
+            progressText.textContent = text;
+        }
+        
+        function onProcessingComplete() {
+            const btn = document.getElementById('autoSegmentBtn');
+            const resultsSection = document.getElementById('resultsSection');
+            const reviewBtn = document.getElementById('reviewBtn');
+            const adjustBtn = document.getElementById('adjustBtn');
+            const continueBtn = document.getElementById('continueBtn');
+            
+            // 更新按钮状态
+            btn.className = 'auto-button completed';
+            btn.innerHTML = '<span>✅</span>AI处理完成<small style="display: block; margin-top: 4px; font-weight: 400; font-size: 14px;">所有分割与定位任务已成功完成</small>';
+            
+            // 显示结果
+            setTimeout(() => {
+                resultsSection.classList.remove('hidden');
+                resultsSection.classList.add('fade-in');
+                
+                // 启用操作按钮
+                reviewBtn.disabled = false;
+                adjustBtn.disabled = false;
+                continueBtn.disabled = false;
+                
+                updateProgress(100, '🎉 AI全自动分割与标志点定位完成！');
+            }, 1000);
+        }
+        
+        // 按钮交互
+        document.getElementById('reviewBtn').addEventListener('click', function() {
+            alert('审核功能：将打开3D视图，高亮显示所有分割结果和标志点，供用户详细检查。');
+        });
+        
+        document.getElementById('adjustBtn').addEventListener('click', function() {
+            alert('手动调整功能：将切换到半自动模式，允许用户手动微调AI生成的分割和标志点位置。');
+        });
+        
+        document.getElementById('continueBtn').addEventListener('click', function() {
+            window.location.href = 'module3.html';
+        });
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 可以在这里添加页面初始化逻辑
+            console.log('TAVR-Analytics Module 2 Auto UI Loaded');
+        });
+    </script>
+</body>
+</html>
