@@ -67,13 +67,18 @@ class Module2Widget(qt.QWidget):
         
         自动切换到舒张末期时相，为分割和标志点定义做准备
         """
-        logging.info("模块二已激活，开始自动时相切换")
+        logging.info("模块二已激活，开始检查和切换期像")
         
         try:
-            # 尝试切换到舒张末期
+            # 检查标记的期像状态
+            self._check_marked_phases()
+            
+            # 尝试切换到舒张末期（默认分析期像）
             if self._auto_switch_to_end_diastole():
                 logging.info("成功切换到舒张末期时相")
                 self._update_status("已切换到舒张末期，准备开始分割...")
+                # 设置舒张末期按钮为激活状态
+                self._update_phase_button_states(active_phase='diastole')
             else:
                 logging.warning("未能自动切换到舒张末期时相")
                 self._update_status("请先在模块一中标记舒张末期时相")
@@ -81,6 +86,35 @@ class Module2Widget(qt.QWidget):
         except Exception as e:
             logging.error(f"自动时相切换失败: {e}")
             self._update_status("时相切换失败，请检查时相标记")
+
+    def _check_marked_phases(self):
+        """
+        检查已标记的期像状态
+        
+        检查模块一中标记的舒张末期和收缩末期状态
+        """
+        end_diastole_info = self.session.get_marked_phase('end_diastole')
+        end_systole_info = self.session.get_marked_phase('end_systole')
+        
+        # 记录期像标记状态
+        diastole_marked = end_diastole_info is not None and end_diastole_info.get('frame_index') is not None
+        systole_marked = end_systole_info is not None and end_systole_info.get('frame_index') is not None
+        
+        if diastole_marked and systole_marked:
+            logging.info("✓ 舒张末期和收缩末期均已标记")
+        elif diastole_marked:
+            logging.info("✓ 舒张末期已标记，收缩末期未标记")
+        elif systole_marked:
+            logging.warning("⚠ 收缩末期已标记，但舒张末期未标记（建议先标记舒张末期）")
+        else:
+            logging.warning("⚠ 舒张末期和收缩末期均未标记")
+        
+        return {
+            'end_diastole_marked': diastole_marked,
+            'end_systole_marked': systole_marked,
+            'end_diastole_info': end_diastole_info,
+            'end_systole_info': end_systole_info
+        }
 
     def _auto_switch_to_end_diastole(self) -> bool:
         """
@@ -120,6 +154,44 @@ class Module2Widget(qt.QWidget):
         if hasattr(self, 'status_label'):
             self.status_label.text = message
             logging.info(f"状态更新: {message}")
+
+    def _switch_to_end_systole(self):
+        """
+        切换到收缩末期
+        
+        用于在需要时切换到收缩末期进行分析
+        """
+        try:
+            end_systole_info = self.session.get_marked_phase('end_systole')
+            if not end_systole_info:
+                self._update_status("未找到收缩末期标记，请先在模块一中标记")
+                return False
+            
+            frame_index = end_systole_info.get('frame_index')
+            if frame_index is None:
+                self._update_status("收缩末期标记中缺少帧索引信息")
+                return False
+            
+            # 获取序列浏览器节点
+            browser_node = self.session.get_sequence_browser_node()
+            if not browser_node:
+                logging.warning("未找到序列浏览器节点")
+                return False
+            
+            # 切换到指定帧
+            browser_node.SetSelectedItemNumber(frame_index)
+            
+            # 更新状态显示
+            phase_percent = end_systole_info.get('phase_percent', 0.0)
+            self._update_status(f"已切换到收缩末期 (帧 {frame_index}, {phase_percent:.1f}%)")
+            
+            logging.info(f"成功切换到帧 {frame_index} (收缩末期)")
+            return True
+            
+        except Exception as e:
+            logging.error(f"切换到收缩末期失败: {e}")
+            self._update_status("切换到收缩末期失败")
+            return False
 
     def _setup_ui(self):
         """设置用户界面"""
@@ -161,12 +233,90 @@ class Module2Widget(qt.QWidget):
         description_label.setAlignment(qt.Qt.AlignCenter)
         description_label.setStyleSheet(StyleManager.get_label_style("muted"))
         layout.addWidget(description_label)
+        
+        # 添加期像状态和控制区域
+        self._create_phase_control_section(layout)
+
+    def _create_phase_control_section(self, layout):
+        """创建期像控制区域"""
+        # 创建期像控制框架
+        phase_frame = LayoutManager.create_section_frame("期像选择")
+        phase_layout = qt.QVBoxLayout(phase_frame)
+        
+        # 期像切换按钮组
+        switch_layout = qt.QHBoxLayout()
+        switch_layout.setSpacing(8)
+        
+        # 切换到舒张末期按钮
+        self.switch_to_diastole_button = LayoutManager.create_button_with_style(
+            text="🫀 舒张末期",
+            button_type="primary",
+            size="small",
+            min_height=32
+        )
+        self.switch_to_diastole_button.setObjectName("switchToDiastoleButton")
+        self.switch_to_diastole_button.clicked.connect(self._on_switch_to_diastole)
+        self.switch_to_diastole_button.setToolTip("切换到舒张末期进行分析（推荐用于HALT等分析）")
+        switch_layout.addWidget(self.switch_to_diastole_button)
+        
+        # 切换到收缩末期按钮
+        self.switch_to_systole_button = LayoutManager.create_button_with_style(
+            text="💓 收缩末期",
+            button_type="secondary",
+            size="small",
+            min_height=32
+        )
+        self.switch_to_systole_button.setObjectName("switchToSystoleButton")
+        self.switch_to_systole_button.clicked.connect(self._on_switch_to_systole)
+        self.switch_to_systole_button.setToolTip("切换到收缩末期进行分析（用于动态分析）")
+        switch_layout.addWidget(self.switch_to_systole_button)
+        
+        phase_layout.addLayout(switch_layout)
+        
+        # 添加说明文本
+        phase_info_label = qt.QLabel(
+            "💡 提示：模块二默认在舒张末期进行分割和标志点定义。\n"
+            "如需切换期像，请使用上方按钮。"
+        )
+        phase_info_label.setAlignment(qt.Qt.AlignCenter)
+        phase_info_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 12px;
+                font-style: italic;
+                padding: 4px;
+                margin: 2px;
+            }
+        """)
+        phase_info_label.setWordWrap(True)
+        phase_layout.addWidget(phase_info_label)
+        
+        layout.addWidget(phase_frame)
 
     def _create_segmentation_section(self, layout):
         """创建分割工具区域"""
         # 使用标准化的section_frame替代直接创建QGroupBox - 与模块一保持一致
         segmentation_group = LayoutManager.create_section_frame("分割工具 (Segmentation)")
         segmentation_layout = qt.QVBoxLayout(segmentation_group)
+        
+        # 添加期像相关的分割提示
+        phase_hint_label = qt.QLabel(
+            "💡 分割提示：主动脉根部和瓣膜支架分割建议在舒张末期进行，\n"
+            "此时心室充盈最大，边界最清晰。"
+        )
+        phase_hint_label.setStyleSheet("""
+            QLabel {
+                background-color: #fff3cd;
+                color: #856404;
+                border: 1px solid #ffeeba;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 12px;
+                margin: 4px 0px;
+            }
+        """)
+        phase_hint_label.setWordWrap(True)
+        segmentation_layout.addWidget(phase_hint_label)
         
         # 按照详细设计文档和开发计划任务2的要求，添加三个分割按钮
         # 使用推荐的LayoutManager.create_button_with_style()方法创建按钮
@@ -497,6 +647,12 @@ class Module2Widget(qt.QWidget):
         logging.info("用户点击了'定义原生瓣环'按钮")
         
         try:
+            # 确保在舒张末期进行瓣环定义（更准确）
+            if not self._ensure_diastolic_phase():
+                self._update_instruction("❌ 请先确保已切换到舒张末期时相")
+                self._update_landmark_progress("⚠️ 需要舒张末期时相")
+                return
+            
             # 更新UI状态
             self._update_instruction("正在创建原生瓣环标志点节点...")
             self._update_landmark_progress("⏳ 初始化中...")
@@ -510,7 +666,7 @@ class Module2Widget(qt.QWidget):
             
             if result:
                 self._update_instruction(
-                    "✅ 标志点节点已创建！\n"
+                    "✅ 标志点节点已创建！（舒张末期）\n"
                     "请在3D视图中依次放置3个原生瓣环上的点：\n"
                     "1️⃣ 第一个点：右冠状动脉小叶对应的瓣环点\n"
                     "2️⃣ 第二个点：左冠状动脉小叶对应的瓣环点\n" 
@@ -525,7 +681,7 @@ class Module2Widget(qt.QWidget):
                 self._start_landmark_monitoring()
                 
                 # 更新状态栏
-                self._update_status("Native_Annulus_Points节点已激活，请开始放置标志点")
+                self._update_status("Native_Annulus_Points节点已激活（舒张末期），请开始放置标志点")
                 
                 logging.info("原生瓣环平面重建流程已启动")
                 
@@ -542,6 +698,42 @@ class Module2Widget(qt.QWidget):
             self._update_landmark_progress("❌ 操作失败")
             self._enable_native_annulus_button()
             self._update_status("原生瓣环定义失败，请检查日志")
+
+    def _ensure_diastolic_phase(self) -> bool:
+        """
+        确保当前处于舒张末期
+        
+        如果当前不在舒张末期，尝试自动切换
+        
+        Returns:
+            bool: 是否成功确保在舒张末期
+        """
+        try:
+            # 检查当前是否已经在舒张末期
+            end_diastole_info = self.session.get_marked_phase('end_diastole')
+            if not end_diastole_info:
+                logging.warning("未找到舒张末期标记")
+                return False
+                
+            browser_node = self.session.get_sequence_browser_node()
+            if not browser_node:
+                logging.warning("未找到序列浏览器节点")
+                return False
+                
+            current_frame = browser_node.GetSelectedItemNumber()
+            diastole_frame = end_diastole_info.get('frame_index')
+            
+            if current_frame == diastole_frame:
+                # 已经在舒张末期
+                return True
+            else:
+                # 需要切换到舒张末期
+                logging.info(f"当前帧 {current_frame}，需要切换到舒张末期帧 {diastole_frame}")
+                return self._auto_switch_to_end_diastole()
+                
+        except Exception as e:
+            logging.error(f"检查/切换舒张末期失败: {e}")
+            return False
 
     def _start_landmark_monitoring(self):
         """
@@ -1238,6 +1430,89 @@ class Module2Widget(qt.QWidget):
                 
         except Exception as e:
             logging.error(f"清除标志点失败: {e}")
+
+    def _on_switch_to_diastole(self):
+        """处理切换到舒张末期按钮点击"""
+        logging.info("用户要求切换到舒张末期")
+        
+        try:
+            if self._auto_switch_to_end_diastole():
+                # 更新按钮状态 - 舒张末期为激活状态
+                self._update_phase_button_states(active_phase='diastole')
+                self._update_status("已切换到舒张末期，适合进行HALT和分割分析")
+                logging.info("手动切换到舒张末期成功")
+            else:
+                self._update_status("切换到舒张末期失败，请检查模块一中的期像标记")
+                logging.warning("手动切换到舒张末期失败")
+                
+        except Exception as e:
+            logging.error(f"手动切换到舒张末期失败: {e}")
+            self._update_status("切换失败，请检查期像标记")
+
+    def _on_switch_to_systole(self):
+        """处理切换到收缩末期按钮点击"""
+        logging.info("用户要求切换到收缩末期")
+        
+        try:
+            if self._switch_to_end_systole():
+                # 更新按钮状态 - 收缩末期为激活状态
+                self._update_phase_button_states(active_phase='systole')
+                self._update_status("已切换到收缩末期，适合进行动态分析")
+                logging.info("手动切换到收缩末期成功")
+            else:
+                self._update_status("切换到收缩末期失败，请检查模块一中的期像标记")
+                logging.warning("手动切换到收缩末期失败")
+                
+        except Exception as e:
+            logging.error(f"手动切换到收缩末期失败: {e}")
+            self._update_status("切换失败，请检查期像标记")
+
+    def _update_phase_button_states(self, active_phase: str):
+        """
+        更新期像切换按钮的状态
+        
+        Args:
+            active_phase: 当前激活的期像 ('diastole' 或 'systole')
+        """
+        if active_phase == 'diastole':
+            # 舒张末期激活
+            if hasattr(self, 'switch_to_diastole_button'):
+                self.switch_to_diastole_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #28a745;
+                        color: white;
+                        border: 2px solid #1e7e34;
+                        border-radius: 6px;
+                        padding: 6px 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #218838;
+                    }
+                """)
+            if hasattr(self, 'switch_to_systole_button'):
+                # 恢复次要样式
+                self.switch_to_systole_button.setStyleSheet("")  # 重置为默认次要样式
+                
+        elif active_phase == 'systole':
+            # 收缩末期激活
+            if hasattr(self, 'switch_to_systole_button'):
+                self.switch_to_systole_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #dc3545;
+                        color: white;
+                        border: 2px solid #bd2130;
+                        border-radius: 6px;
+                        padding: 6px 12px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #c82333;
+                    }
+                """)
+            if hasattr(self, 'switch_to_diastole_button'):
+                # 恢复主要样式  
+                self.switch_to_diastole_button.setStyleSheet("")  # 重置为默认主要样式
 
     def _refresh_3d_view(self):
         """
