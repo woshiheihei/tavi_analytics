@@ -203,8 +203,8 @@ class Module2Widget(qt.QWidget):
         # 添加标题
         self._create_title_section(layout)
         
-        # 添加分割工具区域 (Segmentation)
-        self._create_segmentation_section(layout)
+        # 添加全自动分析区域 (Auto Analysis)
+        self._create_auto_analysis_section(layout)
         
         # 添加解剖标志点定义区域 (Landmark Placement)
         self._create_landmark_placement_section(layout)
@@ -220,14 +220,14 @@ class Module2Widget(qt.QWidget):
 
     def _create_title_section(self, layout):
         """创建标题区域"""
-        title_label = qt.QLabel("模块二：引导式分割与解剖标志点定义")
+        title_label = qt.QLabel("模块二：全自动分析与解剖标志点定义")
         title_label.setAlignment(qt.Qt.AlignCenter)
         title_label.setStyleSheet(StyleManager.get_label_style("large"))
         layout.addWidget(title_label)
         
         # 添加描述
         description_label = qt.QLabel(
-            "本模块提供主动脉根部和瓣膜支架的半自动分割功能，\n"
+            "本模块提供一键全自动分析功能，自动完成主动脉根部分割和测量，\n"
             "以及关键解剖标志点的定义和管理工具。"
         )
         description_label.setAlignment(qt.Qt.AlignCenter)
@@ -275,8 +275,8 @@ class Module2Widget(qt.QWidget):
         
         # 添加说明文本
         phase_info_label = qt.QLabel(
-            "💡 提示：模块二默认在舒张末期进行分割和标志点定义。\n"
-            "如需切换期像，请使用上方按钮。"
+            "💡 提示：全自动分析默认使用舒张末期数据进行处理。\n"
+            "请确保在模块一中已正确标记舒张末期，然后点击上方按钮切换。"
         )
         phase_info_label.setAlignment(qt.Qt.AlignCenter)
         phase_info_label.setStyleSheet("""
@@ -293,22 +293,22 @@ class Module2Widget(qt.QWidget):
         
         layout.addWidget(phase_frame)
 
-    def _create_segmentation_section(self, layout):
-        """创建分割工具区域"""
+    def _create_auto_analysis_section(self, layout):
+        """创建全自动分析区域"""
         # 使用标准化的section_frame替代直接创建QGroupBox - 与模块一保持一致
-        segmentation_group = LayoutManager.create_section_frame("分割工具 (Segmentation)")
-        segmentation_layout = qt.QVBoxLayout(segmentation_group)
+        analysis_group = LayoutManager.create_section_frame("全自动分析 (Auto Analysis)")
+        analysis_layout = qt.QVBoxLayout(analysis_group)
         
-        # 添加期像相关的分割提示
+        # 添加期像相关的分析提示
         phase_hint_label = qt.QLabel(
-            "💡 分割提示：主动脉根部和瓣膜支架分割建议在舒张末期进行，\n"
-            "此时心室充盈最大，边界最清晰。"
+            "💡 分析提示：全自动分析将使用当前舒张末期的数据进行处理，\n"
+            "包括主动脉根部分割、测量分析等，整个过程无需人工干预。"
         )
         phase_hint_label.setStyleSheet("""
             QLabel {
-                background-color: #fff3cd;
-                color: #856404;
-                border: 1px solid #ffeeba;
+                background-color: #d1ecf1;
+                color: #0c5460;
+                border: 1px solid #bee5eb;
                 border-radius: 4px;
                 padding: 8px;
                 font-size: 12px;
@@ -316,45 +316,49 @@ class Module2Widget(qt.QWidget):
             }
         """)
         phase_hint_label.setWordWrap(True)
-        segmentation_layout.addWidget(phase_hint_label)
+        analysis_layout.addWidget(phase_hint_label)
         
-        # 按照详细设计文档和开发计划任务2的要求，添加三个分割按钮
-        # 使用推荐的LayoutManager.create_button_with_style()方法创建按钮
-        
-        # 1. 开始主动脉根部分割按钮 - 主要操作
-        aortic_root_button = LayoutManager.create_button_with_style(
-            text="开始主动脉根部分割",
+        # 一键分析按钮 - 主要操作
+        self.auto_analysis_button = LayoutManager.create_button_with_style(
+            text="🚀 开始全自动分析",
             button_type="primary",
-            size="default",
-            min_height=40
+            size="large",
+            min_height=50
         )
-        aortic_root_button.setObjectName("aorticRootSegmentationButton")
-        aortic_root_button.clicked.connect(lambda: self._on_button_clicked("开始主动脉根部分割"))
-        segmentation_layout.addWidget(aortic_root_button)
+        self.auto_analysis_button.setObjectName("autoAnalysisButton")
+        self.auto_analysis_button.clicked.connect(self._on_start_auto_analysis)
+        analysis_layout.addWidget(self.auto_analysis_button)
         
-        # 2. 开始瓣膜支架分割按钮 - 次要操作
-        valve_stent_button = LayoutManager.create_button_with_style(
-            text="开始瓣膜支架分割",
-            button_type="secondary",
-            size="default",
-            min_height=40
-        )
-        valve_stent_button.setObjectName("valveStentSegmentationButton")
-        valve_stent_button.clicked.connect(lambda: self._on_button_clicked("开始瓣膜支架分割"))
-        segmentation_layout.addWidget(valve_stent_button)
+        # 分析状态显示
+        self.analysis_status_label = qt.QLabel("准备开始全自动分析...")
+        self.analysis_status_label.setAlignment(qt.Qt.AlignCenter)
+        self.analysis_status_label.setStyleSheet("""
+            QLabel {
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border: 1px solid #e9ecef;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+                margin: 4px 0px;
+            }
+        """)
+        self.analysis_status_label.setWordWrap(True)
+        analysis_layout.addWidget(self.analysis_status_label)
         
-        # 3. 验证分割结果按钮 - 轮廓按钮
-        validate_button = LayoutManager.create_button_with_style(
-            text="验证分割结果",
-            button_type="outline",
+        # 停止分析按钮 - 危险操作，初始隐藏
+        self.stop_analysis_button = LayoutManager.create_button_with_style(
+            text="⏹ 停止分析",
+            button_type="destructive",
             size="default",
             min_height=35
         )
-        validate_button.setObjectName("validateSegmentationButton")
-        validate_button.clicked.connect(lambda: self._on_button_clicked("验证分割结果"))
-        segmentation_layout.addWidget(validate_button)
+        self.stop_analysis_button.setObjectName("stopAnalysisButton")
+        self.stop_analysis_button.clicked.connect(self._on_stop_analysis)
+        self.stop_analysis_button.setVisible(False)  # 初始隐藏
+        analysis_layout.addWidget(self.stop_analysis_button)
         
-        layout.addWidget(segmentation_group)
+        layout.addWidget(analysis_group)
 
     def _create_landmark_placement_section(self, layout):
         """创建解剖标志点定义区域"""
@@ -1246,18 +1250,7 @@ class Module2Widget(qt.QWidget):
         # 同时隐藏控制面板
         self._hide_markups_controls()
 
-    def _stop_all_monitoring(self):
-        """停止所有监控定时器"""
-        # 停止瓣环监控
-        self._stop_landmark_monitoring()
-        
-        # 停止连合点监控
-        self._stop_commissure_monitoring()
-        
-        # 停止新连合点监控
-        self._stop_neo_commissure_monitoring()
-        
-        logging.info("所有监控定时器已停止")
+
 
     def _enable_native_annulus_button(self):
         """重新启用原生瓣环按钮"""
@@ -1467,6 +1460,329 @@ class Module2Widget(qt.QWidget):
             logging.error(f"手动切换到收缩末期失败: {e}")
             self._update_status("切换失败，请检查期像标记")
 
+    def _on_start_auto_analysis(self):
+        """
+        处理开始全自动分析按钮点击事件
+        
+        执行一键全自动分析流程：
+        1. 检查舒张末期是否已标记
+        2. 检查服务器连接
+        3. 获取当前舒张末期的nrrd文件
+        4. 上传到远程分析服务器
+        5. 监控分析状态
+        6. 下载并导入分析结果
+        """
+        logging.info("用户点击了'开始全自动分析'按钮")
+        
+        try:
+            # 确保在舒张末期进行分析
+            if not self._ensure_diastolic_phase():
+                self._update_analysis_status("❌ 请先确保已切换到舒张末期时相", "error")
+                return
+            
+            # 更新UI状态
+            self._update_analysis_status("🔍 正在检查分析条件和服务器连接...", "info")
+            self._disable_analysis_button()
+            
+            # 调用逻辑层开始自动分析
+            result = self.logic.start_auto_analysis()
+            
+            if result:
+                self._update_analysis_status("📤 分析已启动，正在上传数据...", "processing")
+                self._show_stop_button()
+                
+                # 启动状态监控定时器
+                self._start_analysis_monitoring()
+                
+                logging.info("全自动分析流程已启动")
+                
+            else:
+                self._update_analysis_status("❌ 分析启动失败，请检查数据和网络连接", "error")
+                self._enable_analysis_button()
+                logging.error("全自动分析流程启动失败")
+                
+        except Exception as e:
+            logging.error(f"开始全自动分析失败: {e}")
+            self._update_analysis_status(f"❌ 发生错误: {str(e)}", "error")
+            self._enable_analysis_button()
+
+    def _on_stop_analysis(self):
+        """
+        处理停止分析按钮点击事件
+        """
+        logging.info("用户要求停止分析")
+        
+        try:
+            # 停止分析监控
+            self._stop_analysis_monitoring()
+            
+            # 调用逻辑层停止分析
+            self.logic.stop_auto_analysis()
+            
+            # 重置UI状态
+            self._update_analysis_status("⏹ 分析已停止", "warning")
+            self._enable_analysis_button()
+            self._hide_stop_button()
+            
+            logging.info("分析已被用户停止")
+            
+        except Exception as e:
+            logging.error(f"停止分析失败: {e}")
+            self._update_analysis_status(f"❌ 停止分析时发生错误: {str(e)}", "error")
+
+    def _start_analysis_monitoring(self):
+        """
+        启动分析状态监控
+        
+        定期检查远程分析的状态，并在完成时处理结果
+        """
+        # 创建定时器
+        if not hasattr(self, 'analysis_timer'):
+            self.analysis_timer = qt.QTimer()
+            self.analysis_timer.timeout.connect(self._check_analysis_progress)
+        
+        self.analysis_timer.start(3000)  # 每3秒检查一次
+        logging.info("分析状态监控定时器已启动")
+
+    def _stop_analysis_monitoring(self):
+        """停止分析状态监控定时器"""
+        if hasattr(self, 'analysis_timer') and self.analysis_timer:
+            self.analysis_timer.stop()
+            self.analysis_timer = None
+            logging.info("分析状态监控定时器已停止")
+
+    def _check_analysis_progress(self):
+        """
+        检查分析进度
+        
+        定期调用，监控远程分析的进度并更新UI
+        """
+        try:
+            # 获取分析状态
+            status = self.logic.get_analysis_status()
+            
+            if not status:
+                # 状态获取失败，停止监控
+                self._stop_analysis_monitoring()
+                self._update_analysis_status("❌ 无法获取分析状态，请检查网络连接", "error")
+                self._enable_analysis_button()
+                return
+            
+            analysis_status = status.get('status', 'unknown')
+            progress = status.get('progress', 0)
+            message = status.get('message', '')
+            
+            # 更新进度显示
+            if analysis_status == 'uploading':
+                self._update_analysis_status("📤 正在上传数据到分析服务器...", "processing")
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(10)
+            elif analysis_status == 'processing':
+                self._update_analysis_status(f"🔄 正在进行自动分析... ({progress}%)", "processing")
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(20 + int(progress * 0.6))  # 20-80%
+            elif analysis_status == 'downloading':
+                self._update_analysis_status("📥 正在下载分析结果...", "processing")
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(85)
+            elif analysis_status == 'completed':
+                # 分析完成
+                self._on_analysis_completed()
+            elif analysis_status == 'failed':
+                # 分析失败
+                error_msg = status.get('error', '未知错误')
+                self._on_analysis_failed(error_msg)
+            
+            # 如果有额外消息，显示它
+            if message:
+                logging.info(f"分析状态更新: {message}")
+                
+        except Exception as e:
+            logging.error(f"检查分析进度失败: {e}")
+            self._stop_analysis_monitoring()
+            self._update_analysis_status("❌ 监控分析进度时发生错误", "error")
+            self._enable_analysis_button()
+
+    def _on_analysis_completed(self):
+        """
+        分析完成的处理
+        
+        当远程分析完成时，下载结果并导入到Slicer中
+        """
+        logging.info("全自动分析已完成")
+        
+        try:
+            # 停止监控
+            self._stop_analysis_monitoring()
+            
+            # 更新状态
+            self._update_analysis_status("🎉 分析完成！正在导入结果...", "success")
+            if hasattr(self, 'progress_bar'):
+                self.progress_bar.setValue(90)
+            
+            # 调用逻辑层导入结果
+            import_result = self.logic.import_analysis_results()
+            
+            if import_result:
+                # 显示导入成功信息
+                imported_files = import_result.get('imported_files', [])
+                curves_count = import_result.get('curves_count', 0)
+                
+                success_msg = (
+                    f"✅ 全自动分析完成！\n"
+                    f"• 已导入 {len(imported_files)} 个分析文件\n"
+                    f"• 已创建 {curves_count} 条测量曲线\n"
+                    f"您可以继续定义解剖标志点或查看分析结果。"
+                )
+                
+                self._update_analysis_status(success_msg, "success")
+                
+                # 更新进度条
+                if hasattr(self, 'progress_bar'):
+                    self.progress_bar.setValue(100)
+                
+                # 重新启用分析按钮
+                self._enable_analysis_button()
+                self._hide_stop_button()
+                
+                logging.info("全自动分析结果导入成功")
+                
+            else:
+                self._update_analysis_status("❌ 分析完成但结果导入失败", "error")
+                self._enable_analysis_button()
+                self._hide_stop_button()
+                
+        except Exception as e:
+            logging.error(f"处理分析完成事件失败: {e}")
+            self._update_analysis_status(f"❌ 处理分析结果时发生错误: {str(e)}", "error")
+            self._enable_analysis_button()
+            self._hide_stop_button()
+
+    def _on_analysis_failed(self, error_message: str):
+        """
+        分析失败的处理
+        
+        Args:
+            error_message: 错误信息
+        """
+        logging.error(f"全自动分析失败: {error_message}")
+        
+        try:
+            # 停止监控
+            self._stop_analysis_monitoring()
+            
+            # 显示失败信息
+            self._update_analysis_status(f"❌ 分析失败: {error_message}", "error")
+            
+            # 重新启用分析按钮
+            self._enable_analysis_button()
+            self._hide_stop_button()
+            
+            # 重置进度条
+            if hasattr(self, 'progress_bar'):
+                self.progress_bar.setValue(0)
+                
+        except Exception as e:
+            logging.error(f"处理分析失败事件失败: {e}")
+
+    def _update_analysis_status(self, message: str, status_type: str = "info"):
+        """
+        更新分析状态显示
+        
+        Args:
+            message: 状态消息
+            status_type: 状态类型 ('info', 'processing', 'success', 'error', 'warning')
+        """
+        if hasattr(self, 'analysis_status_label'):
+            self.analysis_status_label.setText(message)
+            
+            # 根据状态类型设置不同的样式
+            if status_type == "error":
+                style = """
+                    QLabel {
+                        background-color: #f8d7da;
+                        color: #721c24;
+                        border: 1px solid #f5c6cb;
+                        border-radius: 4px;
+                        padding: 8px;
+                        font-size: 13px;
+                        margin: 4px 0px;
+                    }
+                """
+            elif status_type == "success":
+                style = """
+                    QLabel {
+                        background-color: #d4edda;
+                        color: #155724;
+                        border: 1px solid #c3e6cb;
+                        border-radius: 4px;
+                        padding: 8px;
+                        font-size: 13px;
+                        margin: 4px 0px;
+                    }
+                """
+            elif status_type == "processing":
+                style = """
+                    QLabel {
+                        background-color: #d1ecf1;
+                        color: #0c5460;
+                        border: 1px solid #bee5eb;
+                        border-radius: 4px;
+                        padding: 8px;
+                        font-size: 13px;
+                        margin: 4px 0px;
+                    }
+                """
+            elif status_type == "warning":
+                style = """
+                    QLabel {
+                        background-color: #fff3cd;
+                        color: #856404;
+                        border: 1px solid #ffeeba;
+                        border-radius: 4px;
+                        padding: 8px;
+                        font-size: 13px;
+                        margin: 4px 0px;
+                    }
+                """
+            else:  # info
+                style = """
+                    QLabel {
+                        background-color: #f8f9fa;
+                        color: #6c757d;
+                        border: 1px solid #e9ecef;
+                        border-radius: 4px;
+                        padding: 8px;
+                        font-size: 13px;
+                        margin: 4px 0px;
+                    }
+                """
+            
+            self.analysis_status_label.setStyleSheet(style)
+            logging.debug(f"分析状态更新: {message}")
+
+    def _disable_analysis_button(self):
+        """禁用分析按钮"""
+        if hasattr(self, 'auto_analysis_button'):
+            self.auto_analysis_button.setEnabled(False)
+            self.auto_analysis_button.setText("⏳ 分析进行中...")
+
+    def _enable_analysis_button(self):
+        """重新启用分析按钮"""
+        if hasattr(self, 'auto_analysis_button'):
+            self.auto_analysis_button.setEnabled(True)
+            self.auto_analysis_button.setText("🚀 开始全自动分析")
+
+    def _show_stop_button(self):
+        """显示停止分析按钮"""
+        if hasattr(self, 'stop_analysis_button'):
+            self.stop_analysis_button.setVisible(True)
+
+    def _hide_stop_button(self):
+        """隐藏停止分析按钮"""
+        if hasattr(self, 'stop_analysis_button'):
+            self.stop_analysis_button.setVisible(False)
+
     def _update_phase_button_states(self, active_phase: str):
         """
         更新期像切换按钮的状态
@@ -1631,3 +1947,19 @@ class Module2Widget(qt.QWidget):
             self.logic.cleanup()
         
         logging.info("模块二界面清理完成")
+
+    def _stop_all_monitoring(self):
+        """停止所有监控定时器"""
+        # 停止瓣环监控
+        self._stop_landmark_monitoring()
+        
+        # 停止连合点监控
+        self._stop_commissure_monitoring()
+        
+        # 停止新连合点监控
+        self._stop_neo_commissure_monitoring()
+        
+        # 停止分析监控
+        self._stop_analysis_monitoring()
+        
+        logging.info("所有监控定时器已停止")

@@ -31,7 +31,7 @@ class Module2Adapter(ModuleInterface):
     
     def get_display_name(self) -> str:
         """获取显示名称"""
-        return "引导式分割"
+        return "全自动分析"
     
     def is_available(self) -> bool:
         """检查模块是否可用"""
