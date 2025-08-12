@@ -26,9 +26,11 @@ from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode
 try:
     # 尝试相对导入
     from .data_models import PatientData
+    from .domain_models import PlaneDataManager
 except ImportError:
     # 回退到绝对导入
     from data_models import PatientData
+    from domain_models import PlaneDataManager
 
 
 class TAVRStudySession:
@@ -107,6 +109,12 @@ class TAVRStudySession:
             self.segmentation_node_id = None  # 主分割节点ID
             self.landmark_node_ids = {}  # 标志点节点ID字典
             self.reconstructed_planes = {}  # 重建平面存储
+            
+            # 平面数据管理器
+            self.plane_data_manager = PlaneDataManager()
+            
+            # 兼容性属性 - 指向同一个管理器
+            self.plane_manager = self.plane_data_manager
             
             # 标记已初始化
             self._initialized = True
@@ -662,10 +670,8 @@ class TAVRStudySession:
         self.landmark_node_ids = {}
         self.reconstructed_planes = {}
         
-        # 重置几何数据
-        self.segmentation_node_id = None
-        self.landmark_node_ids = {}
-        self.reconstructed_planes = {}
+        # 重置平面数据管理器
+        self.plane_data_manager.clear()
         
         self.logger.info("会话重置完成")
     
@@ -774,3 +780,56 @@ class TAVRStudySession:
             TAVRStudySession: 单例实例
         """
         return cls()
+    
+    # ====== 平面数据管理方法 ======
+    
+    def load_measurement_planes(self, measurement_data: Dict[str, Any]) -> bool:
+        """
+        从measurement.json数据中加载关键平面
+        
+        Args:
+            measurement_data: 从measurement.json解析的原始数据
+            
+        Returns:
+            bool: 加载成功返回True
+        """
+        try:
+            success = self.plane_data_manager.load_from_measurement_json(measurement_data)
+            if success:
+                self.logger.info("关键平面数据已加载到会话中")
+                return True
+            else:
+                self.logger.warning("未能加载任何关键平面数据")
+                return False
+        except Exception as e:
+            self.logger.error(f"加载测量平面数据失败: {e}")
+            return False
+    
+    def get_valve_stent_bottom_plane(self):
+        """获取瓣膜支架底部平面"""
+        return self.plane_data_manager.get_valve_stent_bottom()
+    
+    def get_sinus_of_valsalva_plane(self):
+        """获取Sinus Of Valsalva平面"""
+        return self.plane_data_manager.get_sinus_of_valsalva()
+    
+    def get_stent_best_fit_plane(self):
+        """获取支架最佳拟合平面"""
+        return self.plane_data_manager.get_stent_best_fit()
+    
+    def has_critical_planes(self) -> bool:
+        """检查是否已加载关键平面"""
+        return self.plane_data_manager.has_critical_planes()
+    
+    def get_planes_summary(self) -> Dict[str, bool]:
+        """获取平面加载状态摘要"""
+        return self.plane_data_manager.get_loaded_planes_summary()
+    
+    def get_all_plane_measurements(self) -> Dict[str, Any]:
+        """获取所有平面的测量数据"""
+        return self.plane_data_manager.get_all_measurements()
+    
+    def clear_plane_data(self):
+        """清空平面数据"""
+        self.plane_data_manager.clear()
+        self.logger.info("已清空会话中的平面数据")
