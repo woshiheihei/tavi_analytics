@@ -4,6 +4,7 @@
 """
 
 import logging
+import time
 from typing import Optional
 import qt
 import slicer
@@ -1576,11 +1577,32 @@ class Module2Widget(qt.QWidget):
             if analysis_status == 'uploading':
                 self._update_analysis_status("📤 正在上传数据到分析服务器...", "processing")
                 if hasattr(self, 'progress_bar'):
-                    self.progress_bar.setValue(10)
+                    self.progress_bar.setValue(progress)
             elif analysis_status == 'processing':
-                self._update_analysis_status(f"🔄 正在进行自动分析... ({progress}%)", "processing")
+                if progress < 100:
+                    # 启动阶段或远程处理阶段
+                    if progress < 70:
+                        self._update_analysis_status(f"⚙️ {message}", "processing")
+                    else:
+                        self._update_analysis_status(f"🔄 正在进行自动分析... ({min(progress-60, 40)}%)", "processing")
+                else:
+                    self._update_analysis_status("🔄 正在进行自动分析...", "processing")
+                
                 if hasattr(self, 'progress_bar'):
-                    self.progress_bar.setValue(20 + int(progress * 0.6))  # 20-80%
+                    # 启动完成后，进度条显示远程分析进度
+                    if progress >= 100:
+                        # 启动完成，远程分析进行中，显示伪进度
+                        current_time = time.time()
+                        if not hasattr(self, 'remote_analysis_start_time'):
+                            self.remote_analysis_start_time = current_time
+                        
+                        # 根据时间计算伪进度（假设分析需要2-5分钟）
+                        elapsed = current_time - self.remote_analysis_start_time
+                        fake_progress = min(20 + elapsed / 300 * 60, 85)  # 20%-85%之间
+                        self.progress_bar.setValue(int(fake_progress))
+                    else:
+                        self.progress_bar.setValue(progress)
+                        
             elif analysis_status == 'downloading':
                 self._update_analysis_status("📥 正在下载分析结果...", "processing")
                 if hasattr(self, 'progress_bar'):
@@ -1594,7 +1616,7 @@ class Module2Widget(qt.QWidget):
                 self._on_analysis_failed(error_msg)
             
             # 如果有额外消息，显示它
-            if message:
+            if message and analysis_status in ['uploading', 'processing']:
                 logging.info(f"分析状态更新: {message}")
                 
         except Exception as e:

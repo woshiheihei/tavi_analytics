@@ -55,6 +55,11 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         self.current_task_id = None
         self.analysis_temp_dir = None
         
+        # 异步分析状态管理
+        self.analysis_state = 'idle'  # 当前分析状态
+        self.analysis_error = None    # 错误信息
+        self.analysis_progress = 0    # 进度百分比
+        
         logging.info("Module2Logic 初始化完成 - 全自动分析模式")
 
     def initialize_segmentation(self) -> bool:
@@ -144,57 +149,251 @@ class Module2Logic(ScriptedLoadableModuleLogic):
     
     def start_auto_analysis(self) -> bool:
         """
-        启动全自动分析流程
+        启动全自动分析流程（非阻塞版本）
         
-        执行以下步骤：
-        1. 检查服务器连接
-        2. 获取当前舒张末期的体积数据
-        3. 保存为临时nrrd文件
-        4. 上传到远程分析服务器
-        5. 返回分析启动状态
+        使用状态机模式和QTimer来避免UI阻塞：
+        1. 立即返回，开始异步处理流程
+        2. 使用QTimer分步骤执行耗时操作
+        3. 通过回调函数更新进度状态
         
         Returns:
             bool: 启动成功返回True，失败返回False
         """
         try:
-            logging.info("开始启动全自动分析流程")
+            logging.info("开始启动全自动分析流程（非阻塞模式）")
             
-            # 1. 检查服务器连接
-            if not self.test_analysis_connection():
-                logging.error("无法连接到分析服务器")
-                return False
+            # 重置状态
+            self.analysis_state = 'initializing'
+            self.analysis_error = None
+            self.analysis_progress = 0
             
-            # 2. 获取当前体积数据
-            volume_node = self._get_current_volume_node()
-            if not volume_node:
-                logging.error("未找到当前体积数据")
-                return False
+            # 创建异步处理定时器
+            if not hasattr(self, 'async_analysis_timer'):
+                self.async_analysis_timer = qt.QTimer()
+                self.async_analysis_timer.setSingleShot(True)
+                self.async_analysis_timer.timeout.connect(self._process_analysis_step)
             
-            # 3. 创建临时目录
-            self.analysis_temp_dir = tempfile.mkdtemp(prefix="tavi_analysis_")
-            temp_nrrd_path = os.path.join(self.analysis_temp_dir, "current_volume.nrrd")
+            # 启动第一步：检查服务器连接
+            self.analysis_state = 'checking_connection'
+            self.async_analysis_timer.start(100)  # 100ms后开始处理
             
-            # 4. 保存当前体积为nrrd文件
-            if not self._save_volume_to_nrrd(volume_node, temp_nrrd_path):
-                logging.error("保存体积数据失败")
-                return False
-            
-            # 5. 上传文件到远程服务器
-            try:
-                self.current_task_id = self.dcm_processor.upload_file(temp_nrrd_path)
-                if self.current_task_id:
-                    logging.info(f"文件上传成功，任务ID: {self.current_task_id}")
-                    return True
-                else:
-                    logging.error("文件上传失败，未获得任务ID")
-                    return False
-            except Exception as e:
-                logging.error(f"上传文件到远程服务器失败: {e}")
-                return False
+            return True
                 
         except Exception as e:
             logging.error(f"启动全自动分析失败: {e}")
+            self.analysis_error = str(e)
             return False
+
+    def _process_analysis_step(self):
+        """
+        处理分析步骤（状态机模式）
+        
+        根据当前状态执行相应的步骤，每个步骤完成后安排下一步
+        """
+        try:
+            if self.analysis_state == 'checking_connection':
+                self._step_check_connection()
+            elif self.analysis_state == 'checking_connection_result':
+                self._check_connection_result()
+            elif self.analysis_state == 'getting_volume':
+                self._step_get_volume()
+            elif self.analysis_state == 'saving_nrrd':
+                self._step_save_nrrd()
+            elif self.analysis_state == 'saving_nrrd_result':
+                self._check_save_result()
+            elif self.analysis_state == 'uploading_file':
+                self._step_upload_file()
+            elif self.analysis_state == 'uploading_file_result':
+                self._check_upload_result()
+            elif self.analysis_state == 'completed':
+                logging.info("全自动分析启动流程完成")
+            elif self.analysis_state == 'failed':
+                logging.error(f"全自动分析失败: {self.analysis_error}")
+            
+        except Exception as e:
+            logging.error(f"处理分析步骤失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = str(e)
+
+    def _check_connection_result(self):
+        """检查连接测试结果"""
+        try:
+            if hasattr(self, 'connection_future'):
+                if self.connection_future.done():
+                    # 连接测试完成
+                    result = self.connection_future.result()
+                    if result:
+                        logging.info("服务器连接正常，进入下一步")
+                        self.analysis_state = 'getting_volume'
+                        self.async_analysis_timer.start(100)
+                    else:
+                        self.analysis_state = 'failed'
+                        self.analysis_error = "无法连接到分析服务器"
+                else:
+                    # 还在检查中，继续等待
+                    self.async_analysis_timer.start(500)
+        except Exception as e:
+            logging.error(f"检查连接结果失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"连接检查失败: {str(e)}"
+
+    def _check_save_result(self):
+        """检查保存nrrd文件的结果"""
+        try:
+            if hasattr(self, 'save_future'):
+                if self.save_future.done():
+                    # 保存完成
+                    result = self.save_future.result()
+                    if result:
+                        logging.info("nrrd文件保存成功，进入上传步骤")
+                        self.analysis_state = 'uploading_file'
+                        self.async_analysis_timer.start(100)
+                    else:
+                        self.analysis_state = 'failed'
+                        self.analysis_error = "保存nrrd文件失败"
+                else:
+                    # 还在保存中，继续等待，更新进度
+                    progress = min(40 + (time.time() - getattr(self, 'save_start_time', time.time())) * 2, 55)
+                    self.analysis_progress = int(progress)
+                    self.async_analysis_timer.start(1000)
+        except Exception as e:
+            logging.error(f"检查保存结果失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"保存检查失败: {str(e)}"
+
+    def _check_upload_result(self):
+        """检查上传文件的结果"""
+        try:
+            if hasattr(self, 'upload_future'):
+                if self.upload_future.done():
+                    # 上传完成
+                    try:
+                        task_id = self.upload_future.result()
+                        if task_id:
+                            self.current_task_id = task_id
+                            logging.info(f"文件上传成功，任务ID: {task_id}")
+                            self.analysis_progress = 100
+                            self.analysis_state = 'completed'
+                        else:
+                            self.analysis_state = 'failed'
+                            self.analysis_error = "文件上传失败，未获得任务ID"
+                    except Exception as e:
+                        self.analysis_state = 'failed'
+                        self.analysis_error = f"上传失败: {str(e)}"
+                else:
+                    # 还在上传中，继续等待，更新进度
+                    progress = min(60 + (time.time() - getattr(self, 'upload_start_time', time.time())) * 3, 95)
+                    self.analysis_progress = int(progress)
+                    self.async_analysis_timer.start(2000)
+        except Exception as e:
+            logging.error(f"检查上传结果失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"上传检查失败: {str(e)}"
+
+    def _step_check_connection(self):
+        """步骤1: 检查服务器连接"""
+        try:
+            logging.info("步骤1: 检查服务器连接...")
+            self.analysis_progress = 10
+            
+            # 使用线程池进行连接测试，避免阻塞
+            import concurrent.futures
+            
+            def check_connection():
+                return self.test_analysis_connection()
+            
+            # 创建线程池执行器
+            if not hasattr(self, 'thread_executor'):
+                self.thread_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            
+            # 提交连接测试任务
+            future = self.thread_executor.submit(check_connection)
+            
+            # 启动定时器检查连接结果
+            self.connection_future = future
+            self.async_analysis_timer.start(500)  # 500ms后检查结果
+            self.analysis_state = 'checking_connection_result'
+            
+        except Exception as e:
+            logging.error(f"检查服务器连接步骤失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"服务器连接检查失败: {str(e)}"
+
+    def _step_get_volume(self):
+        """步骤2: 获取当前体积数据"""
+        try:
+            logging.info("步骤2: 获取当前体积数据...")
+            self.analysis_progress = 20
+            
+            # 获取当前体积数据（这个操作通常很快）
+            volume_node = self._get_current_volume_node()
+            if not volume_node:
+                self.analysis_state = 'failed'
+                self.analysis_error = "未找到当前体积数据"
+                return
+            
+            self.current_volume_node = volume_node
+            
+            # 创建临时目录
+            self.analysis_temp_dir = tempfile.mkdtemp(prefix="tavi_analysis_")
+            self.temp_nrrd_path = os.path.join(self.analysis_temp_dir, "current_volume.nrrd")
+            
+            # 安排下一步
+            self.analysis_state = 'saving_nrrd'
+            self.async_analysis_timer.start(100)
+            
+        except Exception as e:
+            logging.error(f"获取体积数据步骤失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"获取体积数据失败: {str(e)}"
+
+    def _step_save_nrrd(self):
+        """步骤3: 保存nrrd文件（异步）"""
+        try:
+            logging.info("步骤3: 保存nrrd文件...")
+            self.analysis_progress = 40
+            self.save_start_time = time.time()  # 记录开始时间
+            
+            # 使用线程池进行文件保存，避免阻塞UI
+            def save_nrrd():
+                return self._save_volume_to_nrrd(self.current_volume_node, self.temp_nrrd_path)
+            
+            # 提交保存任务
+            future = self.thread_executor.submit(save_nrrd)
+            
+            # 启动定时器检查保存结果
+            self.save_future = future
+            self.async_analysis_timer.start(1000)  # 1秒后检查结果
+            self.analysis_state = 'saving_nrrd_result'
+            
+        except Exception as e:
+            logging.error(f"保存nrrd文件步骤失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"保存nrrd文件失败: {str(e)}"
+
+    def _step_upload_file(self):
+        """步骤4: 上传文件（异步）"""
+        try:
+            logging.info("步骤4: 上传文件到服务器...")
+            self.analysis_progress = 60
+            self.upload_start_time = time.time()  # 记录开始时间
+            
+            # 使用线程池进行文件上传，避免阻塞UI
+            def upload_file():
+                return self.dcm_processor.upload_file(self.temp_nrrd_path)
+            
+            # 提交上传任务
+            future = self.thread_executor.submit(upload_file)
+            
+            # 启动定时器检查上传结果
+            self.upload_future = future
+            self.async_analysis_timer.start(2000)  # 2秒后检查结果
+            self.analysis_state = 'uploading_file_result'
+            
+        except Exception as e:
+            logging.error(f"上传文件步骤失败: {e}")
+            self.analysis_state = 'failed'
+            self.analysis_error = f"上传文件失败: {str(e)}"
 
     def stop_auto_analysis(self) -> bool:
         """
@@ -204,8 +403,20 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             bool: 停止成功返回True
         """
         try:
-            # 重置任务ID
+            # 停止异步处理定时器
+            if hasattr(self, 'async_analysis_timer') and self.async_analysis_timer:
+                self.async_analysis_timer.stop()
+            
+            # 关闭线程池执行器
+            if hasattr(self, 'thread_executor'):
+                self.thread_executor.shutdown(wait=False)
+                delattr(self, 'thread_executor')
+            
+            # 重置任务ID和状态
             self.current_task_id = None
+            self.analysis_state = 'stopped'
+            self.analysis_error = None
+            self.analysis_progress = 0
             
             # 清理临时文件
             self._cleanup_temp_files()
@@ -225,38 +436,109 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             Dict: 包含状态信息的字典，失败返回None
         """
         try:
-            if not self.current_task_id:
-                return None
+            # 检查是否有正在进行的启动流程
+            if hasattr(self, 'analysis_state'):
+                if self.analysis_state == 'failed':
+                    return {
+                        'status': 'failed',
+                        'progress': 0,
+                        'message': '启动失败',
+                        'error': self.analysis_error or '未知错误'
+                    }
+                elif self.analysis_state == 'completed':
+                    # 启动流程完成，检查远程任务状态
+                    if self.current_task_id:
+                        # 查询远程服务器的任务状态
+                        status = self.dcm_processor.check_status(self.current_task_id)
+                        
+                        # 转换为标准化状态格式
+                        if status == 'completed':
+                            return {
+                                'status': 'completed',
+                                'progress': 100,
+                                'message': '分析已完成'
+                            }
+                        elif status == 'failed':
+                            return {
+                                'status': 'failed',
+                                'progress': 0,
+                                'message': '分析失败',
+                                'error': '远程服务器分析失败'
+                            }
+                        elif status in ['processing', 'running']:
+                            return {
+                                'status': 'processing',
+                                'progress': 50,  # 假设50%进度
+                                'message': '正在进行分析'
+                            }
+                        else:
+                            return {
+                                'status': 'processing',
+                                'progress': 25,
+                                'message': f'任务状态: {status}'
+                            }
+                    else:
+                        return {
+                            'status': 'failed',
+                            'progress': 0,
+                            'error': '任务ID丢失'
+                        }
+                else:
+                    # 启动流程进行中
+                    progress = getattr(self, 'analysis_progress', 0)
+                    state_messages = {
+                        'initializing': '正在初始化...',
+                        'checking_connection': '正在检查服务器连接...',
+                        'checking_connection_result': '正在检查连接结果...',
+                        'getting_volume': '正在获取体积数据...',
+                        'saving_nrrd': '正在保存nrrd文件...',
+                        'saving_nrrd_result': '正在保存文件...',
+                        'uploading_file': '正在上传文件...',
+                        'uploading_file_result': '正在上传到服务器...'
+                    }
+                    
+                    message = state_messages.get(self.analysis_state, f'正在处理: {self.analysis_state}')
+                    
+                    return {
+                        'status': 'uploading' if 'upload' in self.analysis_state else 'processing',
+                        'progress': progress,
+                        'message': message
+                    }
             
-            # 查询远程服务器的任务状态
-            status = self.dcm_processor.check_status(self.current_task_id)
+            # 如果没有启动流程状态，但有任务ID，检查远程状态
+            if self.current_task_id:
+                # 查询远程服务器的任务状态
+                status = self.dcm_processor.check_status(self.current_task_id)
+                
+                # 转换为标准化状态格式
+                if status == 'completed':
+                    return {
+                        'status': 'completed',
+                        'progress': 100,
+                        'message': '分析已完成'
+                    }
+                elif status == 'failed':
+                    return {
+                        'status': 'failed',
+                        'progress': 0,
+                        'message': '分析失败',
+                        'error': '远程服务器分析失败'
+                    }
+                elif status in ['processing', 'running']:
+                    return {
+                        'status': 'processing',
+                        'progress': 50,  # 假设50%进度
+                        'message': '正在进行分析'
+                    }
+                else:
+                    return {
+                        'status': 'processing',
+                        'progress': 25,
+                        'message': f'任务状态: {status}'
+                    }
             
-            # 转换为标准化状态格式
-            if status == 'completed':
-                return {
-                    'status': 'completed',
-                    'progress': 100,
-                    'message': '分析已完成'
-                }
-            elif status == 'failed':
-                return {
-                    'status': 'failed',
-                    'progress': 0,
-                    'message': '分析失败',
-                    'error': '远程服务器分析失败'
-                }
-            elif status in ['processing', 'running']:
-                return {
-                    'status': 'processing',
-                    'progress': 50,  # 假设50%进度
-                    'message': '正在进行分析'
-                }
-            else:
-                return {
-                    'status': 'processing',
-                    'progress': 25,
-                    'message': f'任务状态: {status}'
-                }
+            # 没有活动的分析任务
+            return None
                 
         except Exception as e:
             logging.error(f"获取分析状态失败: {e}")
