@@ -79,9 +79,6 @@ class Module2Widget(qt.QWidget):
                 self._update_status("已切换到舒张末期，准备开始全自动分析...")
                 # 设置舒张末期按钮为激活状态
                 self._update_phase_button_states(active_phase='diastole')
-                # 通知逻辑类默认选择舒张期
-                if self.logic:
-                    self.logic.set_selected_phase('diastole')
             else:
                 logging.warning("未能自动切换到舒张末期时相")
                 self._update_status("请先在模块一中标记舒张末期时相")
@@ -421,9 +418,6 @@ class Module2Widget(qt.QWidget):
             if self._auto_switch_to_end_diastole():
                 # 更新按钮状态 - 舒张末期为激活状态
                 self._update_phase_button_states(active_phase='diastole')
-                # 通知逻辑类更新选择的期像
-                if self.logic:
-                    self.logic.set_selected_phase('diastole')
                 self._update_status("已切换到舒张末期，适合进行全自动分析")
                 logging.info("手动切换到舒张末期成功")
             else:
@@ -442,9 +436,6 @@ class Module2Widget(qt.QWidget):
             if self._switch_to_end_systole():
                 # 更新按钮状态 - 收缩末期为激活状态
                 self._update_phase_button_states(active_phase='systole')
-                # 通知逻辑类更新选择的期像
-                if self.logic:
-                    self.logic.set_selected_phase('systole')
                 self._update_status("已切换到收缩末期，适合进行动态分析")
                 logging.info("手动切换到收缩末期成功")
             else:

@@ -30,7 +30,8 @@ class DCMProcessor:
         """
         with open(file_path, 'rb') as f:
             files = {'file': f}
-            response = requests.post(f"{self.base_url}/upload", files=files)
+            # 设置30秒超时，避免长时间阻塞
+            response = requests.post(f"{self.base_url}/upload", files=files, timeout=30)
 
         if response.status_code == 200:
             task_id = response.json().get('task_id')
@@ -49,7 +50,8 @@ class DCMProcessor:
         Returns:
             str: 任务状态
         """
-        response = requests.get(f"{self.base_url}/status/{task_id}")
+        # 设置10秒超时
+        response = requests.get(f"{self.base_url}/status/{task_id}", timeout=10)
 
         if response.status_code == 200:
             status = response.json().get('status')
@@ -84,7 +86,8 @@ class DCMProcessor:
             task_id (str): 任务ID
             output_path (str): 输出文件路径
         """
-        response = requests.get(f"{self.base_url}/result/segmentation/{task_id}")
+        # 设置60秒超时，下载可能需要更长时间
+        response = requests.get(f"{self.base_url}/result/segmentation/{task_id}", timeout=60)
 
         if response.status_code == 200:
             with open(output_path, 'wb') as f:
@@ -101,7 +104,8 @@ class DCMProcessor:
             task_id (str): 任务ID
             output_path (str): 输出文件路径
         """
-        response = requests.get(f"{self.base_url}/result/measurement/{task_id}")
+        # 设置30秒超时
+        response = requests.get(f"{self.base_url}/result/measurement/{task_id}", timeout=30)
 
         if response.status_code == 200:
             with open(output_path, 'wb') as f:
