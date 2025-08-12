@@ -56,7 +56,32 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         self.analysis_error = None    # 错误信息
         self.analysis_progress = 0    # 进度百分比
         
+        # 当前选择的期像状态
+        self.selected_phase = 'diastole'  # 默认选择舒张期，可选 'diastole' 或 'systole'
+        
         logging.info("Module2Logic 初始化完成 - 全自动分析模式")
+
+    def set_selected_phase(self, phase: str):
+        """
+        设置当前选择的期像
+        
+        Args:
+            phase (str): 期像类型，'diastole' 或 'systole'
+        """
+        if phase in ['diastole', 'systole']:
+            self.selected_phase = phase
+            logging.info(f"设置当前选择期像为: {phase}")
+        else:
+            logging.warning(f"无效的期像类型: {phase}")
+
+    def get_selected_phase(self) -> str:
+        """
+        获取当前选择的期像
+        
+        Returns:
+            str: 当前选择的期像，'diastole' 或 'systole'
+        """
+        return self.selected_phase
 
     def initialize_segmentation(self) -> bool:
         """
@@ -711,7 +736,10 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                 # 方法1: 直接使用loadSegmentation加载
                 seg_node = slicer.util.loadSegmentation(file_path)
                 if seg_node:
-                    seg_node.SetName("自动分析分割结果")
+                    # 获取当前期像信息并生成英文名称
+                    phase_info = self._get_current_phase_info()
+                    segmentation_name = f"Auto_Analysis_Segmentation_{phase_info}"
+                    seg_node.SetName(segmentation_name)
                     num_segments = seg_node.GetSegmentation().GetNumberOfSegments()
                     logging.info(f"分割文件已导入为分割节点，包含 {num_segments} 个分段")
                     
@@ -733,7 +761,10 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                 if volume_node:
                     # 创建分割节点
                     seg_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLSegmentationNode')
-                    seg_node.SetName("自动分析分割结果")
+                    # 获取当前期像信息并生成英文名称
+                    phase_info = self._get_current_phase_info()
+                    segmentation_name = f"Auto_Analysis_Segmentation_{phase_info}"
+                    seg_node.SetName(segmentation_name)
                     
                     # 将体积转换为分割
                     segmentations_logic = slicer.modules.segmentations.logic()
@@ -771,14 +802,14 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             segmentation = seg_node.GetSegmentation()
             
             # 心脏解剖结构的常见分段名称映射
-            # 根据常见的心脏CT分割标签进行映射
+            # 根据常见的心脏CT分割标签进行映射，使用英文名称
             segment_names = {
-                1: "主动脉根部",
-                2: "左心室心肌", 
-                5: "主动脉瓣环",
-                6: "冠状动脉",
-                7: "心房",
-                12: "其他心脏结构"
+                1: "Aortic_Root",
+                2: "Left_Ventricle", 
+                5: "Left_Coronary_Artery",
+                6: "Right_Coronary_Artery",
+                7: "Calcification",
+                12: "Valve_Stent"
             }
             
             # 为每个分段设置有意义的名称
@@ -795,8 +826,8 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                             segment.SetName(new_name)
                             logging.info(f"分段重命名: {original_name} -> {new_name}")
                         else:
-                            # 如果没有预定义名称，使用通用名称
-                            segment.SetName(f"心脏结构_{segment_id}")
+                            # 如果没有预定义名称，使用英文通用名称
+                            segment.SetName(f"Cardiac_Structure_{segment_id}")
                 except ValueError:
                     # 如果无法解析分段编号，保持原名称
                     pass
@@ -881,6 +912,28 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                 self.analysis_temp_dir = None
         except Exception as e:
             logging.error(f"清理临时文件失败: {e}")
+
+    def _get_current_phase_info(self) -> str:
+        """
+        根据用户选择的期像按钮获取期像信息，用于生成分割结果名称
+        
+        Returns:
+            str: 期像信息字符串，"End_Diastole" 或 "End_Systole"
+        """
+        try:
+            # 直接根据当前选择的期像返回对应的英文名称
+            if self.selected_phase == 'diastole':
+                return "End_Diastole"
+            elif self.selected_phase == 'systole':
+                return "End_Systole"
+            else:
+                # 如果状态异常，记录日志并返回默认值
+                logging.warning(f"未知的期像状态: {self.selected_phase}")
+                return "Unknown_Phase"
+            
+        except Exception as e:
+            logging.error(f"获取期像信息失败: {e}")
+            return "Unknown_Phase"
 
     def test_analysis_connection(self) -> bool:
         """
