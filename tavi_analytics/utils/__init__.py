@@ -26,9 +26,17 @@ try:
 except ImportError:
     from logging_utils import LoggingUtils
 
+try:
+    from .plane_position import PlanePositionManager, get_plane_manager, switch_to_plane
+except ImportError:
+    from plane_position import PlanePositionManager, get_plane_manager, switch_to_plane
+
 __all__ = [
     "DicomUtils",
     "ConfigManager", 
     "QtUtils",
-    "LoggingUtils"
+    "LoggingUtils",
+    "PlanePositionManager",
+    "get_plane_manager",
+    "switch_to_plane"
 ]
