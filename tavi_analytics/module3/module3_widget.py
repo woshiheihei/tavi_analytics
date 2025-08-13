@@ -68,6 +68,44 @@ class Module3Widget(qt.QWidget):
         """
         logging.debug(f"模块三期像状态更新: {status}")
     
+    def _on_switch_to_valve_plane(self):
+        """
+        切换到ValveStent_Bottom_Plane平面的回调方法
+        """
+        try:
+            if not self.logic:
+                logging.error("模块三逻辑未初始化")
+                return
+            
+            logging.info("开始切换到ValveStent_Bottom_Plane平面...")
+            
+            # 禁用按钮，防止重复点击
+            self.switch_to_valve_plane_btn.setEnabled(False)
+            self.switch_to_valve_plane_btn.setText("🔄 正在切换...")
+            
+            # 执行切换
+            success = self.logic.switch_to_valve_stent_bottom_plane()
+            
+            if success:
+                logging.info("成功切换到ValveStent_Bottom_Plane平面")
+                # 可以在这里添加成功提示
+                self.switch_to_valve_plane_btn.setText("✅ 切换完成")
+                # 2秒后恢复按钮文本
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 切换到ValveStent_Bottom_Plane平面"))
+            else:
+                logging.error("切换到ValveStent_Bottom_Plane平面失败")
+                self.switch_to_valve_plane_btn.setText("❌ 切换失败")
+                # 2秒后恢复按钮文本
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 切换到ValveStent_Bottom_Plane平面"))
+            
+        except Exception as e:
+            logging.error(f"切换到ValveStent_Bottom_Plane平面时出错: {e}")
+            self.switch_to_valve_plane_btn.setText("❌ 出错")
+            qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 切换到ValveStent_Bottom_Plane平面"))
+        finally:
+            # 重新启用按钮
+            self.switch_to_valve_plane_btn.setEnabled(True)
+    
     def _setup_ui(self):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
@@ -83,11 +121,38 @@ class Module3Widget(qt.QWidget):
             "不同期像的测量结果可能会有所差异。"
         )
 
+        # 创建平面切换控制区域
+        plane_control_frame = LayoutManager.create_section_frame("平面视图控制")
+        plane_control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, plane_control_frame)
+        
+        # 平面切换说明
+        plane_info = qt.QLabel(
+            "📐 平面视图控制\n"
+            "点击下方按钮将当前MPR视图切换到ValveStent_Bottom_Plane平面。\n"
+            "轴状面将切换到该平面，矢状面和冠状面与之垂直相交。"
+        )
+        plane_info.setWordWrap(True)
+        plane_info.setStyleSheet(StyleManager.get_label_style("info"))
+        
+        # 平面切换按钮
+        self.switch_to_valve_plane_btn = LayoutManager.create_button_with_style(
+            "🎯 切换到ValveStent_Bottom_Plane平面", 
+            "primary", 
+            "default", 
+            45
+        )
+        self.switch_to_valve_plane_btn.clicked.connect(self._on_switch_to_valve_plane)
+        
+        # 组装平面控制区域
+        plane_control_layout.addWidget(plane_info)
+        plane_control_layout.addWidget(self.switch_to_valve_plane_btn)
+
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title)
         container_layout.addWidget(self.phase_selection)  # 添加期像选择组件
+        container_layout.addWidget(plane_control_frame)   # 添加平面控制区域
 
         main_layout.addWidget(container, 1)
         LayoutManager.add_stretch_with_ratio(main_layout, 1)
