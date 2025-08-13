@@ -851,52 +851,70 @@ class Module2Logic(ScriptedLoadableModuleLogic):
 
     def _import_measurement_data(self, json_path: str) -> int:
         """
-        导入测量数据到Slicer（参考模块三的实现）
+        导入测量数据到Slicer（纯领域化平面管理方式）
         
         Args:
             json_path: JSON文件路径
             
         Returns:
-            int: 创建的曲线数量
+            int: 成功加载的关键平面数量
         """
         try:
             if not os.path.exists(json_path):
                 logging.error(f"测量数据文件不存在: {json_path}")
                 return 0
             
-            # 使用类似模块三的逻辑加载JSON数据
-            try:
-                from ..module3.services.json_loader import JSONCurveLoader
-                from ..module3.services.slicer_curve_service import SlicerCurveService
-            except ImportError:
-                # 回退导入方式
-                import sys
-                module3_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'module3')
-                if module3_path not in sys.path:
-                    sys.path.insert(0, module3_path)
+            # 加载原始JSON数据
+            import json
+            with open(json_path, 'r', encoding='utf-8') as f:
+                measurement_data = json.load(f)
+            
+            logging.info(f"成功读取测量数据文件: {json_path}")
+            
+            # 使用会话的领域化平面管理器加载关键平面
+            success = self.session.load_measurement_planes(measurement_data)
+            
+            if success:
+                logging.info("关键平面数据已成功加载到会话中")
                 
-                from services.json_loader import JSONCurveLoader
-                from services.slicer_curve_service import SlicerCurveService
-            
-            json_loader = JSONCurveLoader()
-            slicer_curve = SlicerCurveService()
-            
-            # 解析JSON文件
-            plane_fields = json_loader.load(json_path)
-            
-            # 清理现有的plane节点（可选）
-            cleared = slicer_curve.clear_plane_nodes()
-            if cleared > 0:
-                logging.info(f"清理了 {cleared} 个现有plane节点")
-            
-            # 创建曲线
-            result = slicer_curve.create_closed_curves(plane_fields)
-            curves_count = result.get('created_count', 0)
-            
-            if curves_count > 0:
-                logging.info(f"测量数据导入成功，创建了 {curves_count} 条曲线")
-            
-            return curves_count
+                # 获取详细的加载摘要
+                business_summary = self.session.plane_manager.get_business_summary()
+                loaded_planes = business_summary['loaded_planes']
+                
+                # 记录加载的平面信息
+                loaded_plane_names = [k for k, v in loaded_planes.items() if v and k != 'has_any_critical_plane']
+                logging.info(f"已加载的关键平面: {loaded_plane_names}")
+                
+                # 输出详细的业务摘要
+                for plane_name, plane_details in business_summary['plane_details'].items():
+                    logging.info(f"{plane_name}: {plane_details['description']}")
+                    if 'point_count' in plane_details:
+                        logging.info(f"  - 点数: {plane_details['point_count']}")
+                    if 'area' in plane_details:
+                        logging.info(f"  - 面积: {plane_details['area']:.2f}")
+                    if 'perimeter' in plane_details:
+                        logging.info(f"  - 周长: {plane_details['perimeter']:.2f}")
+                    if 'distance_to_zjd' in plane_details:
+                        logging.info(f"  - 到参考点距离: {plane_details['distance_to_zjd']:.2f}")
+                
+                # 创建所有平面的可视化
+                visualization_results = self.session.plane_manager.create_all_visualizations()
+                successful_visualizations = sum(1 for success in visualization_results.values() if success)
+                
+                logging.info(f"可视化创建结果: {successful_visualizations}/{len(visualization_results)}个成功")
+                
+                # 输出测量数据
+                measurements = business_summary['measurements']
+                for plane_name, plane_measurements in measurements.items():
+                    logging.info(f"{plane_name} 测量数据: {plane_measurements}")
+                
+                # 返回成功加载的关键平面数量
+                successful_planes = sum(1 for v in loaded_planes.values() if v and isinstance(v, bool))
+                return successful_planes
+                
+            else:
+                logging.warning("未能加载任何关键平面数据")
+                return 0
             
         except Exception as e:
             logging.error(f"导入测量数据失败: {e}")

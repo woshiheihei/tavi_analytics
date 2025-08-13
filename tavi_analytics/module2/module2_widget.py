@@ -73,6 +73,9 @@ class Module2Widget(qt.QWidget):
             # 检查标记的期像状态
             self._check_marked_phases()
             
+            # 恢复期像选择状态
+            self._restore_phase_selection_state()
+            
             # 尝试切换到舒张末期（默认分析期像）
             if self._auto_switch_to_end_diastole():
                 logging.info("成功切换到舒张末期时相")
@@ -89,6 +92,16 @@ class Module2Widget(qt.QWidget):
         except Exception as e:
             logging.error(f"自动时相切换失败: {e}")
             self._update_status("时相切换失败，请检查时相标记")
+
+    def _restore_phase_selection_state(self):
+        """恢复期像选择状态"""
+        try:
+            if self.logic:
+                selected_phase = self.logic.get_selected_phase()
+                self._update_phase_button_states(active_phase=selected_phase)
+                logging.info(f"已恢复期像选择状态: {selected_phase}")
+        except Exception as e:
+            logging.warning(f"恢复期像选择状态失败: {e}")
 
     def _check_marked_phases(self):
         """

@@ -212,12 +212,43 @@ class LayoutManager:
         
         # 使用经过验证的样式系统
         try:
-            from ..ui.styles import StyleManager
-        except ImportError:
-            from ui.styles import StyleManager
+            # 尝试多种导入方式以确保兼容性
+            StyleManager = None
+            import_attempts = [
+                lambda: __import__('ui.styles', fromlist=['StyleManager']).StyleManager,
+                lambda: __import__('tavi_analytics.ui.styles', fromlist=['StyleManager']).StyleManager,
+                lambda: __import__('styles', fromlist=['StyleManager']).StyleManager,
+            ]
+            
+            for attempt in import_attempts:
+                try:
+                    StyleManager = attempt()
+                    break
+                except ImportError:
+                    continue
+            
+            if StyleManager is None:
+                # 最后的fallback：从当前工作目录导入
+                import sys
+                import os
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                ui_dir = os.path.join(os.path.dirname(current_dir), 'ui')
+                if ui_dir not in sys.path:
+                    sys.path.insert(0, ui_dir)
+                from styles import StyleManager
+                
+        except Exception as e:
+            # 如果所有导入都失败，返回一个基本样式的按钮
+            import logging
+            logging.warning(f"StyleManager导入失败: {e}，使用基本样式")
+            return button
         
         # 直接使用StyleManager应用样式 - 这是经过验证有效的方式
-        button.setStyleSheet(StyleManager.get_button_style(button_type, size))
+        try:
+            button.setStyleSheet(StyleManager.get_button_style(button_type, size))
+        except Exception as e:
+            import logging
+            logging.warning(f"应用按钮样式失败: {e}")
         
         return button
     
@@ -232,13 +263,36 @@ class LayoutManager:
         """
         try:
             # 使用经过验证的样式系统
-            try:
-                from ..ui.styles import StyleManager
-            except ImportError:
-                from ui.styles import StyleManager
+            StyleManager = None
+            import_attempts = [
+                lambda: __import__('ui.styles', fromlist=['StyleManager']).StyleManager,
+                lambda: __import__('tavi_analytics.ui.styles', fromlist=['StyleManager']).StyleManager,
+                lambda: __import__('styles', fromlist=['StyleManager']).StyleManager,
+            ]
+            
+            for attempt in import_attempts:
+                try:
+                    StyleManager = attempt()
+                    break
+                except ImportError:
+                    continue
+            
+            if StyleManager is None:
+                # 最后的fallback：从当前工作目录导入
+                import sys
+                import os
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                ui_dir = os.path.join(os.path.dirname(current_dir), 'ui')
+                if ui_dir not in sys.path:
+                    sys.path.insert(0, ui_dir)
+                from styles import StyleManager
             
             # 直接使用StyleManager应用样式
             button.setStyleSheet(StyleManager.get_button_style(button_type, size))
+            
+        except Exception as e:
+            import logging
+            logging.warning(f"按钮样式应用失败: {e}")
             
         except Exception as e:
             # 导入日志系统

@@ -380,6 +380,21 @@ class ModuleManager(VTKObservationMixin):
         """获取模块信息"""
         return self._modules.get(module_name)
     
+    def get_module_adapter(self, module_name: str) -> Optional[ModuleInterface]:
+        """
+        获取模块适配器实例
+        
+        Args:
+            module_name: 模块名称
+            
+        Returns:
+            模块适配器实例，如果模块不存在或未加载返回None
+        """
+        module_info = self._modules.get(module_name)
+        if module_info and module_info.module_instance:
+            return module_info.module_instance
+        return None
+    
     def load_module(self, module_name: str) -> bool:
         """加载模块"""
         if module_name not in self._modules:

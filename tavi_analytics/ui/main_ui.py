@@ -3,6 +3,7 @@
 """
 
 import logging
+import os
 from typing import Optional, Dict, Any
 import qt
 import slicer
@@ -11,6 +12,7 @@ from core.session import TAVRStudySession
 from core.module_manager import ModuleManager
 from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
 from ui.styles import ComponentStyleFactory
+from utils.dev_utils import DevUtils
 
 
 class MainUI(qt.QWidget):
@@ -64,6 +66,14 @@ class MainUI(qt.QWidget):
         
         # 创建内容区域（模块内容）- 使用可滚动容器
         self._create_content_area(main_layout)
+
+        # 如果处于开发者模式（默认开启），添加开发者面板
+        try:
+            flag = str(os.environ.get("TAVI_DEBUG", "1")).strip().lower()
+            if flag not in ("0", "false", "off"):
+                self._create_developer_panel(main_layout)
+        except Exception as e:
+            logging.warning(f"检查开发者模式失败: {e}")
     
     def _create_navigation_area(self, parent_layout):
         """创建导航区域（模块切换按钮）"""
@@ -131,6 +141,140 @@ class MainUI(qt.QWidget):
         
         # 将滚动区域添加到主布局，并设置最大的伸缩因子
         parent_layout.addWidget(self._content_scroll, 1)  # 内容区域占用所有剩余空间
+
+    def _create_developer_panel(self, parent_layout):
+        """创建开发者工具面板（仅在TAVI_DEBUG启用时显示）"""
+        try:
+            # 使用标准化的区域框架，避免自定义样式覆盖造成标题排版问题
+            frame = LayoutManager.create_section_frame("开发者工具", LayoutType.SECTION_CONTAINER)
+            
+            # 为开发者面板添加特殊的背景色来突出显示
+            frame.setStyleSheet("""
+                QGroupBox {
+                    background-color: #fef3c7;
+                    border: 1px solid #f59e0b;
+                    border-radius: 8px;
+                    margin-top: 1ex;
+                    padding-top: 10px;
+                    font-weight: bold;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px 0 5px;
+                    background-color: #fef3c7;
+                }
+            """)
+
+            # 水平按钮行，减小边距让按钮更紧凑
+            layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
+            layout.setContentsMargins(8, 4, 8, 4)  # 更紧凑的边距
+
+            # 直接使用LayoutManager统一的按钮工厂创建现代化样式的按钮
+            save_btn = LayoutManager.create_button_with_style("保存会话", button_type="outline", size="sm", min_height=36)
+            load_btn = LayoutManager.create_button_with_style("加载会话", button_type="outline", size="sm", min_height=36)
+
+            # 设置按钮最小宽度以获得更好的外观
+            save_btn.setMinimumWidth(80)
+            load_btn.setMinimumWidth(80)
+
+            layout.addWidget(save_btn)
+            layout.addWidget(load_btn)
+            LayoutManager.add_stretch_with_ratio(layout, 1)
+
+            frame.setLayout(layout)
+            parent_layout.insertWidget(0, frame)  # 放在最上方
+
+            # 绑定事件
+            save_btn.clicked.connect(self._save_debug_session)
+            load_btn.clicked.connect(self._load_debug_session)
+
+            self._dev_panel = frame
+        except Exception as e:
+            logging.warning(f"创建开发者面板失败: {e}")
+
+    def _save_debug_session(self):
+        """保存调试会话快照"""
+        try:
+            # QInputDialog.getText 也可能有类似的返回值问题
+            result = qt.QInputDialog.getText(self, "保存会话", "请输入会话名称:")
+            
+            if isinstance(result, tuple) and len(result) == 2:
+                # 标准 (text, ok) 格式
+                name, ok = result
+                if not ok:
+                    return
+                name = str(name).strip()
+            elif isinstance(result, str):
+                # 直接返回输入的文本
+                name = str(result).strip()
+            else:
+                # 未知格式或用户取消
+                return
+            
+            if not name:
+                self._show_error_message("输入错误", "会话名称不能为空")
+                return
+            
+            result = DevUtils.save_debug_session(self._session, name)
+            if result.get("success"):
+                self._show_info_message("保存成功", f"已保存到: {result.get('path')}")
+            else:
+                self._show_error_message("保存失败", result.get("message", "未知错误"))
+        except Exception as e:
+            logging.exception("保存调试会话异常")
+            self._show_error_message("保存失败", str(e))
+
+    def _load_debug_session(self):
+        """加载调试会话快照"""
+        try:
+            sessions = DevUtils.list_sessions()
+            if not sessions:
+                self._show_info_message("加载会话", "未发现已保存的会话")
+                return
+
+            try:
+                # QInputDialog.getItem 在不同环境下返回值不同
+                # 标准Qt: (item, ok) tuple
+                # Slicer环境: 可能只返回 item string 或者其他格式
+                result = qt.QInputDialog.getItem(self, "加载会话", "选择会话:", sessions, 0, False)
+                
+                if isinstance(result, tuple) and len(result) == 2:
+                    # 标准 (item, ok) 格式
+                    item, ok = result
+                    if not ok:
+                        return
+                    name = str(item)
+                elif isinstance(result, str):
+                    # 直接返回选中的字符串
+                    name = result
+                    if not name or name not in sessions:
+                        return
+                else:
+                    # 未知格式，尝试转换为字符串
+                    name = str(result)
+                    if not name or name not in sessions:
+                        return
+            except Exception as e:
+                logging.error(f"加载会话对话框出错: {e}")
+                self._show_error_message("对话框错误", f"无法显示会话选择对话框: {str(e)}")
+                return
+
+            # 加载
+            result = DevUtils.load_debug_session(self._session, name)
+            if result.get("success"):
+                # 刷新UI：回到默认页并提示
+                if self._content_stack and self._content_stack.count > 0:
+                    self._content_stack.setCurrentIndex(0)
+                self._current_module = None
+                self._update_module_button_state(None)
+                self.update_status("会话已加载，UI已刷新", "success")
+                self._show_info_message("加载成功", f"已加载会话: {name}")
+            else:
+                self._show_error_message("加载失败", result.get("message", "未知错误"))
+        except Exception as e:
+            logging.exception("加载调试会话异常")
+            self._show_error_message("加载失败", str(e))
     
     def _create_default_page(self):
         """创建默认页面"""
@@ -462,6 +606,17 @@ TAVR Analytics 帮助
             logging.info(f"状态更新: {message}")
         else:
             logging.info(f"状态更新: {message}")
+
+    def update_patient_info(self):
+        """更新患者信息显示（场景关闭时清空）"""
+        # 这个方法目前只是占位符，因为患者信息显示逻辑
+        # 主要在各个模块中处理，主界面暂时不需要特殊的患者信息显示
+        logging.info("患者信息已清空")
+
+    def update_session_status(self, status: str):
+        """更新会话状态"""
+        # 这个方法也是占位符，会话状态主要通过update_status方法显示
+        self.update_status(f"会话状态: {status}")
     
     def auto_activate_default_module(self):
         """自动激活默认模块（模块一）"""
