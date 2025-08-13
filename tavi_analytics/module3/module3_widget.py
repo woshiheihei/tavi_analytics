@@ -1,7 +1,7 @@
 """
-模块三界面组件（骨架）
+模块三界面组件
 
-仅展示一个 Mock 标题，支持在主导航中切换到本页面。
+自动化测量功能界面。
 """
 import logging
 from typing import Optional
@@ -29,7 +29,7 @@ except ImportError:
 
 
 class Module3Widget(qt.QWidget):
-    """模块三界面（仅Mock标题）"""
+    """模块三界面"""
 
     def __init__(self, session: TAVRStudySession, logic: Optional[Module3Logic] = None, parent=None):
         super().__init__(parent)
@@ -43,7 +43,7 @@ class Module3Widget(qt.QWidget):
         
         self.setObjectName("Module3Widget")
         self._setup_ui()
-        logging.info("Module3Widget 初始化完成 (skeleton)")
+        logging.info("Module3Widget 初始化完成")
 
     def _on_phase_changed(self, phase: str):
         """
@@ -72,14 +72,10 @@ class Module3Widget(qt.QWidget):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 标题区（Mock）
-        title = qt.QLabel("模块三：自动化测量（Mock 页面）")
+        # 标题区
+        title = qt.QLabel("模块三：自动化测量")
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
-
-        desc = qt.QLabel("此处为占位页面，用于确认导航切换与框架搭建是否正常。")
-        desc.setAlignment(qt.Qt.AlignCenter)
-        desc.setStyleSheet(StyleManager.get_label_style("muted"))
 
         # 添加期像选择组件
         self.phase_selection.set_info_text(
@@ -91,7 +87,6 @@ class Module3Widget(qt.QWidget):
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title)
-        container_layout.addWidget(desc)
         container_layout.addWidget(self.phase_selection)  # 添加期像选择组件
 
         main_layout.addWidget(container, 1)
