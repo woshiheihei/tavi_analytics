@@ -139,6 +139,57 @@ class PlaneGeometry:
     # Slicer节点管理
     _slicer_node_id: Optional[str] = None
     
+    def to_dict(self) -> Dict[str, Any]:
+        """将平面几何数据转换为字典格式"""
+        # 安全转换节点ID（处理可能的节点对象）
+        slicer_node_id = None
+        if self._slicer_node_id is not None:
+            if isinstance(self._slicer_node_id, str):
+                slicer_node_id = self._slicer_node_id
+            elif hasattr(self._slicer_node_id, 'GetID'):
+                try:
+                    slicer_node_id = self._slicer_node_id.GetID()
+                except Exception:
+                    slicer_node_id = None
+            else:
+                slicer_node_id = str(self._slicer_node_id) if self._slicer_node_id else None
+        
+        return {
+            'points': self.points,
+            'less_points': self.less_points,
+            'plane_params': self.plane_params,
+            'perimeter': self.perimeter,
+            'area': self.area,
+            'ped': self.ped,
+            'aed': self.aed,
+            'max_dist': self.max_dist,
+            'min_dist': self.min_dist,
+            'average_dist': self.average_dist,
+            'max_dist_pair': self.max_dist_pair,
+            'min_dist_pair': self.min_dist_pair,
+            '_slicer_node_id': slicer_node_id  # 安全的节点ID
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneGeometry':
+        """从字典创建平面几何对象"""
+        instance = cls(
+            points=data.get('points', []),
+            less_points=data.get('less_points', []),
+            plane_params=data.get('plane_params', []),
+            perimeter=data.get('perimeter', 0.0),
+            area=data.get('area', 0.0),
+            ped=data.get('ped', 0.0),
+            aed=data.get('aed', 0.0),
+            max_dist=data.get('max_dist', 0.0),
+            min_dist=data.get('min_dist', 0.0),
+            average_dist=data.get('average_dist', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
+            min_dist_pair=data.get('min_dist_pair', [])
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
+    
     @property
     def has_valid_geometry(self) -> bool:
         """检查几何数据是否有效"""
@@ -291,6 +342,32 @@ class ValveStentBottomPlane(PlaneGeometry):
         """创建可视化节点"""
         node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalPlaneType.VALVE_STENT_BOTTOM)
         return node_id is not None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将瓣膜支架底部平面数据转换为字典格式"""
+        base_dict = super().to_dict()
+        base_dict['plane_type'] = 'ValveStentBottomPlane'
+        return base_dict
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomPlane':
+        """从字典创建瓣膜支架底部平面对象"""
+        instance = cls(
+            points=data.get('points', []),
+            less_points=data.get('less_points', []),
+            plane_params=data.get('plane_params', []),
+            perimeter=data.get('perimeter', 0.0),
+            area=data.get('area', 0.0),
+            ped=data.get('ped', 0.0),
+            aed=data.get('aed', 0.0),
+            max_dist=data.get('max_dist', 0.0),
+            min_dist=data.get('min_dist', 0.0),
+            average_dist=data.get('average_dist', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
+            min_dist_pair=data.get('min_dist_pair', [])
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
 
 
 @dataclass
@@ -320,6 +397,32 @@ class SinusOfValsalvaPlane(PlaneGeometry):
         """创建可视化节点"""
         node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalPlaneType.SINUS_OF_VALSALVA)
         return node_id is not None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将Sinus Of Valsalva平面数据转换为字典格式"""
+        base_dict = super().to_dict()
+        base_dict['plane_type'] = 'SinusOfValsalvaPlane'
+        return base_dict
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaPlane':
+        """从字典创建Sinus Of Valsalva平面对象"""
+        instance = cls(
+            points=data.get('points', []),
+            less_points=data.get('less_points', []),
+            plane_params=data.get('plane_params', []),
+            perimeter=data.get('perimeter', 0.0),
+            area=data.get('area', 0.0),
+            ped=data.get('ped', 0.0),
+            aed=data.get('aed', 0.0),
+            max_dist=data.get('max_dist', 0.0),
+            min_dist=data.get('min_dist', 0.0),
+            average_dist=data.get('average_dist', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
+            min_dist_pair=data.get('min_dist_pair', [])
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
 
 
 @dataclass
@@ -364,6 +467,29 @@ class StentBestFitPlane:
         return {
             'distance_to_reference': self.distance_to_zjd
         }
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将支架最佳拟合平面数据转换为字典格式"""
+        return {
+            'plane_type': 'StentBestFitPlane',
+            'name': self.name,
+            'plane_params': self.plane_params,
+            'distance_to_zjd': self.distance_to_zjd,
+            'points': self.points,
+            '_slicer_node_id': self._slicer_node_id
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitPlane':
+        """从字典创建支架最佳拟合平面对象"""
+        instance = cls(
+            name=data.get('name', ''),
+            plane_params=data.get('plane_params'),
+            distance_to_zjd=data.get('distance_to_zjd', 0.0),
+            points=data.get('points')
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
     
     def create_visualization(self) -> bool:
         """创建可视化节点（优先创建闭合曲线，然后是平面，最后是标记点）"""
@@ -840,3 +966,46 @@ class PlaneDataManager:
             }
         
         return summary
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将平面管理器数据转换为字典格式"""
+        data = {
+            'raw_data': self._raw_data,
+            'valve_stent_bottom': None,
+            'sinus_of_valsalva': None,
+            'stent_best_fit': None
+        }
+        
+        if self._valve_stent_bottom:
+            data['valve_stent_bottom'] = self._valve_stent_bottom.to_dict()
+        
+        if self._sinus_of_valsalva:
+            data['sinus_of_valsalva'] = self._sinus_of_valsalva.to_dict()
+        
+        if self._stent_best_fit:
+            data['stent_best_fit'] = self._stent_best_fit.to_dict()
+        
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneDataManager':
+        """从字典创建平面管理器对象"""
+        manager = cls()
+        manager._raw_data = data.get('raw_data', {})
+        
+        # 恢复瓣膜支架底部平面
+        valve_stent_data = data.get('valve_stent_bottom')
+        if valve_stent_data:
+            manager._valve_stent_bottom = ValveStentBottomPlane.from_dict(valve_stent_data)
+        
+        # 恢复Sinus Of Valsalva平面
+        sinus_data = data.get('sinus_of_valsalva')
+        if sinus_data:
+            manager._sinus_of_valsalva = SinusOfValsalvaPlane.from_dict(sinus_data)
+        
+        # 恢复支架最佳拟合平面
+        stent_data = data.get('stent_best_fit')
+        if stent_data:
+            manager._stent_best_fit = StentBestFitPlane.from_dict(stent_data)
+        
+        return manager
