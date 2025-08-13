@@ -12,6 +12,7 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module3_logic import Module3Logic
 except ImportError:
     import os
@@ -23,6 +24,7 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from widgets.phase_selection_widget import PhaseSelectionWidget
     from module3.module3_logic import Module3Logic
 
 
@@ -33,10 +35,43 @@ class Module3Widget(qt.QWidget):
         super().__init__(parent)
         self.session = session
         self.logic = logic or Module3Logic()
+        
+        # 创建期像选择组件
+        self.phase_selection = PhaseSelectionWidget(session, self)
+        self.phase_selection.phaseChanged.connect(self._on_phase_changed)
+        self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
+        
         self.setObjectName("Module3Widget")
         self._setup_ui()
         logging.info("Module3Widget 初始化完成 (skeleton)")
 
+    def _on_phase_changed(self, phase: str):
+        """
+        期像改变时的回调
+        
+        Args:
+            phase: 新的期像 ('diastole' 或 'systole')
+        """
+        logging.info(f"模块三期像已切换到: {phase}")
+        
+        # 这里可以根据期像变更更新模块三的分析逻辑
+        if self.logic:
+            # 如果需要，可以在逻辑类中添加期像相关的方法
+            pass
+        
+        # 更新结果显示
+        phase_name = "舒张末期" if phase == 'diastole' else "收缩末期"
+        self.result_label.setText(f"当前期像: {phase_name}，可以开始测量分析")
+    
+    def _on_phase_status_updated(self, status: str):
+        """
+        期像状态更新时的回调
+        
+        Args:
+            status: 状态消息
+        """
+        logging.debug(f"模块三期像状态更新: {status}")
+    
     # 兼容性工具：有的环境 QLineEdit.text 是方法，有的可能是属性
     def _get_line_edit_text(self, le: qt.QLineEdit) -> str:
         try:
@@ -56,9 +91,15 @@ class Module3Widget(qt.QWidget):
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
 
-        desc = qt.QLabel("此处为占位页面，用于确认导航切换与框架搭建是否正常。\n现已加入JSON曲线加载的UI演示。")
+        desc = qt.QLabel("此处为占位页面，用于确认导航切换与框架搭建是否正常。\n现已加入JSON曲线加载的UI演示和期像选择功能。")
         desc.setAlignment(qt.Qt.AlignCenter)
         desc.setStyleSheet(StyleManager.get_label_style("muted"))
+
+        # 添加期像选择组件
+        self.phase_selection.set_info_text(
+            "💡 提示：请选择要进行测量分析的期像。\n"
+            "不同期像的测量结果可能会有所差异。"
+        )
 
         # JSON 加载区
         io_group = LayoutManager.create_section_frame("加载测量JSON并绘制闭合曲线")
@@ -104,6 +145,7 @@ class Module3Widget(qt.QWidget):
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title)
         container_layout.addWidget(desc)
+        container_layout.addWidget(self.phase_selection)  # 添加期像选择组件
         container_layout.addWidget(io_group)
 
         main_layout.addWidget(container, 1)
@@ -149,17 +191,25 @@ class Module3Widget(qt.QWidget):
 
     def set_session(self, session: TAVRStudySession):
         self.session = session
+        if hasattr(self, 'phase_selection'):
+            self.phase_selection.set_session(session)
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
             pass
 
     def on_activated(self):
         logging.info("模块三已激活")
+        
+        # 激活期像选择组件，默认选择舒张末期
+        if hasattr(self, 'phase_selection'):
+            self.phase_selection.auto_activate(preferred_phase='diastole')
 
     def on_deactivated(self):
         logging.info("模块三已停用")
 
     def cleanup(self):
+        if hasattr(self, 'phase_selection'):
+            self.phase_selection.cleanup()
         if self.logic:
             self.logic.cleanup()
         logging.info("模块三界面清理完成")
