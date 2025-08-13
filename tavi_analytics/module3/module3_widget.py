@@ -106,6 +106,144 @@ class Module3Widget(qt.QWidget):
             # 重新启用按钮
             self.switch_to_valve_plane_btn.setEnabled(True)
     
+    def _on_switch_to_sinus_plane(self):
+        """
+        切换到SinusOfValsalva_Plane平面的回调方法
+        """
+        try:
+            if not self.logic:
+                logging.error("模块三逻辑未初始化")
+                return
+            
+            logging.info("开始切换到SinusOfValsalva_Plane平面...")
+            
+            # 禁用按钮，防止重复点击
+            self.switch_to_sinus_plane_btn.setEnabled(False)
+            self.switch_to_sinus_plane_btn.setText("🔄 正在切换...")
+            
+            # 执行切换
+            success = self.logic.switch_to_sinus_of_valsalva_plane()
+            
+            if success:
+                logging.info("成功切换到SinusOfValsalva_Plane平面")
+                self.switch_to_sinus_plane_btn.setText("✅ 切换完成")
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 切换到SinusOfValsalva_Plane平面"))
+            else:
+                logging.error("切换到SinusOfValsalva_Plane平面失败")
+                self.switch_to_sinus_plane_btn.setText("❌ 切换失败")
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 切换到SinusOfValsalva_Plane平面"))
+            
+        except Exception as e:
+            logging.error(f"切换到SinusOfValsalva_Plane平面时出错: {e}")
+            self.switch_to_sinus_plane_btn.setText("❌ 出错")
+            qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 切换到SinusOfValsalva_Plane平面"))
+        finally:
+            # 重新启用按钮
+            self.switch_to_sinus_plane_btn.setEnabled(True)
+    
+    def _on_switch_to_stent_fit_plane(self):
+        """
+        切换到StentBestFit_Plane平面的回调方法
+        """
+        try:
+            if not self.logic:
+                logging.error("模块三逻辑未初始化")
+                return
+            
+            logging.info("开始切换到StentBestFit_Plane平面...")
+            
+            # 禁用按钮，防止重复点击
+            self.switch_to_stent_fit_plane_btn.setEnabled(False)
+            self.switch_to_stent_fit_plane_btn.setText("🔄 正在切换...")
+            
+            # 执行切换
+            success = self.logic.switch_to_stent_best_fit_plane()
+            
+            if success:
+                logging.info("成功切换到StentBestFit_Plane平面")
+                self.switch_to_stent_fit_plane_btn.setText("✅ 切换完成")
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_stent_fit_plane_btn.setText("🔧 切换到StentBestFit_Plane平面"))
+            else:
+                logging.error("切换到StentBestFit_Plane平面失败")
+                self.switch_to_stent_fit_plane_btn.setText("❌ 切换失败")
+                qt.QTimer.singleShot(2000, lambda: self.switch_to_stent_fit_plane_btn.setText("🔧 切换到StentBestFit_Plane平面"))
+            
+        except Exception as e:
+            logging.error(f"切换到StentBestFit_Plane平面时出错: {e}")
+            self.switch_to_stent_fit_plane_btn.setText("❌ 出错")
+            qt.QTimer.singleShot(2000, lambda: self.switch_to_stent_fit_plane_btn.setText("🔧 切换到StentBestFit_Plane平面"))
+        finally:
+            # 重新启用按钮
+            self.switch_to_stent_fit_plane_btn.setEnabled(True)
+    
+    def _on_refresh_plane_status(self):
+        """
+        刷新平面状态的回调方法
+        """
+        try:
+            if not self.logic:
+                logging.error("模块三逻辑未初始化")
+                return
+            
+            # 检查平面可用性
+            availability = self.logic.check_plane_availability()
+            
+            # 构建状态文本
+            status_lines = ["📋 平面状态检查结果:"]
+            
+            plane_names = {
+                'valve_stent_bottom': 'ValveStent_Bottom_Plane (瓣膜支架底部)',
+                'sinus_of_valsalva': 'SinusOfValsalva_Plane (窦部)',
+                'stent_best_fit': 'StentBestFit_Plane (支架拟合)'
+            }
+            
+            for plane_type, info in availability.items():
+                if plane_type in plane_names:
+                    plane_display_name = plane_names[plane_type]
+                    if info['available']:
+                        status_icon = "✅"
+                        extra_info = ""
+                        if 'num_points' in info:
+                            extra_info = f" ({info['num_points']}个点)"
+                        status_lines.append(f"{status_icon} {plane_display_name}{extra_info}")
+                    else:
+                        status_icon = "❌"
+                        status_lines.append(f"{status_icon} {plane_display_name} - 未找到")
+            
+            # 更新状态显示
+            status_text = "\n".join(status_lines)
+            self.plane_status_label.setText(status_text)
+            
+            # 根据状态启用/禁用按钮
+            self._update_button_states(availability)
+            
+        except Exception as e:
+            logging.error(f"刷新平面状态时出错: {e}")
+            self.plane_status_label.setText("❌ 检查平面状态时出错")
+    
+    def _update_button_states(self, availability):
+        """
+        根据平面可用性更新按钮状态
+        
+        Args:
+            availability: 平面可用性字典
+        """
+        try:
+            # 更新瓣膜支架底部平面按钮
+            if 'valve_stent_bottom' in availability:
+                self.switch_to_valve_plane_btn.setEnabled(availability['valve_stent_bottom']['available'])
+            
+            # 更新Sinus Of Valsalva平面按钮
+            if 'sinus_of_valsalva' in availability:
+                self.switch_to_sinus_plane_btn.setEnabled(availability['sinus_of_valsalva']['available'])
+            
+            # 更新支架最佳拟合平面按钮
+            if 'stent_best_fit' in availability:
+                self.switch_to_stent_fit_plane_btn.setEnabled(availability['stent_best_fit']['available'])
+            
+        except Exception as e:
+            logging.error(f"更新按钮状态时出错: {e}")
+    
     def _setup_ui(self):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
@@ -128,13 +266,18 @@ class Module3Widget(qt.QWidget):
         # 平面切换说明
         plane_info = qt.QLabel(
             "📐 平面视图控制\n"
-            "点击下方按钮将当前MPR视图切换到ValveStent_Bottom_Plane平面。\n"
+            "点击下方按钮将当前MPR视图切换到对应的关键平面。\n"
             "轴状面将切换到该平面，矢状面和冠状面与之垂直相交。"
         )
         plane_info.setWordWrap(True)
         plane_info.setStyleSheet(StyleManager.get_label_style("info"))
         
-        # 平面切换按钮
+        # 创建按钮网格布局
+        buttons_widget = qt.QWidget()
+        buttons_layout = qt.QGridLayout(buttons_widget)
+        buttons_layout.setSpacing(10)
+        
+        # 瓣膜支架底部平面按钮
         self.switch_to_valve_plane_btn = LayoutManager.create_button_with_style(
             "🎯 切换到ValveStent_Bottom_Plane平面", 
             "primary", 
@@ -143,9 +286,48 @@ class Module3Widget(qt.QWidget):
         )
         self.switch_to_valve_plane_btn.clicked.connect(self._on_switch_to_valve_plane)
         
+        # Sinus Of Valsalva平面按钮
+        self.switch_to_sinus_plane_btn = LayoutManager.create_button_with_style(
+            "🫀 切换到SinusOfValsalva_Plane平面", 
+            "secondary", 
+            "default", 
+            45
+        )
+        self.switch_to_sinus_plane_btn.clicked.connect(self._on_switch_to_sinus_plane)
+        
+        # 支架最佳拟合平面按钮
+        self.switch_to_stent_fit_plane_btn = LayoutManager.create_button_with_style(
+            "🔧 切换到StentBestFit_Plane平面", 
+            "accent", 
+            "default", 
+            45
+        )
+        self.switch_to_stent_fit_plane_btn.clicked.connect(self._on_switch_to_stent_fit_plane)
+        
+        # 排列按钮（2行3列或3行1列，根据空间调整）
+        buttons_layout.addWidget(self.switch_to_valve_plane_btn, 0, 0)
+        buttons_layout.addWidget(self.switch_to_sinus_plane_btn, 0, 1)
+        buttons_layout.addWidget(self.switch_to_stent_fit_plane_btn, 1, 0, 1, 2)  # 占两列
+        
         # 组装平面控制区域
         plane_control_layout.addWidget(plane_info)
-        plane_control_layout.addWidget(self.switch_to_valve_plane_btn)
+        plane_control_layout.addWidget(buttons_widget)
+        
+        # 添加平面状态显示区域
+        self.plane_status_label = qt.QLabel("🔍 检查平面状态...")
+        self.plane_status_label.setWordWrap(True)
+        self.plane_status_label.setStyleSheet(StyleManager.get_label_style("info"))
+        plane_control_layout.addWidget(self.plane_status_label)
+        
+        # 添加刷新状态按钮
+        self.refresh_status_btn = LayoutManager.create_button_with_style(
+            "🔄 检查平面状态", 
+            "info", 
+            "small", 
+            30
+        )
+        self.refresh_status_btn.clicked.connect(self._on_refresh_plane_status)
+        plane_control_layout.addWidget(self.refresh_status_btn)
 
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
@@ -171,6 +353,9 @@ class Module3Widget(qt.QWidget):
         # 激活期像选择组件，默认选择舒张末期
         if hasattr(self, 'phase_selection'):
             self.phase_selection.auto_activate(preferred_phase='diastole')
+        
+        # 自动检查平面状态
+        qt.QTimer.singleShot(500, self._on_refresh_plane_status)  # 延迟500ms执行，确保UI完全加载
 
     def on_deactivated(self):
         logging.info("模块三已停用")

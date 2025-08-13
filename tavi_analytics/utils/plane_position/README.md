@@ -164,30 +164,42 @@ def get_plane_manager() -> PlanePositionManager:
 
 ### 医学标准方向
 
-#### 轴状面 (Axial - Red切片)
-- **视角**: 从上往下看的横截面
-- **X轴**: 指向患者左侧（符合放射学约定）
-- **Y轴**: 指向患者前方
-- **Z轴**: 沿着法向量方向
+以下定义与3D Slicer默认方向一致，并与常用影像软件核对一致。
 
-#### 冠状面 (Coronal - Green切片)  
-- **视角**: 从前往后看的截面
-- **X轴**: 指向患者左侧
-- **Y轴**: 指向患者头部
-- **Z轴**: 沿着法向量方向
+#### 轴位/横断面 (Axial - Red切片)
 
-#### 矢状面 (Sagittal - Yellow切片)
-- **视角**: 从右侧看向左侧的截面
-- **X轴**: 指向患者前方
-- **Y轴**: 指向患者头部
-- **Z轴**: 沿着法向量方向
+- 观察方向: 从患者足侧向头侧看（传统放射学约定）
+- 图像上方 (Top): 患者前方 (Anterior)
+- 图像下方 (Bottom): 患者后方 (Posterior)
+- 图像左侧 (Left): 患者右侧 (Right)
+- 图像右侧 (Right): 患者左侧 (Left)
+- 切片坐标轴与RAS对应: X轴 = -R，Y轴 = +A，Z轴 = +S（当法向与Z一致时）
+
+#### 冠状位/额状面 (Coronal - Green切片)
+
+- 观察方向: 从患者前方向后方看
+- 图像上方 (Top): 患者头侧 (Superior)
+- 图像下方 (Bottom): 患者足侧 (Inferior)
+- 图像左侧 (Left): 患者右侧 (Right)
+- 图像右侧 (Right): 患者左侧 (Left)
+- 切片坐标轴与RAS对应: X轴 = -R，Y轴 = +S，Z轴 = +A（当法向与Y/前后方向一致时）
+
+#### 矢状位 (Sagittal - Yellow切片)
+
+- 观察方向: 从患者左侧向右侧看
+- 图像上方 (Top): 患者头侧 (Superior)
+- 图像下方 (Bottom): 患者足侧 (Inferior)
+- 图像左侧 (Left): 患者前方 (Anterior)
+- 图像右侧 (Right): 患者后方 (Posterior)
+- 切片坐标轴与RAS对应: X轴 = -A，Y轴 = +S，Z轴 = -R（当法向与X/左右方向一致时）
 
 ### 坐标系统
 
 使用3D Slicer的RAS坐标系：
-- **R (Right)**: X轴正方向指向患者右侧
-- **A (Anterior)**: Y轴正方向指向患者前方
-- **S (Superior)**: Z轴正方向指向患者头部
+
+- R (Right): X轴正方向指向患者右侧
+- A (Anterior): Y轴正方向指向患者前方
+- S (Superior): Z轴正方向指向患者头部
 
 ## 前提条件
 
@@ -244,7 +256,7 @@ exec(open(r'c:\code\python\slicer\tavi_analytics\demo_plane_position_usage.py').
 
 ## 文件结构
 
-```
+```text
 utils/plane_position/
 ├── __init__.py                    # 模块初始化和导出
 ├── plane_position_manager.py      # 核心实现
@@ -258,6 +270,7 @@ utils/plane_position/
 ## 版本历史
 
 ### v1.0.0 (2025-08-13)
+
 - 🎉 初始版本发布
 - ✅ 从模块三完整抽离平面定位功能
 - ✅ 重构为独立可复用组件
@@ -268,12 +281,14 @@ utils/plane_position/
 ## 后续计划
 
 ### v1.1.0 (计划中)
+
 - 🔄 支持更多预定义平面类型
 - 🎬 添加平滑的视图切换动画
 - 💾 支持平面配置的保存和恢复
 - 📊 增加平面质量评估功能
 
 ### v1.2.0 (计划中)
+
 - 🧮 支持多种平面拟合算法
 - 🔧 批量平面操作功能
 - 📈 性能优化和内存管理

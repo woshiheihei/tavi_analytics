@@ -54,6 +54,54 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             logging.error(f"切换到ValveStent_Bottom_Plane平面时出错: {e}")
             return False
     
+    def switch_to_sinus_of_valsalva_plane(self) -> bool:
+        """
+        一键将当前MPR视图切换到SinusOfValsalva_Plane平面
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            logging.info("开始切换到SinusOfValsalva_Plane平面...")
+            
+            # 使用平面定位管理器执行切换
+            success = self.plane_manager.switch_to_plane('sinus_of_valsalva')
+            
+            if success:
+                logging.info("成功切换到SinusOfValsalva_Plane平面")
+            else:
+                logging.error("切换到SinusOfValsalva_Plane平面失败")
+            
+            return success
+            
+        except Exception as e:
+            logging.error(f"切换到SinusOfValsalva_Plane平面时出错: {e}")
+            return False
+    
+    def switch_to_stent_best_fit_plane(self) -> bool:
+        """
+        一键将当前MPR视图切换到StentBestFit_Plane平面
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            logging.info("开始切换到StentBestFit_Plane平面...")
+            
+            # 使用平面定位管理器执行切换
+            success = self.plane_manager.switch_to_plane('stent_best_fit')
+            
+            if success:
+                logging.info("成功切换到StentBestFit_Plane平面")
+            else:
+                logging.error("切换到StentBestFit_Plane平面失败")
+            
+            return success
+            
+        except Exception as e:
+            logging.error(f"切换到StentBestFit_Plane平面时出错: {e}")
+            return False
+    
     def switch_to_custom_plane(self, node_name: str) -> bool:
         """
         切换到自定义平面
@@ -102,6 +150,79 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             Optional[Dict]: 平面信息字典，包含中心点、法向量等
         """
         return self.plane_manager.get_plane_info(plane_type, node_name)
+    
+    def switch_to_plane_by_type(self, plane_type: str) -> bool:
+        """
+        通用平面切换方法
+        
+        Args:
+            plane_type: 平面类型，支持 'valve_stent_bottom', 'sinus_of_valsalva', 'stent_best_fit'
+            
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            logging.info(f"开始切换到{plane_type}平面...")
+            
+            # 使用平面定位管理器执行切换
+            success = self.plane_manager.switch_to_plane(plane_type)
+            
+            if success:
+                logging.info(f"成功切换到{plane_type}平面")
+            else:
+                logging.error(f"切换到{plane_type}平面失败")
+            
+            return success
+            
+        except Exception as e:
+            logging.error(f"切换到{plane_type}平面时出错: {e}")
+            return False
+    
+    def check_plane_availability(self) -> dict:
+        """
+        检查所有关键平面的可用性
+        
+        Returns:
+            dict: 各个平面的可用性状态
+        """
+        try:
+            supported_planes = self.plane_manager.get_supported_planes()
+            availability = {}
+            
+            for plane_type, node_name in supported_planes.items():
+                if plane_type == 'custom':
+                    continue
+                    
+                if node_name:
+                    # 检查节点是否存在
+                    import slicer
+                    node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+                    availability[plane_type] = {
+                        'available': node is not None,
+                        'node_name': node_name,
+                        'node_exists': node is not None
+                    }
+                    
+                    if node:
+                        # 获取更多信息
+                        plane_info = self.plane_manager.get_plane_info(plane_type)
+                        if plane_info:
+                            availability[plane_type].update({
+                                'num_points': plane_info.get('num_points', 0),
+                                'has_geometry': plane_info.get('num_points', 0) >= 3
+                            })
+                else:
+                    availability[plane_type] = {
+                        'available': False,
+                        'node_name': None,
+                        'node_exists': False
+                    }
+            
+            return availability
+            
+        except Exception as e:
+            logging.error(f"检查平面可用性时出错: {e}")
+            return {}
 
     def cleanup(self):
         """清理资源"""

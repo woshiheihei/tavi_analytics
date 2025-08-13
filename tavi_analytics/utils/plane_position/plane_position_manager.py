@@ -31,6 +31,7 @@ class PlanePositionManager:
     SUPPORTED_PLANES = {
         'valve_stent_bottom': 'ValveStent_Bottom_Plane',
         'sinus_of_valsalva': 'SinusOfValsalva_Plane',
+        'stent_best_fit': 'StentBestFit_Plane',
         'aortic_annulus': 'AorticAnnulus_Plane',
         'custom': None  # 自定义平面，需要手动指定节点名称
     }
@@ -248,13 +249,17 @@ class PlanePositionManager:
             logging.error(f"设置切片方向时出错: {e}")
     
     def _set_axial_orientation(self, slice_node, center_point: np.ndarray, normal_vector: np.ndarray):
-        """设置轴状面的医学标准方向"""
+        """设置轴位/横断面（Axial）的医学标准方向。
+
+        标准观察方向：从患者足侧向头侧看。
+        图像上方=Anterior，图像下方=Posterior，图像左侧=Right，图像右侧=Left。
+        """
         try:
-            # 轴状面：从上往下看的横截面
+            # 轴位：从足侧向头侧看的横断面
             z_axis = normal_vector / np.linalg.norm(normal_vector)
             
             # X轴：指向患者左侧（-R方向），在图像中显示为右侧（符合放射学约定）
-            x_axis = np.array([-1, 0, 0])  # 指向Left
+            x_axis = np.array([-1, 0, 0])  # 指向Left（-R）
             
             # 如果法向量与X轴近似平行，选择其他参考向量
             if abs(np.dot(z_axis, x_axis)) > 0.9:
@@ -263,10 +268,19 @@ class PlanePositionManager:
             # 计算实际的X轴（垂直于法向量）
             x_axis = x_axis - np.dot(x_axis, z_axis) * z_axis
             x_axis = x_axis / np.linalg.norm(x_axis)
+
+            # 强制X轴朝向 -R（以保持左右显示的一致性）
+            if np.dot(x_axis, np.array([-1, 0, 0])) < 0:
+                x_axis = -x_axis
             
-            # Y轴：通过叉积计算，应该指向前方
-            y_axis = np.cross(z_axis, x_axis)
+            # Y轴：通过叉积计算（确保右手系），应指向 +A（图像上方=Anterior）
+            y_axis = np.cross(x_axis, z_axis)
             y_axis = y_axis / np.linalg.norm(y_axis)
+
+            # 若Y未朝向 +A，则同时翻转X和Y以保持右手系且满足Top=Anterior
+            if np.dot(y_axis, np.array([0, 1, 0])) < 0:
+                x_axis = -x_axis
+                y_axis = -y_axis
             
             # 构建并应用变换矩阵
             self._apply_transformation_matrix(slice_node, center_point, x_axis, y_axis, z_axis)
@@ -275,9 +289,13 @@ class PlanePositionManager:
             logging.error(f"设置轴状面方向时出错: {e}")
     
     def _set_coronal_orientation(self, slice_node, center_point: np.ndarray, normal_vector: np.ndarray):
-        """设置冠状面的医学标准方向"""
+        """设置冠状位/额状面（Coronal）的医学标准方向。
+
+        标准观察方向：从患者前方向后方看。
+        图像上方=Superior，图像下方=Inferior，图像左侧=Right，图像右侧=Left。
+        """
         try:
-            # 冠状面：从前往后看的截面
+            # 冠状位：从前往后看的截面
             z_axis = normal_vector / np.linalg.norm(normal_vector)
             
             # X轴：指向患者左侧
@@ -306,13 +324,17 @@ class PlanePositionManager:
             logging.error(f"设置冠状面方向时出错: {e}")
     
     def _set_sagittal_orientation(self, slice_node, center_point: np.ndarray, normal_vector: np.ndarray):
-        """设置矢状面的医学标准方向"""
+        """设置矢状位（Sagittal）的医学标准方向。
+
+        标准观察方向：从患者左侧向右侧看。
+        图像上方=Superior，图像下方=Inferior，图像左侧=Anterior，图像右侧=Posterior。
+        """
         try:
-            # 矢状面：从右侧看向左侧的截面
+            # 矢状位：从左侧向右侧看的截面
             z_axis = normal_vector / np.linalg.norm(normal_vector)
             
-            # X轴：指向患者前方
-            x_axis = np.array([0, 1, 0])  # 指向Anterior
+            # X轴：应指向 -A（确保图像左侧=Anterior，右侧=Posterior）
+            x_axis = np.array([0, -1, 0])  # 指向 -Anterior
             
             # 如果法向量与X轴近似平行，选择其他参考向量
             if abs(np.dot(z_axis, x_axis)) > 0.9:
