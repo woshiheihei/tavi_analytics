@@ -25,9 +25,10 @@ class PlanePositionManager:
     
     提供通用的平面一键定位功能，可以将MPR视图快速切换到指定的解剖平面。
     支持从标记点自动计算平面参数，并按医学标准设置视图方向。
+    支持期像感知的节点查找，能够根据当前心动周期期像选择正确的平面节点。
     """
     
-    # 支持的平面类型配置
+    # 支持的平面类型配置（基础名称）
     SUPPORTED_PLANES = {
         'valve_stent_bottom': 'ValveStent_Bottom_Plane',
         'sinus_of_valsalva': 'SinusOfValsalva_Plane',
@@ -36,24 +37,111 @@ class PlanePositionManager:
         'custom': None  # 自定义平面，需要手动指定节点名称
     }
     
+    # 期像后缀映射
+    PHASE_SUFFIXES = {
+        'diastole': 'End_Diastole',
+        'systole': 'End_Systole',
+        'end_diastole': 'End_Diastole',
+        'end_systole': 'End_Systole'
+    }
+    
     def __init__(self):
         """初始化平面定位管理器"""
+        self.current_phase = None  # 当前期像
         logging.info("PlanePositionManager 初始化完成")
     
-    def switch_to_plane(self, plane_type: str, node_name: Optional[str] = None) -> bool:
+    def set_current_phase(self, phase: Optional[str]):
+        """
+        设置当前期像
+        
+        Args:
+            phase: 期像类型 ('diastole', 'systole', 'end_diastole', 'end_systole')
+        """
+        self.current_phase = phase
+        if phase:
+            logging.info(f"PlanePositionManager 当前期像设置为: {phase}")
+    
+    def get_current_phase(self) -> Optional[str]:
+        """获取当前期像"""
+        return self.current_phase
+    
+    def _get_phase_aware_node_name(self, base_name: str, phase: Optional[str] = None) -> str:
+        """
+        根据期像生成完整的节点名称
+        
+        Args:
+            base_name: 基础节点名称
+            phase: 期像类型，如果为None则使用当前期像
+            
+        Returns:
+            str: 包含期像后缀的完整节点名称
+        """
+        if not base_name:
+            return base_name
+            
+        use_phase = phase or self.current_phase
+        if not use_phase:
+            return base_name
+            
+        phase_suffix = self.PHASE_SUFFIXES.get(use_phase)
+        if phase_suffix:
+            return f"{base_name}_{phase_suffix}"
+        else:
+            return base_name
+    
+    def _find_phase_aware_node(self, base_name: str, phase: Optional[str] = None):
+        """
+        期像感知的节点查找
+        
+        首先尝试期像相关的节点名称，如果找不到则尝试基础名称
+        
+        Args:
+            base_name: 基础节点名称
+            phase: 期像类型，如果为None则使用当前期像
+            
+        Returns:
+            节点对象或None
+        """
+        try:
+            # 1. 尝试期像相关的节点名称
+            phase_aware_name = self._get_phase_aware_node_name(base_name, phase)
+            node = slicer.mrmlScene.GetFirstNodeByName(phase_aware_name)
+            if node:
+                logging.debug(f"找到期像相关节点: {phase_aware_name}")
+                return node
+            
+            # 2. 尝试基础名称（向后兼容）
+            if phase_aware_name != base_name:
+                node = slicer.mrmlScene.GetFirstNodeByName(base_name)
+                if node:
+                    logging.debug(f"找到基础节点: {base_name}")
+                    return node
+            
+            logging.debug(f"未找到节点: {phase_aware_name} 或 {base_name}")
+            return None
+            
+        except Exception as e:
+            logging.error(f"期像感知节点查找失败: {e}")
+            return None
+
+    def switch_to_plane(self, plane_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> bool:
         """
         一键将当前MPR视图切换到指定平面
         
         Args:
             plane_type: 平面类型，支持的类型见 SUPPORTED_PLANES
             node_name: 自定义节点名称，仅在 plane_type='custom' 时使用
+            phase: 期像类型，如果为None则使用当前期像
             
         Returns:
             bool: 切换成功返回True
             
         Examples:
-            # 切换到瓣膜支架底平面
+            # 切换到瓣膜支架底平面（使用当前期像）
             success = manager.switch_to_plane('valve_stent_bottom')
+            
+            # 切换到特定期像的瓣膜支架底平面
+            success = manager.switch_to_plane('valve_stent_bottom', phase='diastole')
             
             # 切换到自定义平面
             success = manager.switch_to_plane('custom', 'MyCustomPlane')
@@ -65,22 +153,28 @@ class PlanePositionManager:
                     logging.error("自定义平面类型需要提供节点名称")
                     return False
                 target_node_name = node_name
+                # 对于自定义节点，直接查找，不应用期像逻辑
+                plane_node = slicer.mrmlScene.GetFirstNodeByName(target_node_name)
             elif plane_type in self.SUPPORTED_PLANES:
-                target_node_name = self.SUPPORTED_PLANES[plane_type]
-                if not target_node_name:
+                base_name = self.SUPPORTED_PLANES[plane_type]
+                if not base_name:
                     logging.error(f"不支持的平面类型: {plane_type}")
                     return False
+                
+                # 使用期像感知的节点查找
+                plane_node = self._find_phase_aware_node(base_name, phase)
+                target_node_name = self._get_phase_aware_node_name(base_name, phase)
             else:
                 logging.error(f"不支持的平面类型: {plane_type}")
                 return False
             
-            # 2. 获取平面节点
-            plane_node = slicer.mrmlScene.GetFirstNodeByName(target_node_name)
+            # 2. 检查节点是否存在
             if not plane_node:
-                logging.error(f"未找到平面节点: {target_node_name}")
+                attempted_name = target_node_name if plane_type != 'custom' else node_name
+                logging.error(f"未找到平面节点: {attempted_name}")
                 return False
             
-            logging.info(f"开始切换到平面: {target_node_name}")
+            logging.info(f"开始切换到平面: {plane_node.GetName()}")
             
             # 3. 计算平面的中心点和法向量
             center_point, normal_vector = self._calculate_plane_geometry(plane_node)
@@ -95,10 +189,10 @@ class PlanePositionManager:
             success = self._configure_mpr_slices(center_point, normal_vector)
             
             if success:
-                logging.info(f"成功切换到平面: {target_node_name}")
+                logging.info(f"成功切换到平面: {plane_node.GetName()}")
                 return True
             else:
-                logging.error(f"切换到平面失败: {target_node_name}")
+                logging.error(f"切换到平面失败: {plane_node.GetName()}")
                 return False
                 
         except Exception as e:
@@ -463,36 +557,119 @@ class PlanePositionManager:
         获取支持的平面类型列表
         
         Returns:
-            Dict[str, str]: 平面类型到节点名称的映射
+            Dict[str, str]: 平面类型到基础节点名称的映射
         """
         return PlanePositionManager.SUPPORTED_PLANES.copy()
     
-    def get_plane_info(self, plane_type: str, node_name: Optional[str] = None) -> Optional[Dict]:
+    def get_phase_aware_supported_planes(self, phase: Optional[str] = None) -> Dict[str, str]:
+        """
+        获取期像感知的支持平面列表
+        
+        Args:
+            phase: 期像类型，如果为None则使用当前期像
+            
+        Returns:
+            Dict[str, str]: 平面类型到完整节点名称的映射
+        """
+        result = {}
+        for plane_type, base_name in self.SUPPORTED_PLANES.items():
+            if plane_type == 'custom':
+                result[plane_type] = None
+            elif base_name:
+                result[plane_type] = self._get_phase_aware_node_name(base_name, phase)
+            else:
+                result[plane_type] = base_name
+        return result
+    
+    def check_phase_plane_availability(self, phase: Optional[str] = None) -> Dict[str, Dict]:
+        """
+        检查指定期像下所有平面的可用性
+        
+        Args:
+            phase: 期像类型，如果为None则使用当前期像
+            
+        Returns:
+            Dict[str, Dict]: 平面可用性状态字典
+        """
+        try:
+            availability = {}
+            use_phase = phase or self.current_phase
+            
+            for plane_type, base_name in self.SUPPORTED_PLANES.items():
+                if plane_type == 'custom':
+                    continue
+                    
+                if base_name:
+                    # 尝试查找期像感知的节点
+                    node = self._find_phase_aware_node(base_name, use_phase)
+                    phase_aware_name = self._get_phase_aware_node_name(base_name, use_phase)
+                    
+                    availability[plane_type] = {
+                        'available': node is not None,
+                        'base_name': base_name,
+                        'phase_aware_name': phase_aware_name,
+                        'node_exists': node is not None,
+                        'current_phase': use_phase
+                    }
+                    
+                    if node:
+                        # 获取更多信息
+                        try:
+                            num_points = node.GetNumberOfControlPoints()
+                            availability[plane_type].update({
+                                'num_points': num_points,
+                                'has_geometry': num_points >= 3,
+                                'actual_node_name': node.GetName()
+                            })
+                        except Exception:
+                            availability[plane_type].update({
+                                'num_points': 0,
+                                'has_geometry': False,
+                                'actual_node_name': phase_aware_name
+                            })
+                else:
+                    availability[plane_type] = {
+                        'available': False,
+                        'base_name': None,
+                        'phase_aware_name': None,
+                        'node_exists': False,
+                        'current_phase': use_phase
+                    }
+            
+            return availability
+            
+        except Exception as e:
+            logging.error(f"检查平面可用性时出错: {e}")
+            return {}
+
+    def get_plane_info(self, plane_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> Optional[Dict]:
         """
         获取指定平面的详细信息
         
         Args:
             plane_type: 平面类型
             node_name: 自定义节点名称（当plane_type='custom'时使用）
+            phase: 期像类型，如果为None则使用当前期像
             
         Returns:
             Optional[Dict]: 平面信息字典，包含中心点、法向量等
         """
         try:
-            # 确定节点名称
+            # 确定节点
             if plane_type == 'custom':
                 if not node_name:
                     return None
-                target_node_name = node_name
+                plane_node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+                target_name = node_name
             elif plane_type in self.SUPPORTED_PLANES:
-                target_node_name = self.SUPPORTED_PLANES[plane_type]
-                if not target_node_name:
+                base_name = self.SUPPORTED_PLANES[plane_type]
+                if not base_name:
                     return None
+                plane_node = self._find_phase_aware_node(base_name, phase)
+                target_name = self._get_phase_aware_node_name(base_name, phase)
             else:
                 return None
             
-            # 获取平面节点
-            plane_node = slicer.mrmlScene.GetFirstNodeByName(target_node_name)
             if not plane_node:
                 return None
             
@@ -502,12 +679,14 @@ class PlanePositionManager:
                 return None
             
             return {
-                'node_name': target_node_name,
+                'node_name': target_name,
+                'actual_node_name': plane_node.GetName(),
                 'plane_type': plane_type,
                 'center_point': center_point.tolist(),
                 'normal_vector': normal_vector.tolist(),
                 'num_points': plane_node.GetNumberOfControlPoints(),
-                'node_exists': True
+                'node_exists': True,
+                'phase': phase or self.current_phase
             }
             
         except Exception as e:
@@ -530,23 +709,27 @@ def get_plane_manager() -> PlanePositionManager:
         _plane_manager = PlanePositionManager()
     return _plane_manager
 
-def switch_to_plane(plane_type: str, node_name: Optional[str] = None) -> bool:
+def switch_to_plane(plane_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> bool:
     """
     便捷函数：一键切换到指定平面
     
     Args:
         plane_type: 平面类型
         node_name: 自定义节点名称（可选）
+        phase: 期像类型（可选）
         
     Returns:
         bool: 切换成功返回True
         
     Examples:
-        # 切换到瓣膜支架底平面
+        # 切换到瓣膜支架底平面（使用管理器的当前期像）
         success = switch_to_plane('valve_stent_bottom')
+        
+        # 切换到特定期像的瓣膜支架底平面
+        success = switch_to_plane('valve_stent_bottom', phase='diastole')
         
         # 切换到自定义平面
         success = switch_to_plane('custom', 'MyCustomPlane')
     """
     manager = get_plane_manager()
-    return manager.switch_to_plane(plane_type, node_name)
+    return manager.switch_to_plane(plane_type, node_name, phase)

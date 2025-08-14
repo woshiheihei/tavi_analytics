@@ -54,10 +54,14 @@ class Module3Widget(qt.QWidget):
         """
         logging.info(f"模块三期像已切换到: {phase}")
         
-        # 这里可以根据期像变更更新模块三的分析逻辑
+        # 更新逻辑层的当前期像
         if self.logic:
-            # 如果需要，可以在逻辑类中添加期像相关的方法
-            pass
+            # 将期像格式转换为领域模型格式
+            domain_phase = 'end_diastole' if phase == 'diastole' else 'end_systole'
+            self.logic.set_current_phase(domain_phase)
+        
+        # 自动刷新平面状态以显示当前期像下的可用平面
+        qt.QTimer.singleShot(100, self._on_refresh_plane_status)  # 延迟100ms刷新
     
     def _on_phase_status_updated(self, status: str):
         """
@@ -185,11 +189,18 @@ class Module3Widget(qt.QWidget):
                 logging.error("模块三逻辑未初始化")
                 return
             
+            # 获取当前期像
+            current_phase = self.logic.get_current_phase()
+            phase_display = {
+                'end_diastole': '舒张末期',
+                'end_systole': '收缩末期'
+            }.get(current_phase, '未知期像')
+            
             # 检查平面可用性
             availability = self.logic.check_plane_availability()
             
             # 构建状态文本
-            status_lines = ["📋 平面状态检查结果:"]
+            status_lines = [f"📋 平面状态检查结果 (期像: {phase_display}):"]
             
             plane_names = {
                 'valve_stent_bottom': 'ValveStent_Bottom_Plane (瓣膜支架底部)',
@@ -200,15 +211,20 @@ class Module3Widget(qt.QWidget):
             for plane_type, info in availability.items():
                 if plane_type in plane_names:
                     plane_display_name = plane_names[plane_type]
-                    if info['available']:
+                    if info.get('available', False):
                         status_icon = "✅"
                         extra_info = ""
                         if 'num_points' in info:
                             extra_info = f" ({info['num_points']}个点)"
+                        # 显示期像感知的节点名称
+                        if 'phase_aware_name' in info:
+                            extra_info += f" [{info['phase_aware_name']}]"
                         status_lines.append(f"{status_icon} {plane_display_name}{extra_info}")
                     else:
                         status_icon = "❌"
-                        status_lines.append(f"{status_icon} {plane_display_name} - 未找到")
+                        # 显示期像感知的节点名称（如果有）
+                        missing_name = info.get('phase_aware_name', info.get('base_name', ''))
+                        status_lines.append(f"{status_icon} {plane_display_name} - 未找到 [{missing_name}]")
             
             # 更新状态显示
             status_text = "\n".join(status_lines)
@@ -231,15 +247,30 @@ class Module3Widget(qt.QWidget):
         try:
             # 更新瓣膜支架底部平面按钮
             if 'valve_stent_bottom' in availability:
-                self.switch_to_valve_plane_btn.setEnabled(availability['valve_stent_bottom']['available'])
+                is_available = availability['valve_stent_bottom'].get('available', False)
+                self.switch_to_valve_plane_btn.setEnabled(is_available)
+                if not is_available:
+                    self.switch_to_valve_plane_btn.setToolTip("当前期像下该平面不可用")
+                else:
+                    self.switch_to_valve_plane_btn.setToolTip("切换到瓣膜支架底部平面")
             
             # 更新Sinus Of Valsalva平面按钮
             if 'sinus_of_valsalva' in availability:
-                self.switch_to_sinus_plane_btn.setEnabled(availability['sinus_of_valsalva']['available'])
+                is_available = availability['sinus_of_valsalva'].get('available', False)
+                self.switch_to_sinus_plane_btn.setEnabled(is_available)
+                if not is_available:
+                    self.switch_to_sinus_plane_btn.setToolTip("当前期像下该平面不可用")
+                else:
+                    self.switch_to_sinus_plane_btn.setToolTip("切换到Sinus Of Valsalva平面")
             
             # 更新支架最佳拟合平面按钮
             if 'stent_best_fit' in availability:
-                self.switch_to_stent_fit_plane_btn.setEnabled(availability['stent_best_fit']['available'])
+                is_available = availability['stent_best_fit'].get('available', False)
+                self.switch_to_stent_fit_plane_btn.setEnabled(is_available)
+                if not is_available:
+                    self.switch_to_stent_fit_plane_btn.setToolTip("当前期像下该平面不可用")
+                else:
+                    self.switch_to_stent_fit_plane_btn.setToolTip("切换到支架最佳拟合平面")
             
         except Exception as e:
             logging.error(f"更新按钮状态时出错: {e}")
