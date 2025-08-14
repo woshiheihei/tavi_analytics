@@ -1063,37 +1063,21 @@ class PlaneDataManager:
         """获取所有已加载的平面类型"""
         return list(self._planes.keys())
     
-    # ========== 兼容性访问器（向后兼容） ==========
-    @property 
-    def valve_stent_bottom(self) -> Optional[ValveStentBottomPlane]:
-        """瓣膜支架底部平面（兼容性访问器）"""
-        plane = self.get_plane(CriticalPlaneType.VALVE_STENT_BOTTOM)
-        return plane if isinstance(plane, ValveStentBottomPlane) else None
-    
-    @property
-    def sinus_of_valsalva(self) -> Optional[SinusOfValsalvaPlane]:
-        """Sinus Of Valsalva平面（兼容性访问器）"""
-        plane = self.get_plane(CriticalPlaneType.SINUS_OF_VALSALVA)
-        return plane if isinstance(plane, SinusOfValsalvaPlane) else None
-    
-    @property
-    def stent_best_fit(self) -> Optional[StentBestFitPlane]:
-        """支架最佳拟合平面（兼容性访问器）"""
-        plane = self.get_plane(CriticalPlaneType.STENT_BEST_FIT)
-        return plane if isinstance(plane, StentBestFitPlane) else None
-    
     # 业务访问方法（现在使用动态访问）
     def get_valve_stent_bottom(self) -> Optional[ValveStentBottomPlane]:
         """获取瓣膜支架底部平面"""
-        return self.valve_stent_bottom
+        plane = self.get_plane(CriticalPlaneType.VALVE_STENT_BOTTOM)
+        return plane if isinstance(plane, ValveStentBottomPlane) else None
     
     def get_sinus_of_valsalva(self) -> Optional[SinusOfValsalvaPlane]:
         """获取Sinus Of Valsalva平面"""
-        return self.sinus_of_valsalva
+        plane = self.get_plane(CriticalPlaneType.SINUS_OF_VALSALVA)
+        return plane if isinstance(plane, SinusOfValsalvaPlane) else None
     
     def get_stent_best_fit(self) -> Optional[StentBestFitPlane]:
         """获取支架最佳拟合平面"""
-        return self.stent_best_fit
+        plane = self.get_plane(CriticalPlaneType.STENT_BEST_FIT)
+        return plane if isinstance(plane, StentBestFitPlane) else None
     
     def has_critical_planes(self) -> bool:
         """检查是否已加载关键平面"""
@@ -1168,16 +1152,6 @@ class PlaneDataManager:
                 status[plane_type.value] = plane.get_slicer_node() is not None
             except:
                 status[plane_type.value] = False
-            node = self._valve_stent_bottom.get_slicer_node()
-            status["valve_stent_bottom"] = node is not None
-        
-        if self._sinus_of_valsalva:
-            node = self._sinus_of_valsalva.get_slicer_node()
-            status["sinus_of_valsalva"] = node is not None
-        
-        if self._stent_best_fit:
-            node = self._stent_best_fit.get_slicer_node()
-            status["stent_best_fit"] = node is not None
         
         return status
     
@@ -1191,27 +1165,30 @@ class PlaneDataManager:
         }
         
         # 添加详细的平面信息
-        if self._valve_stent_bottom:
+        valve_stent_bottom = self.get_valve_stent_bottom()
+        if valve_stent_bottom:
             summary['plane_details']['valve_stent_bottom'] = {
-                'description': self._valve_stent_bottom.description,
-                'point_count': len(self._valve_stent_bottom.points),
-                'area': self._valve_stent_bottom.area,
-                'perimeter': self._valve_stent_bottom.perimeter
+                'description': valve_stent_bottom.description,
+                'point_count': len(valve_stent_bottom.points),
+                'area': valve_stent_bottom.area,
+                'perimeter': valve_stent_bottom.perimeter
             }
         
-        if self._sinus_of_valsalva:
+        sinus_of_valsalva = self.get_sinus_of_valsalva()
+        if sinus_of_valsalva:
             summary['plane_details']['sinus_of_valsalva'] = {
-                'description': self._sinus_of_valsalva.description,
-                'point_count': len(self._sinus_of_valsalva.points),
-                'area': self._sinus_of_valsalva.area,
-                'perimeter': self._sinus_of_valsalva.perimeter
+                'description': sinus_of_valsalva.description,
+                'point_count': len(sinus_of_valsalva.points),
+                'area': sinus_of_valsalva.area,
+                'perimeter': sinus_of_valsalva.perimeter
             }
         
-        if self._stent_best_fit:
+        stent_best_fit = self.get_stent_best_fit()
+        if stent_best_fit:
             summary['plane_details']['stent_best_fit'] = {
-                'description': self._stent_best_fit.description,
-                'has_valid_params': self._stent_best_fit.has_valid_params,
-                'distance_to_zjd': self._stent_best_fit.distance_to_zjd
+                'description': stent_best_fit.description,
+                'has_valid_params': stent_best_fit.has_valid_params,
+                'distance_to_zjd': stent_best_fit.distance_to_zjd
             }
         
         return summary
