@@ -26,11 +26,11 @@ from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode
 try:
     # 尝试相对导入
     from .data_models import PatientData
-    from .domain_models import PlaneDataManager, PhasePlaneRepository, CardiacPhase
+    from .domain_models import ContourDataManager, PhaseContourRepository, CardiacPhase
 except ImportError:
     # 回退到绝对导入
     from data_models import PatientData
-    from domain_models import PlaneDataManager, PhasePlaneRepository, CardiacPhase
+    from domain_models import ContourDataManager, PhaseContourRepository, CardiacPhase
 
 
 class TAVRStudySession:
@@ -117,14 +117,14 @@ class TAVRStudySession:
                 CardiacPhase.END_SYSTOLE.value: None,
             }
 
-            # 分期平面仓库（各期像一个PlaneDataManager）
-            self.phase_plane_repo: PhasePlaneRepository = PhasePlaneRepository.create_default()
+            # 分期轮廓仓库（各期像一个ContourDataManager）
+            self.phase_contour_repo: PhaseContourRepository = PhaseContourRepository.create_default()
 
-            # 平面数据管理器（兼容旧API，默认返回舒张末期管理器）
-            self.plane_data_manager = self.phase_plane_repo.diastole
+            # 轮廓数据管理器（兼容旧API，默认返回舒张末期管理器）
+            self.contour_data_manager = self.phase_contour_repo.diastole
             
             # 兼容性属性 - 指向同一个管理器
-            self.plane_manager = self.plane_data_manager
+            self.contour_manager = self.contour_data_manager
             
             # 标记已初始化
             self._initialized = True
@@ -708,7 +708,7 @@ class TAVRStudySession:
         
         # 重置平面数据管理器
         try:
-            self.plane_data_manager.clear()
+            self.contour_data_manager.clear()
         except Exception:
             pass
 
@@ -718,12 +718,12 @@ class TAVRStudySession:
             CardiacPhase.END_SYSTOLE.value: None,
         }
         try:
-            self.phase_plane_repo.clear()
+            self.phase_contour_repo.clear()
         except Exception:
-            self.phase_plane_repo = PhasePlaneRepository.create_default()
+            self.phase_contour_repo = PhaseContourRepository.create_default()
         # 兼容默认指向舒张末期
-        self.plane_data_manager = self.phase_plane_repo.diastole
-        self.plane_manager = self.plane_data_manager
+        self.contour_data_manager = self.phase_contour_repo.diastole
+        self.contour_manager = self.contour_data_manager
         
         self.logger.info("会话重置完成")
 
@@ -771,7 +771,7 @@ class TAVRStudySession:
             bool: 加载成功返回True
         """
         try:
-            success = self.plane_data_manager.load_from_measurement_json(measurement_data)
+            success = self.contour_data_manager.load_from_measurement_json(measurement_data)
             if success:
                 self.logger.info("关键平面数据已加载到会话中")
                 return True
@@ -784,49 +784,62 @@ class TAVRStudySession:
     
     def get_valve_stent_bottom_plane(self):
         """获取瓣膜支架底部平面"""
-        return self.plane_data_manager.get_valve_stent_bottom()
+        return self.contour_data_manager.get_valve_stent_bottom()
     
     def get_sinus_of_valsalva_plane(self):
         """获取Sinus Of Valsalva平面"""
-        return self.plane_data_manager.get_sinus_of_valsalva()
+        return self.contour_data_manager.get_sinus_of_valsalva()
     
     def get_stent_best_fit_plane(self):
         """获取支架最佳拟合平面"""
-        return self.plane_data_manager.get_stent_best_fit()
+        return self.contour_data_manager.get_stent_best_fit()
     
     def has_critical_planes(self) -> bool:
         """检查是否已加载关键平面"""
-        return self.plane_data_manager.has_critical_planes()
+        return self.contour_data_manager.has_critical_contours()
     
     def get_planes_summary(self) -> Dict[str, bool]:
         """获取平面加载状态摘要"""
-        return self.plane_data_manager.get_loaded_planes_summary()
+        return self.contour_data_manager.get_loaded_contours_summary()
     
     def get_all_plane_measurements(self) -> Dict[str, Any]:
         """获取所有平面的测量数据"""
-        return self.plane_data_manager.get_all_measurements()
+        return self.contour_data_manager.get_all_measurements()
     
     def clear_plane_data(self):
         """清空平面数据"""
-        self.plane_data_manager.clear()
+        self.contour_data_manager.clear()
         self.logger.info("已清空会话中的平面数据")
 
-    # ====== 分期平面管理API（新增） ======
-    def get_phase_plane_manager(self, phase: Union[str, CardiacPhase]) -> PlaneDataManager:
-        """获取某期像对应的PlaneDataManager"""
+    # ====== 分期轮廓管理API（新增） ======
+    def get_phase_contour_manager(self, phase: Union[str, CardiacPhase]) -> ContourDataManager:
+        """获取某期像对应的ContourDataManager"""
         if isinstance(phase, CardiacPhase):
             phase = phase.value
-        return self.phase_plane_repo.get_manager(phase)
+        return self.phase_contour_repo.get_manager(phase)
 
-    def load_measurement_planes_for_phase(self, phase: Union[str, CardiacPhase], measurement_data: Dict[str, Any]) -> bool:
-        """将measurement.json加载到指定期像的PlaneDataManager中"""
-        mgr = self.get_phase_plane_manager(phase)
+    def load_measurement_contours_for_phase(self, phase: Union[str, CardiacPhase], measurement_data: Dict[str, Any]) -> bool:
+        """将measurement.json加载到指定期像的ContourDataManager中"""
+        mgr = self.get_phase_contour_manager(phase)
         ok = mgr.load_from_measurement_json(measurement_data)
         # 同步兼容默认：若是舒张末期则刷新旧引用
         if (phase.value if isinstance(phase, CardiacPhase) else phase) == CardiacPhase.END_DIASTOLE.value:
-            self.plane_data_manager = mgr
-            self.plane_manager = mgr
+            self.contour_data_manager = mgr
+            self.contour_manager = mgr
         return ok
 
+    def get_phase_contours_summary(self) -> Dict[str, Any]:
+        return self.phase_contour_repo.get_loaded_summary()
+
+    # Compatibility methods for old plane-based API
+    def load_measurement_planes_for_phase(self, phase: Union[str, CardiacPhase], measurement_data: Dict[str, Any]) -> bool:
+        """兼容方法：调用新的轮廓方法"""
+        return self.load_measurement_contours_for_phase(phase, measurement_data)
+
+    def get_phase_plane_manager(self, phase: Union[str, CardiacPhase]) -> 'ContourDataManager':
+        """兼容方法：调用新的轮廓管理器方法"""
+        return self.get_phase_contour_manager(phase)
+
     def get_phase_planes_summary(self) -> Dict[str, Any]:
-        return self.phase_plane_repo.get_loaded_summary()
+        """兼容方法：调用新的轮廓方法"""
+        return self.get_phase_contours_summary()

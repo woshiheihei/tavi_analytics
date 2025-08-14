@@ -722,11 +722,11 @@ def switch_to_contour(contour_type: str, node_name: Optional[str] = None, phase:
         bool: 切换成功返回True
         
     Examples:
-        # 切换到瓣膜支架底平面（使用管理器的当前期像）
-        success = switch_to_plane('valve_stent_bottom')
+        # 切换到瓣膜支架底轮廓（使用管理器的当前期像）
+        success = switch_to_contour('valve_stent_bottom')
         
-        # 切换到特定期像的瓣膜支架底平面
-        success = switch_to_plane('valve_stent_bottom', phase='diastole')
+        # 切换到特定期像的瓣膜支架底轮廓
+        success = switch_to_contour('valve_stent_bottom', phase='diastole')
         
         # 切换到自定义轮廓
         success = switch_to_contour('custom', 'MyCustomContour')

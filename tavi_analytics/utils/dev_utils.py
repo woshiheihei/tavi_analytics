@@ -61,8 +61,8 @@ class DevUtils:
         # 序列化平面数据管理器
         plane_data = {}
         try:
-            if hasattr(session, 'plane_data_manager') and session.plane_data_manager:
-                plane_data = session.plane_data_manager.to_dict()
+            if hasattr(session, 'contour_data_manager') and session.contour_data_manager:
+                contour_data = session.contour_data_manager.to_dict()
         except Exception as e:
             logging.warning(f"序列化平面数据失败: {e}")
 
@@ -170,18 +170,18 @@ class DevUtils:
         session.landmark_node_ids = data.get("landmark_node_ids") or {}
         session.reconstructed_planes = data.get("reconstructed_planes") or {}
 
-        # 恢复平面数据管理器
-        plane_data = data.get("plane_data")
-        if plane_data:
+        # 恢复轮廓数据管理器
+        contour_data = data.get("contour_data")
+        if contour_data:
             try:
-                from core.domain_models import PlaneDataManager
-                session.plane_data_manager = PlaneDataManager.from_dict(plane_data)
-                logging.info("平面数据管理器已恢复")
+                from core.domain_models import ContourDataManager
+                session.contour_data_manager = ContourDataManager.from_dict(contour_data)
+                logging.info("轮廓数据管理器已恢复")
             except Exception as e:
-                logging.warning(f"恢复平面数据失败: {e}")
+                logging.warning(f"恢复轮廓数据失败: {e}")
                 # 创建新的空管理器
-                from core.domain_models import PlaneDataManager
-                session.plane_data_manager = PlaneDataManager()
+                from core.domain_models import ContourDataManager
+                session.contour_data_manager = ContourDataManager()
 
     @staticmethod
     def _apply_module_states(module_states: Dict[str, Any]) -> None:
@@ -223,13 +223,13 @@ class DevUtils:
             # 恢复平面数据的可视化（延迟执行）
             def restore_plane_visualizations():
                 try:
-                    if hasattr(session, 'plane_data_manager') and session.plane_data_manager:
-                        # 重建所有平面的可视化
-                        results = session.plane_data_manager.create_all_visualizations()
+                    if hasattr(session, 'contour_data_manager') and session.contour_data_manager:
+                        # 重建所有轮廓的可视化
+                        results = session.contour_data_manager.create_all_visualizations()
                         successful_count = sum(1 for success in results.values() if success)
-                        logging.info(f"已恢复平面可视化: {successful_count}/{len(results)}个成功")
+                        logging.info(f"已恢复轮廓可视化: {successful_count}/{len(results)}个成功")
                 except Exception as e:
-                    logging.warning(f"恢复平面可视化失败: {e}")
+                    logging.warning(f"恢复轮廓可视化失败: {e}")
             
             # 恢复当前激活的模块（稍后执行，让场景完全加载）
             current_module = module_states.get('current_active_module')

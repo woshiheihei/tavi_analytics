@@ -27,16 +27,16 @@ except ImportError:
     from logging_utils import LoggingUtils
 
 try:
-    from .plane_position import PlanePositionManager, get_plane_manager, switch_to_plane
+    from .contour_position import ContourPositionManager, get_contour_manager, switch_to_contour
 except ImportError:
-    from plane_position import PlanePositionManager, get_plane_manager, switch_to_plane
+    from contour_position import ContourPositionManager, get_contour_manager, switch_to_contour
 
 __all__ = [
     "DicomUtils",
     "ConfigManager", 
     "QtUtils",
     "LoggingUtils",
-    "PlanePositionManager",
-    "get_plane_manager",
-    "switch_to_plane"
+    "ContourPositionManager",
+    "get_contour_manager",
+    "switch_to_contour"
 ]

@@ -942,15 +942,15 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             success = self.session.load_measurement_planes(measurement_data)
             
             if success:
-                logging.info("关键平面数据已成功加载到会话中")
+                logging.info("关键轮廓数据已成功加载到会话中")
                 
                 # 获取详细的加载摘要
-                business_summary = self.session.plane_manager.get_business_summary()
-                loaded_planes = business_summary['loaded_planes']
+                business_summary = self.session.contour_manager.get_business_summary()
+                loaded_contours = business_summary['loaded_contours']
                 
-                # 记录加载的平面信息
-                loaded_plane_names = [k for k, v in loaded_planes.items() if v and k != 'has_any_critical_plane']
-                logging.info(f"已加载的关键平面: {loaded_plane_names}")
+                # 记录加载的轮廓信息
+                loaded_contour_names = [k for k, v in loaded_contours.items() if v and k != 'has_any_critical_contour']
+                logging.info(f"已加载的关键轮廓: {loaded_contour_names}")
                 
                 # 输出详细的业务摘要
                 for plane_name, plane_details in business_summary['plane_details'].items():
@@ -965,22 +965,22 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         logging.info(f"  - 到参考点距离: {plane_details['distance_to_zjd']:.2f}")
                 
                 # 创建所有平面的可视化
-                visualization_results = self.session.plane_manager.create_all_visualizations()
+                visualization_results = self.session.contour_manager.create_all_visualizations()
                 successful_visualizations = sum(1 for success in visualization_results.values() if success)
                 
                 logging.info(f"可视化创建结果: {successful_visualizations}/{len(visualization_results)}个成功")
                 
                 # 输出测量数据
                 measurements = business_summary['measurements']
-                for plane_name, plane_measurements in measurements.items():
-                    logging.info(f"{plane_name} 测量数据: {plane_measurements}")
+                for contour_name, contour_measurements in measurements.items():
+                    logging.info(f"{contour_name} 测量数据: {contour_measurements}")
                 
-                # 返回成功加载的关键平面数量
-                successful_planes = sum(1 for v in loaded_planes.values() if v and isinstance(v, bool))
-                return successful_planes
+                # 返回成功加载的关键轮廓数量
+                successful_contours = sum(1 for v in loaded_contours.values() if v and isinstance(v, bool))
+                return successful_contours
                 
             else:
-                logging.warning("未能加载任何关键平面数据")
+                logging.warning("未能加载任何关键轮廓数据")
                 return 0
             
         except Exception as e:
@@ -1008,17 +1008,17 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             logging.info(f"成功读取测量数据文件: {json_path} -> 导入到 {phase_key}")
 
             # 加载到对应期像
-            success = self.session.load_measurement_planes_for_phase(phase_key, measurement_data)
+            success = self.session.load_measurement_contours_for_phase(phase_key, measurement_data)
             if not success:
-                logging.warning(f"[{phase_key}] 未能加载任何关键平面数据")
+                logging.warning(f"[{phase_key}] 未能加载任何关键轮廓数据")
                 return 0
 
-            mgr = self.session.get_phase_plane_manager(phase_key)
+            mgr = self.session.get_phase_contour_manager(phase_key)
             business_summary = mgr.get_business_summary()
-            loaded_planes = business_summary['loaded_planes']
+            loaded_contours = business_summary['loaded_contours']
 
-            loaded_plane_names = [k for k, v in loaded_planes.items() if v and k != 'has_any_critical_plane']
-            logging.info(f"[{phase_key}] 已加载的关键平面: {loaded_plane_names}")
+            loaded_contour_names = [k for k, v in loaded_contours.items() if v and k != 'has_any_critical_contour']
+            logging.info(f"[{phase_key}] 已加载的关键轮廓: {loaded_contour_names}")
 
             # 创建可视化
             visualization_results = mgr.create_all_visualizations()
@@ -1027,11 +1027,11 @@ class Module2Logic(ScriptedLoadableModuleLogic):
 
             # 输出测量数据
             measurements = business_summary['measurements']
-            for plane_name, plane_measurements in measurements.items():
-                logging.info(f"[{phase_key}] {plane_name} 测量数据: {plane_measurements}")
+            for contour_name, contour_measurements in measurements.items():
+                logging.info(f"[{phase_key}] {contour_name} 测量数据: {contour_measurements}")
 
-            successful_planes = sum(1 for v in loaded_planes.values() if v and isinstance(v, bool))
-            return successful_planes
+            successful_contours = sum(1 for v in loaded_contours.values() if v and isinstance(v, bool))
+            return successful_contours
         except Exception as e:
             logging.error(f"[{phase_key}] 导入测量数据失败: {e}")
             return 0

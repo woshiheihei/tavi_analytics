@@ -267,25 +267,25 @@ class PhaseSelectionWidget(qt.QWidget):
             except Exception as e:
                 logging.warning(f"更新分割可视化失败(phase={phase_key}): {e}")
 
-            # 2) 平面节点：通过PhasePlaneRepository -> PlaneDataManager -> 所有平面对象
+            # 2) 轮廓节点：通过PhaseContourRepository -> ContourDataManager -> 所有轮廓对象
             try:
-                plane_mgr = None
-                if hasattr(self.session, 'get_phase_plane_manager'):
-                    plane_mgr = self.session.get_phase_plane_manager(phase_key)
-                if plane_mgr and hasattr(plane_mgr, 'get_all_planes'):
-                    # 使用领域模型的通用API获取所有平面，而不是硬编码特定类型
-                    planes = plane_mgr.get_all_planes()
-                    for plane in planes:
-                        if not plane:
+                contour_mgr = None
+                if hasattr(self.session, 'get_phase_contour_manager'):
+                    contour_mgr = self.session.get_phase_contour_manager(phase_key)
+                if contour_mgr and hasattr(contour_mgr, 'get_all_contours'):
+                    # 使用领域模型的通用API获取所有轮廓，而不是硬编码特定类型
+                    contours = contour_mgr.get_all_contours()
+                    for contour in contours:
+                        if not contour:
                             continue
 
                         # 获取或按需创建可视化节点（仅在需要显示时创建）
-                        node = plane.get_slicer_node() if hasattr(plane, 'get_slicer_node') else None
-                        if visible and node is None and hasattr(plane, 'create_visualization'):
+                        node = contour.get_slicer_node() if hasattr(contour, 'get_slicer_node') else None
+                        if visible and node is None and hasattr(contour, 'create_visualization'):
                             try:
-                                created = plane.create_visualization()
+                                created = contour.create_visualization()
                                 if created:
-                                    node = plane.get_slicer_node()
+                                    node = contour.get_slicer_node()
                             except Exception:
                                 pass
 
@@ -306,7 +306,7 @@ class PhaseSelectionWidget(qt.QWidget):
                                     pass
                             toggled_any = True
             except Exception as e:
-                logging.warning(f"更新平面可视化失败(phase={phase_key}): {e}")
+                logging.warning(f"更新轮廓可视化失败(phase={phase_key}): {e}")
 
             # 3) 兜底：若领域模型未能定位任何节点，退回到名称匹配（保证兼容性）
             if not toggled_any:
@@ -340,11 +340,11 @@ class PhaseSelectionWidget(qt.QWidget):
                             toggled_any = True
                         except Exception:
                             pass
-                    # 平面节点名称兜底
+                    # 轮廓节点名称兜底
                     for name in (
-                        f"ValveStent_Bottom_Plane_{phase_suffix}",
-                        f"SinusOfValsalva_Plane_{phase_suffix}",
-                        f"StentBestFit_Plane_{phase_suffix}",
+                        f"ValveStent_Bottom_Contour_{phase_suffix}",
+                        f"SinusOfValsalva_Contour_{phase_suffix}",
+                        f"StentBestFit_Contour_{phase_suffix}",
                     ):
                         node = slicer.mrmlScene.GetFirstNodeByName(name)
                         if not node:

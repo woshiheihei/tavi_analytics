@@ -10,11 +10,11 @@ from enum import Enum
 from abc import ABC, abstractmethod
 
 
-class CriticalPlaneType(Enum):
-    """关键平面类型枚举"""
-    VALVE_STENT_BOTTOM = "plane_bootom"  # 瓣膜支架的最底端闭合曲线
-    SINUS_OF_VALSALVA = "plane_max"     # Sinus Of Valsalva的位置
-    STENT_BEST_FIT = "plane_0"          # 支架的best fit plane
+class CriticalContourType(Enum):
+    """关键轮廓类型枚举"""
+    VALVE_STENT_BOTTOM = "plane_bootom"  # 瓣膜支架的最底端闭合轮廓
+    SINUS_OF_VALSALVA = "plane_max"     # Sinus Of Valsalva的轮廓
+    STENT_BEST_FIT = "plane_0"          # 支架的best fit轮廓
 
 
 class CardiacPhase(Enum):
@@ -41,22 +41,22 @@ class VisualizationConfig:
         )
 
 
-class PlaneVisualizationManager:
-    """平面可视化管理器 - 统一管理所有显示属性配置"""
+class ContourVisualizationManager:
+    """轮廓可视化管理器 - 统一管理所有显示属性配置"""
     
     # 统一的显示配置
     VISUALIZATION_CONFIGS = {
-        CriticalPlaneType.VALVE_STENT_BOTTOM: VisualizationConfig(
+        CriticalContourType.VALVE_STENT_BOTTOM: VisualizationConfig(
             color=(0.0, 0.85, 0.4),  # 更鲜亮的青绿色，表示支架
             line_width=3.0,
             glyph_scale=1.5
         ),
-        CriticalPlaneType.SINUS_OF_VALSALVA: VisualizationConfig(
+        CriticalContourType.SINUS_OF_VALSALVA: VisualizationConfig(
             color=(0.1, 0.6, 1.0),  # 更亮的天蓝色，表示窦部
             line_width=2.5,
             glyph_scale=1.5
         ),
-        CriticalPlaneType.STENT_BEST_FIT: VisualizationConfig(
+        CriticalContourType.STENT_BEST_FIT: VisualizationConfig(
             color=(1.0, 0.55, 0.0),  # 亮橙色，表示支架拟合
             line_width=2.0,
             glyph_scale=1.5
@@ -64,9 +64,9 @@ class PlaneVisualizationManager:
     }
     
     @classmethod
-    def get_config(cls, plane_type: CriticalPlaneType) -> VisualizationConfig:
-        """获取指定平面类型的可视化配置"""
-        return cls.VISUALIZATION_CONFIGS.get(plane_type, VisualizationConfig.create_default_curve_config())
+    def get_config(cls, contour_type: CriticalContourType) -> VisualizationConfig:
+        """获取指定轮廓类型的可视化配置"""
+        return cls.VISUALIZATION_CONFIGS.get(contour_type, VisualizationConfig.create_default_curve_config())
     
     @classmethod
     def apply_display_properties(cls, display_node, config: VisualizationConfig):
@@ -127,8 +127,8 @@ class PlaneVisualizationManager:
                 pass
 
 
-class PlaneBase(ABC):
-    """平面基类 - 定义所有平面的通用接口"""
+class ContourBase(ABC):
+    """轮廓基类 - 定义所有轮廓的通用接口"""
     
     def __init__(self, cardiac_phase: Optional[str] = None):
         self.cardiac_phase = cardiac_phase
@@ -136,14 +136,14 @@ class PlaneBase(ABC):
     
     @property
     @abstractmethod
-    def plane_type(self) -> CriticalPlaneType:
-        """平面类型"""
+    def contour_type(self) -> CriticalContourType:
+        """轮廓类型"""
         pass
     
     @property
     @abstractmethod
     def description(self) -> str:
-        """平面描述"""
+        """轮廓描述"""
         pass
     
     @property
@@ -154,7 +154,7 @@ class PlaneBase(ABC):
     
     @abstractmethod
     def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据加载平面"""
+        """从数据加载轮廓"""
         pass
     
     @abstractmethod
@@ -174,7 +174,7 @@ class PlaneBase(ABC):
     
     @classmethod
     @abstractmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneBase':
+    def from_dict(cls, data: Dict[str, Any]) -> 'ContourBase':
         """从字典创建实例"""
         pass
     
@@ -210,44 +210,44 @@ class PlaneBase(ABC):
             return phase
 
 
-class PlaneFactory:
-    """平面工厂 - 负责创建和注册平面类型"""
+class ContourFactory:
+    """轮廓工厂 - 负责创建和注册轮廓类型"""
     
-    _registry: Dict[CriticalPlaneType, Type[PlaneBase]] = {}
-    
-    @classmethod
-    def register(cls, plane_type: CriticalPlaneType, plane_class: Type[PlaneBase]):
-        """注册平面类型"""
-        cls._registry[plane_type] = plane_class
-        logging.info(f"注册平面类型: {plane_type.value} -> {plane_class.__name__}")
+    _registry: Dict[CriticalContourType, Type[ContourBase]] = {}
     
     @classmethod
-    def create_plane(cls, plane_type: CriticalPlaneType, cardiac_phase: Optional[str] = None) -> Optional[PlaneBase]:
-        """创建平面实例"""
-        if plane_type not in cls._registry:
-            logging.warning(f"未注册的平面类型: {plane_type}")
+    def register(cls, contour_type: CriticalContourType, contour_class: Type[ContourBase]):
+        """注册轮廓类型"""
+        cls._registry[contour_type] = contour_class
+        logging.info(f"注册轮廓类型: {contour_type.value} -> {contour_class.__name__}")
+    
+    @classmethod
+    def create_contour(cls, contour_type: CriticalContourType, cardiac_phase: Optional[str] = None) -> Optional[ContourBase]:
+        """创建轮廓实例"""
+        if contour_type not in cls._registry:
+            logging.warning(f"未注册的轮廓类型: {contour_type}")
             return None
         
-        plane_class = cls._registry[plane_type]
-        return plane_class(cardiac_phase=cardiac_phase)
+        contour_class = cls._registry[contour_type]
+        return contour_class(cardiac_phase=cardiac_phase)
     
     @classmethod
-    def get_registered_types(cls) -> List[CriticalPlaneType]:
-        """获取所有已注册的平面类型"""
+    def get_registered_types(cls) -> List[CriticalContourType]:
+        """获取所有已注册的轮廓类型"""
         return list(cls._registry.keys())
     
     @classmethod
-    def load_plane_from_data(cls, plane_type: CriticalPlaneType, data: Dict[str, Any], cardiac_phase: Optional[str] = None) -> Optional[PlaneBase]:
-        """从数据创建并加载平面"""
-        plane = cls.create_plane(plane_type, cardiac_phase)
-        if plane and plane.load_from_data(data):
-            return plane
+    def load_contour_from_data(cls, contour_type: CriticalContourType, data: Dict[str, Any], cardiac_phase: Optional[str] = None) -> Optional[ContourBase]:
+        """从数据创建并加载轮廓"""
+        contour = cls.create_contour(contour_type, cardiac_phase)
+        if contour and contour.load_from_data(data):
+            return contour
         return None
 
 
 @dataclass
-class PlaneGeometry:
-    """平面几何数据基类"""
+class ContourGeometry:
+    """轮廓几何数据基类"""
     points: List[List[float]]           # 原始点集
     less_points: List[List[float]]      # 简化点集
     plane_params: List[float]           # 平面参数 [a, b, c, d]
@@ -299,8 +299,8 @@ class PlaneGeometry:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneGeometry':
-        """从字典创建平面几何对象"""
+    def from_dict(cls, data: Dict[str, Any]) -> 'ContourGeometry':
+        """从字典创建轮廓几何对象"""
         instance = cls(
             points=data.get('points', []),
             less_points=data.get('less_points', []),
@@ -331,13 +331,13 @@ class PlaneGeometry:
         """获取有效的点集（优先使用less_points）"""
         return self.less_points if self.less_points else self.points
     
-    def create_slicer_curve_node(self, node_name: str, plane_type: Optional[CriticalPlaneType] = None) -> Optional[str]:
+    def create_slicer_curve_node(self, node_name: str, contour_type: Optional[CriticalContourType] = None) -> Optional[str]:
         """
         在Slicer中创建曲线节点
         
         Args:
             node_name: 节点名称
-            plane_type: 平面类型，用于获取对应的可视化配置
+            contour_type: 轮廓类型，用于获取对应的可视化配置
             
         Returns:
             str: 创建的节点ID，失败返回None
@@ -403,14 +403,14 @@ class PlaneGeometry:
             # 应用可视化配置
             display_node = curve_node.GetDisplayNode()
             if display_node:
-                if plane_type:
-                    # 使用特定平面类型的配置
-                    config = PlaneVisualizationManager.get_config(plane_type)
-                    PlaneVisualizationManager.apply_display_properties(display_node, config)
+                if contour_type:
+                    # 使用特定轮廓类型的配置
+                    config = ContourVisualizationManager.get_config(contour_type)
+                    ContourVisualizationManager.apply_display_properties(display_node, config)
                 else:
                     # 使用默认配置
                     default_config = VisualizationConfig.create_default_curve_config()
-                    PlaneVisualizationManager.apply_display_properties(display_node, default_config)
+                    ContourVisualizationManager.apply_display_properties(display_node, default_config)
             
             self._slicer_node_id = curve_node.GetID()
             logging.info(f"成功创建平面曲线节点: {node_name} (ID: {self._slicer_node_id})")
@@ -446,13 +446,13 @@ class PlaneGeometry:
 
 
 @dataclass
-class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
-    """瓣膜支架最底端平面"""
+class ValveStentBottomContour(ContourGeometry, ContourBase):
+    """瓣膜支架最底端轮廓"""
     
     def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
                  ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
                  max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
-        # 初始化PlaneGeometry的数据
+        # 初始化ContourGeometry的数据
         super().__init__(
             points=points or [],
             less_points=less_points or [],
@@ -467,17 +467,17 @@ class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
             max_dist_pair=max_dist_pair or [],
             min_dist_pair=min_dist_pair or []
         )
-        # 初始化PlaneBase
-        PlaneBase.__init__(self, cardiac_phase)
+        # 初始化ContourBase
+        ContourBase.__init__(self, cardiac_phase)
     
     @property
-    def plane_type(self) -> CriticalPlaneType:
-        return CriticalPlaneType.VALVE_STENT_BOTTOM
+    def contour_type(self) -> CriticalContourType:
+        return CriticalContourType.VALVE_STENT_BOTTOM
     
     def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载平面数据"""
+        """从数据字典加载轮廓数据"""
         try:
-            # 设置PlaneGeometry的属性
+            # 设置ContourGeometry的属性
             self.points = data.get('points', [])
             self.less_points = data.get('less_points', [])
             self.plane_params = data.get('plane_params', [])
@@ -493,7 +493,7 @@ class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
             self._slicer_node_id = data.get('_slicer_node_id')
             return True
         except Exception as e:
-            logging.error(f"加载瓣膜支架底部平面数据失败: {e}")
+            logging.error(f"加载瓣膜支架底部轮廓数据失败: {e}")
             return False
     
     def get_measurements(self) -> Dict[str, float]:
@@ -502,12 +502,12 @@ class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
     
     @property
     def description(self) -> str:
-        return "瓣膜支架最底端闭合曲线"
+        return "瓣膜支架最底端闭合轮廓"
     
     @property
     def standard_node_name(self) -> str:
         """生成包含期像信息的标准节点名称"""
-        base_name = "ValveStent_Bottom_Plane"
+        base_name = "ValveStent_Bottom_Contour"
         if self.cardiac_phase:
             # 将期像转换为显示友好的名称
             phase_suffix = self._get_phase_suffix(self.cardiac_phase)
@@ -535,18 +535,18 @@ class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
     
     def create_visualization(self) -> bool:
         """创建可视化节点"""
-        node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalPlaneType.VALVE_STENT_BOTTOM)
+        node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.VALVE_STENT_BOTTOM)
         return node_id is not None
     
     def to_dict(self) -> Dict[str, Any]:
-        """将瓣膜支架底部平面数据转换为字典格式"""
+        """将瓣膜支架底部轮廓数据转换为字典格式"""
         base_dict = super().to_dict()
-        base_dict['plane_type'] = 'ValveStentBottomPlane'
+        base_dict['contour_type'] = 'ValveStentBottomContour'
         return base_dict
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomPlane':
-        """从字典创建瓣膜支架底部平面对象"""
+    def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomContour':
+        """从字典创建瓣膜支架底部轮廓对象"""
         instance = cls(
             points=data.get('points', []),
             less_points=data.get('less_points', []),
@@ -566,13 +566,13 @@ class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
 
 
 @dataclass
-class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
-    """Sinus Of Valsalva平面"""
+class SinusOfValsalvaContour(ContourGeometry, ContourBase):
+    """Sinus Of Valsalva轮廓"""
     
     def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
                  ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
                  max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
-        # 初始化PlaneGeometry的数据
+        # 初始化ContourGeometry的数据
         super().__init__(
             points=points or [],
             less_points=less_points or [],
@@ -587,17 +587,17 @@ class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
             max_dist_pair=max_dist_pair or [],
             min_dist_pair=min_dist_pair or []
         )
-        # 初始化PlaneBase
-        PlaneBase.__init__(self, cardiac_phase)
+        # 初始化ContourBase
+        ContourBase.__init__(self, cardiac_phase)
     
     @property
-    def plane_type(self) -> CriticalPlaneType:
-        return CriticalPlaneType.SINUS_OF_VALSALVA
+    def contour_type(self) -> CriticalContourType:
+        return CriticalContourType.SINUS_OF_VALSALVA
     
     def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载平面数据"""
+        """从数据字典加载轮廓数据"""
         try:
-            # 设置PlaneGeometry的属性
+            # 设置ContourGeometry的属性
             self.points = data.get('points', [])
             self.less_points = data.get('less_points', [])
             self.plane_params = data.get('plane_params', [])
@@ -613,7 +613,7 @@ class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
             self._slicer_node_id = data.get('_slicer_node_id')
             return True
         except Exception as e:
-            logging.error(f"加载Sinus Of Valsalva平面数据失败: {e}")
+            logging.error(f"加载Sinus Of Valsalva轮廓数据失败: {e}")
             return False
     
     def get_measurements(self) -> Dict[str, float]:
@@ -622,12 +622,12 @@ class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
     
     @property
     def description(self) -> str:
-        return "Sinus Of Valsalva位置平面"
+        return "Sinus Of Valsalva轮廓"
     
     @property
     def standard_node_name(self) -> str:
         """生成包含期像信息的标准节点名称"""
-        base_name = "SinusOfValsalva_Plane"
+        base_name = "SinusOfValsalva_Contour"
         if self.cardiac_phase:
             # 将期像转换为显示友好的名称
             phase_suffix = self._get_phase_suffix(self.cardiac_phase)
@@ -656,18 +656,18 @@ class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
     
     def create_visualization(self) -> bool:
         """创建可视化节点"""
-        node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalPlaneType.SINUS_OF_VALSALVA)
+        node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.SINUS_OF_VALSALVA)
         return node_id is not None
     
     def to_dict(self) -> Dict[str, Any]:
-        """将Sinus Of Valsalva平面数据转换为字典格式"""
+        """将Sinus Of Valsalva轮廓数据转换为字典格式"""
         base_dict = super().to_dict()
-        base_dict['plane_type'] = 'SinusOfValsalvaPlane'
+        base_dict['contour_type'] = 'SinusOfValsalvaContour'
         return base_dict
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaPlane':
-        """从字典创建Sinus Of Valsalva平面对象"""
+    def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaContour':
+        """从字典创建Sinus Of Valsalva轮廓对象"""
         instance = cls(
             points=data.get('points', []),
             less_points=data.get('less_points', []),
@@ -687,8 +687,8 @@ class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
 
 
 @dataclass
-class StentBestFitPlane(PlaneBase):
-    """支架最佳拟合平面"""
+class StentBestFitContour(ContourBase):
+    """支架最佳拟合轮廓"""
     
     def __init__(self, name="", plane_params=None, distance_to_zjd=0.0, points=None, cardiac_phase=None):
         super().__init__(cardiac_phase)
@@ -697,15 +697,15 @@ class StentBestFitPlane(PlaneBase):
         self.distance_to_zjd = distance_to_zjd  # 到某个参考点的距离
         self.points = points  # 添加点数据支持
         
-        # Slicer节点管理（对于这个平面，可能不创建曲线，而是创建平面节点）
+        # Slicer节点管理（对于这个轮廓，可能不创建曲线，而是创建平面节点）
         self._slicer_node_id: Optional[str] = None
     
     @property
-    def plane_type(self) -> CriticalPlaneType:
-        return CriticalPlaneType.STENT_BEST_FIT
+    def contour_type(self) -> CriticalContourType:
+        return CriticalContourType.STENT_BEST_FIT
     
     def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载平面数据"""
+        """从数据字典加载轮廓数据"""
         try:
             self.name = data.get('name', '')
             self.plane_params = data.get('plane_params')
@@ -714,7 +714,7 @@ class StentBestFitPlane(PlaneBase):
             self._slicer_node_id = data.get('_slicer_node_id')
             return True
         except Exception as e:
-            logging.error(f"加载支架拟合平面数据失败: {e}")
+            logging.error(f"加载支架拟合轮廓数据失败: {e}")
             return False
     
     def get_measurements(self) -> Dict[str, float]:
@@ -722,9 +722,9 @@ class StentBestFitPlane(PlaneBase):
         return self.get_distance_measurement()
     
     def to_dict(self) -> Dict[str, Any]:
-        """将支架最佳拟合平面数据转换为字典格式"""
+        """将支架最佳拟合轮廓数据转换为字典格式"""
         return {
-            'plane_type': 'StentBestFitPlane',
+            'contour_type': 'StentBestFitContour',
             'name': self.name,
             'plane_params': self.plane_params,
             'distance_to_zjd': self.distance_to_zjd,
@@ -734,8 +734,8 @@ class StentBestFitPlane(PlaneBase):
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitPlane':
-        """从字典创建支架最佳拟合平面对象"""
+    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitContour':
+        """从字典创建支架最佳拟合轮廓对象"""
         instance = cls(
             name=data.get('name', ''),
             plane_params=data.get('plane_params'),
@@ -748,12 +748,12 @@ class StentBestFitPlane(PlaneBase):
     
     @property
     def description(self) -> str:
-        return "支架最佳拟合平面"
+        return "支架最佳拟合轮廓"
     
     @property
     def standard_node_name(self) -> str:
         """生成包含期像信息的标准节点名称"""
-        base_name = "StentBestFit_Plane"
+        base_name = "StentBestFit_Contour"
         if self.cardiac_phase:
             # 将期像转换为显示友好的名称
             phase_suffix = self._get_phase_suffix(self.cardiac_phase)
@@ -806,7 +806,7 @@ class StentBestFitPlane(PlaneBase):
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitPlane':
+    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitContour':
         """从字典创建支架最佳拟合平面对象"""
         instance = cls(
             name=data.get('name', ''),
@@ -875,8 +875,8 @@ class StentBestFitPlane(PlaneBase):
                 # 应用统一的可视化配置
                 display_node = curve_node.GetDisplayNode()
                 if display_node:
-                    config = PlaneVisualizationManager.get_config(CriticalPlaneType.STENT_BEST_FIT)
-                    PlaneVisualizationManager.apply_display_properties(display_node, config)
+                    config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
+                    ContourVisualizationManager.apply_display_properties(display_node, config)
                 
                 self._slicer_node_id = curve_node.GetID()
                 logging.info(f"成功创建支架拟合闭合曲线: {self.standard_node_name}")
@@ -906,9 +906,9 @@ class StentBestFitPlane(PlaneBase):
                     # 应用统一的可视化配置（平面节点）
                     display_node = plane_node.GetDisplayNode()
                     if display_node:
-                        config = PlaneVisualizationManager.get_config(CriticalPlaneType.STENT_BEST_FIT)
+                        config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
                         # 复用统一样式，并稍微透明一些
-                        PlaneVisualizationManager.apply_display_properties(display_node, config)
+                        ContourVisualizationManager.apply_display_properties(display_node, config)
                         try:
                             display_node.SetOpacity(0.3)
                         except Exception:
@@ -930,8 +930,8 @@ class StentBestFitPlane(PlaneBase):
                 # 应用统一的可视化配置（标记点）
                 display_node = point_node.GetDisplayNode()
                 if display_node:
-                    config = PlaneVisualizationManager.get_config(CriticalPlaneType.STENT_BEST_FIT)
-                    PlaneVisualizationManager.apply_display_properties(display_node, config)
+                    config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
+                    ContourVisualizationManager.apply_display_properties(display_node, config)
                     # 放大标记点便于查看
                     try:
                         display_node.SetGlyphScale(3.0)
@@ -979,22 +979,22 @@ class StentBestFitPlane(PlaneBase):
                 logging.error(f"移除支架拟合平面节点失败: {e}")
 
 
-class PlaneDataManager:
+class ContourDataManager:
     """
-    平面数据管理器
-    负责管理和访问关键平面数据
+    轮廓数据管理器
+    负责管理和访问关键轮廓数据
     """
     
     def __init__(self, cardiac_phase: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
-        # 使用动态字典存储平面，替代硬编码字段
-        self._planes: Dict[CriticalPlaneType, PlaneBase] = {}
+        # 使用动态字典存储轮廓，替代硬编码字段
+        self._contours: Dict[CriticalContourType, ContourBase] = {}
         self._raw_data: Dict[str, Any] = {}
         self.cardiac_phase = cardiac_phase  # 期像信息：'end_diastole' 或 'end_systole'
     
     def load_from_measurement_json(self, measurement_data: Dict[str, Any]) -> bool:
         """
-        从measurement.json数据中加载关键平面
+        从measurement.json数据中加载关键轮廓
         
         Args:
             measurement_data: 从measurement.json解析的原始数据
@@ -1006,168 +1006,168 @@ class PlaneDataManager:
             self._raw_data = measurement_data.copy()
             success_count = 0
             
-            # 动态加载所有注册的平面类型
-            for plane_type in PlaneFactory.get_registered_types():
-                if self._load_plane_dynamic(measurement_data, plane_type):
+            # 动态加载所有注册的轮廓类型
+            for contour_type in ContourFactory.get_registered_types():
+                if self._load_contour_dynamic(measurement_data, contour_type):
                     success_count += 1
             
-            self.logger.info(f"成功加载 {success_count}/{len(PlaneFactory.get_registered_types())} 个关键平面")
+            self.logger.info(f"成功加载 {success_count}/{len(ContourFactory.get_registered_types())} 个关键轮廓")
             return success_count > 0
             
         except Exception as e:
-            self.logger.error(f"加载平面数据失败: {e}")
+            self.logger.error(f"加载轮廓数据失败: {e}")
             return False
     
-    def _load_plane_dynamic(self, data: Dict[str, Any], plane_type: CriticalPlaneType) -> bool:
-        """动态加载指定类型的平面"""
+    def _load_contour_dynamic(self, data: Dict[str, Any], contour_type: CriticalContourType) -> bool:
+        """动态加载指定类型的轮廓"""
         try:
-            plane_key = plane_type.value
-            if plane_key not in data:
-                self.logger.warning(f"未找到 {plane_key} 数据")
+            contour_key = contour_type.value
+            if contour_key not in data:
+                self.logger.warning(f"未找到 {contour_key} 数据")
                 return False
             
-            plane_data = data[plane_key]
+            contour_data = data[contour_key]
             
-            # 使用工厂创建平面实例
-            plane = PlaneFactory.load_plane_from_data(plane_type, plane_data, self.cardiac_phase)
-            if plane:
-                self._planes[plane_type] = plane
-                self.logger.info(f"成功加载{plane.description}")
+            # 使用工厂创建轮廓实例
+            contour = ContourFactory.load_contour_from_data(contour_type, contour_data, self.cardiac_phase)
+            if contour:
+                self._contours[contour_type] = contour
+                self.logger.info(f"成功加载{contour.description}")
                 return True
             else:
-                self.logger.error(f"创建{plane_type.value}平面失败")
+                self.logger.error(f"创建{contour_type.value}轮廓失败")
                 return False
                 
         except Exception as e:
-            self.logger.error(f"加载{plane_type.value}平面失败: {e}")
+            self.logger.error(f"加载{contour_type.value}轮廓失败: {e}")
             return False
     
-    # ========== 动态平面访问方法 ==========
-    def get_plane(self, plane_type: CriticalPlaneType) -> Optional[PlaneBase]:
-        """获取指定类型的平面"""
-        return self._planes.get(plane_type)
+    # ========== 动态轮廓访问方法 ==========
+    def get_contour(self, contour_type: CriticalContourType) -> Optional[ContourBase]:
+        """获取指定类型的轮廓"""
+        return self._contours.get(contour_type)
     
-    def set_plane(self, plane_type: CriticalPlaneType, plane: PlaneBase):
-        """设置指定类型的平面"""
-        self._planes[plane_type] = plane
+    def set_contour(self, contour_type: CriticalContourType, contour: ContourBase):
+        """设置指定类型的轮廓"""
+        self._contours[contour_type] = contour
     
-    def has_plane(self, plane_type: CriticalPlaneType) -> bool:
-        """检查是否有指定类型的平面"""
-        return plane_type in self._planes
+    def has_contour(self, contour_type: CriticalContourType) -> bool:
+        """检查是否有指定类型的轮廓"""
+        return contour_type in self._contours
     
-    def get_all_planes(self) -> List[PlaneBase]:
-        """获取所有已加载的平面"""
-        return list(self._planes.values())
+    def get_all_contours(self) -> List[ContourBase]:
+        """获取所有已加载的轮廓"""
+        return list(self._contours.values())
     
-    def get_loaded_plane_types(self) -> List[CriticalPlaneType]:
-        """获取所有已加载的平面类型"""
-        return list(self._planes.keys())
+    def get_loaded_contour_types(self) -> List[CriticalContourType]:
+        """获取所有已加载的轮廓类型"""
+        return list(self._contours.keys())
     
     # 业务访问方法（现在使用动态访问）
-    def get_valve_stent_bottom(self) -> Optional[ValveStentBottomPlane]:
-        """获取瓣膜支架底部平面"""
-        plane = self.get_plane(CriticalPlaneType.VALVE_STENT_BOTTOM)
-        return plane if isinstance(plane, ValveStentBottomPlane) else None
+    def get_valve_stent_bottom(self) -> Optional[ValveStentBottomContour]:
+        """获取瓣膜支架底部轮廓"""
+        contour = self.get_contour(CriticalContourType.VALVE_STENT_BOTTOM)
+        return contour if isinstance(contour, ValveStentBottomContour) else None
     
-    def get_sinus_of_valsalva(self) -> Optional[SinusOfValsalvaPlane]:
-        """获取Sinus Of Valsalva平面"""
-        plane = self.get_plane(CriticalPlaneType.SINUS_OF_VALSALVA)
-        return plane if isinstance(plane, SinusOfValsalvaPlane) else None
+    def get_sinus_of_valsalva(self) -> Optional[SinusOfValsalvaContour]:
+        """获取Sinus Of Valsalva轮廓"""
+        contour = self.get_contour(CriticalContourType.SINUS_OF_VALSALVA)
+        return contour if isinstance(contour, SinusOfValsalvaContour) else None
     
-    def get_stent_best_fit(self) -> Optional[StentBestFitPlane]:
-        """获取支架最佳拟合平面"""
-        plane = self.get_plane(CriticalPlaneType.STENT_BEST_FIT)
-        return plane if isinstance(plane, StentBestFitPlane) else None
+    def get_stent_best_fit(self) -> Optional[StentBestFitContour]:
+        """获取支架最佳拟合轮廓"""
+        contour = self.get_contour(CriticalContourType.STENT_BEST_FIT)
+        return contour if isinstance(contour, StentBestFitContour) else None
     
-    def has_critical_planes(self) -> bool:
-        """检查是否已加载关键平面"""
-        return len(self._planes) > 0
+    def has_critical_contours(self) -> bool:
+        """检查是否已加载关键轮廓"""
+        return len(self._contours) > 0
     
-    def get_loaded_planes_summary(self) -> Dict[str, bool]:
-        """获取已加载平面的摘要"""
+    def get_loaded_contours_summary(self) -> Dict[str, bool]:
+        """获取已加载轮廓的摘要"""
         return {
-            'valve_stent_bottom_loaded': self.has_plane(CriticalPlaneType.VALVE_STENT_BOTTOM),
-            'sinus_of_valsalva_loaded': self.has_plane(CriticalPlaneType.SINUS_OF_VALSALVA),
-            'stent_best_fit_loaded': self.has_plane(CriticalPlaneType.STENT_BEST_FIT),
-            'has_any_critical_plane': self.has_critical_planes()
+            'valve_stent_bottom_loaded': self.has_contour(CriticalContourType.VALVE_STENT_BOTTOM),
+            'sinus_of_valsalva_loaded': self.has_contour(CriticalContourType.SINUS_OF_VALSALVA),
+            'stent_best_fit_loaded': self.has_contour(CriticalContourType.STENT_BEST_FIT),
+            'has_any_critical_contour': self.has_critical_contours()
         }
     
     def get_all_measurements(self) -> Dict[str, Any]:
-        """获取所有平面的测量数据"""
+        """获取所有轮廓的测量数据"""
         measurements = {}
         
-        for plane_type, plane in self._planes.items():
+        for contour_type, contour in self._contours.items():
             try:
-                measurements[plane_type.value] = plane.get_measurements()
+                measurements[contour_type.value] = contour.get_measurements()
             except Exception as e:
-                self.logger.error(f"获取{plane_type.value}测量数据失败: {e}")
+                self.logger.error(f"获取{contour_type.value}测量数据失败: {e}")
         
         return measurements
     
     def clear(self):
-        """清空所有平面数据"""
+        """清空所有轮廓数据"""
         # 先移除可视化节点
         self.remove_all_visualizations()
         
-        self._planes.clear()
+        self._contours.clear()
         self._raw_data.clear()
-        self.logger.info("已清空所有平面数据")
+        self.logger.info("已清空所有轮廓数据")
     
     def clear_all(self):
-        """清空所有平面数据（兼容性方法）"""
+        """清空所有轮廓数据（兼容性方法）"""
         self.clear()
     
     # 可视化管理方法
     def create_all_visualizations(self) -> Dict[str, bool]:
-        """为所有已加载的平面创建可视化"""
+        """为所有已加载的轮廓创建可视化"""
         results = {}
         
-        for plane_type, plane in self._planes.items():
+        for contour_type, contour in self._contours.items():
             try:
-                results[plane_type.value] = plane.create_visualization()
+                results[contour_type.value] = contour.create_visualization()
             except Exception as e:
-                self.logger.error(f"创建{plane_type.value}可视化失败: {e}")
-                results[plane_type.value] = False
+                self.logger.error(f"创建{contour_type.value}可视化失败: {e}")
+                results[contour_type.value] = False
         
         success_count = sum(1 for success in results.values() if success)
         self.logger.info(f"可视化创建结果: {success_count}/{len(results)}个成功")
         return results
     
     def remove_all_visualizations(self):
-        """移除所有平面的可视化节点"""
-        for plane_type, plane in self._planes.items():
+        """移除所有轮廓的可视化节点"""
+        for contour_type, contour in self._contours.items():
             try:
-                plane.remove_slicer_node()
+                contour.remove_slicer_node()
             except Exception as e:
-                self.logger.error(f"移除{plane_type.value}可视化失败: {e}")
+                self.logger.error(f"移除{contour_type.value}可视化失败: {e}")
         
-        self.logger.info("已移除所有平面可视化节点")
+        self.logger.info("已移除所有轮廓可视化节点")
     
     def get_visualization_status(self) -> Dict[str, bool]:
-        """获取各平面的可视化状态"""
+        """获取各轮廓的可视化状态"""
         status = {}
         
-        for plane_type, plane in self._planes.items():
+        for contour_type, contour in self._contours.items():
             try:
-                status[plane_type.value] = plane.get_slicer_node() is not None
+                status[contour_type.value] = contour.get_slicer_node() is not None
             except:
-                status[plane_type.value] = False
+                status[contour_type.value] = False
         
         return status
     
     def get_business_summary(self) -> Dict[str, Any]:
         """获取完整的业务摘要信息"""
         summary = {
-            'loaded_planes': self.get_loaded_planes_summary(),
+            'loaded_contours': self.get_loaded_contours_summary(),
             'measurements': self.get_all_measurements(),
             'visualization_status': self.get_visualization_status(),
-            'plane_details': {}
+            'contour_details': {}
         }
         
-        # 添加详细的平面信息
+        # 添加详细的轮廓信息
         valve_stent_bottom = self.get_valve_stent_bottom()
         if valve_stent_bottom:
-            summary['plane_details']['valve_stent_bottom'] = {
+            summary['contour_details']['valve_stent_bottom'] = {
                 'description': valve_stent_bottom.description,
                 'point_count': len(valve_stent_bottom.points),
                 'area': valve_stent_bottom.area,
@@ -1176,7 +1176,7 @@ class PlaneDataManager:
         
         sinus_of_valsalva = self.get_sinus_of_valsalva()
         if sinus_of_valsalva:
-            summary['plane_details']['sinus_of_valsalva'] = {
+            summary['contour_details']['sinus_of_valsalva'] = {
                 'description': sinus_of_valsalva.description,
                 'point_count': len(sinus_of_valsalva.points),
                 'area': sinus_of_valsalva.area,
@@ -1185,7 +1185,7 @@ class PlaneDataManager:
         
         stent_best_fit = self.get_stent_best_fit()
         if stent_best_fit:
-            summary['plane_details']['stent_best_fit'] = {
+            summary['contour_details']['stent_best_fit'] = {
                 'description': stent_best_fit.description,
                 'has_valid_params': stent_best_fit.has_valid_params,
                 'distance_to_zjd': stent_best_fit.distance_to_zjd
@@ -1194,94 +1194,94 @@ class PlaneDataManager:
         return summary
     
     def to_dict(self) -> Dict[str, Any]:
-        """将平面管理器数据转换为字典格式"""
+        """将轮廓管理器数据转换为字典格式"""
         data = {
             'raw_data': self._raw_data,
             'cardiac_phase': self.cardiac_phase,
-            'planes': {}
+            'contours': {}
         }
         
-        # 动态序列化所有平面
-        for plane_type, plane in self._planes.items():
+        # 动态序列化所有轮廓
+        for contour_type, contour in self._contours.items():
             try:
-                data['planes'][plane_type.value] = plane.to_dict()
+                data['contours'][contour_type.value] = contour.to_dict()
             except Exception as e:
-                self.logger.error(f"序列化{plane_type.value}平面失败: {e}")
+                self.logger.error(f"序列化{contour_type.value}轮廓失败: {e}")
         
         # 为了向后兼容，也包含旧的字段名
-        data['valve_stent_bottom'] = data['planes'].get(CriticalPlaneType.VALVE_STENT_BOTTOM.value)
-        data['sinus_of_valsalva'] = data['planes'].get(CriticalPlaneType.SINUS_OF_VALSALVA.value)
-        data['stent_best_fit'] = data['planes'].get(CriticalPlaneType.STENT_BEST_FIT.value)
+        data['valve_stent_bottom'] = data['contours'].get(CriticalContourType.VALVE_STENT_BOTTOM.value)
+        data['sinus_of_valsalva'] = data['contours'].get(CriticalContourType.SINUS_OF_VALSALVA.value)
+        data['stent_best_fit'] = data['contours'].get(CriticalContourType.STENT_BEST_FIT.value)
         
         return data
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneDataManager':
-        """从字典创建平面管理器对象"""
+    def from_dict(cls, data: Dict[str, Any]) -> 'ContourDataManager':
+        """从字典创建轮廓管理器对象"""
         # 恢复期像信息
         cardiac_phase = data.get('cardiac_phase')
         manager = cls(cardiac_phase=cardiac_phase)
         manager._raw_data = data.get('raw_data', {})
         
-        # 首先尝试从新的planes字段加载
-        planes_data = data.get('planes', {})
-        for plane_type_str, plane_data in planes_data.items():
+        # 首先尝试从新的contours字段加载
+        contours_data = data.get('contours', {})
+        for contour_type_str, contour_data in contours_data.items():
             try:
-                # 查找对应的平面类型枚举
-                plane_type = None
-                for pt in CriticalPlaneType:
-                    if pt.value == plane_type_str:
-                        plane_type = pt
+                # 查找对应的轮廓类型枚举
+                contour_type = None
+                for ct in CriticalContourType:
+                    if ct.value == contour_type_str:
+                        contour_type = ct
                         break
                 
-                if plane_type:
-                    plane = PlaneFactory.load_plane_from_data(plane_type, plane_data, cardiac_phase)
-                    if plane:
-                        manager._planes[plane_type] = plane
+                if contour_type:
+                    contour = ContourFactory.load_contour_from_data(contour_type, contour_data, cardiac_phase)
+                    if contour:
+                        manager._contours[contour_type] = contour
             except Exception as e:
-                manager.logger.error(f"恢复{plane_type_str}平面失败: {e}")
+                manager.logger.error(f"恢复{contour_type_str}轮廓失败: {e}")
         
         # 向后兼容：从旧字段名加载（如果新格式没有数据）
-        if not manager._planes:
+        if not manager._contours:
             legacy_mappings = [
-                (CriticalPlaneType.VALVE_STENT_BOTTOM, 'valve_stent_bottom', ValveStentBottomPlane),
-                (CriticalPlaneType.SINUS_OF_VALSALVA, 'sinus_of_valsalva', SinusOfValsalvaPlane),
-                (CriticalPlaneType.STENT_BEST_FIT, 'stent_best_fit', StentBestFitPlane)
+                (CriticalContourType.VALVE_STENT_BOTTOM, 'valve_stent_bottom', ValveStentBottomContour),
+                (CriticalContourType.SINUS_OF_VALSALVA, 'sinus_of_valsalva', SinusOfValsalvaContour),
+                (CriticalContourType.STENT_BEST_FIT, 'stent_best_fit', StentBestFitContour)
             ]
             
-            for plane_type, field_name, plane_class in legacy_mappings:
-                plane_data = data.get(field_name)
-                if plane_data:
+            for contour_type, field_name, contour_class in legacy_mappings:
+                contour_data = data.get(field_name)
+                if contour_data:
                     try:
-                        plane = plane_class.from_dict(plane_data)
-                        if plane:
-                            plane.cardiac_phase = cardiac_phase
-                            manager._planes[plane_type] = plane
+                        contour = contour_class.from_dict(contour_data)
+                        if contour:
+                            contour.cardiac_phase = cardiac_phase
+                            manager._contours[contour_type] = contour
                     except Exception as e:
-                        manager.logger.error(f"恢复{field_name}平面失败: {e}")
+                        manager.logger.error(f"恢复{field_name}轮廓失败: {e}")
         
         return manager
 
 
 # ========== Phase-aware wrapper (非破坏性新增API) ==========
 @dataclass
-class PhasePlaneRepository:
-    """按期像归类的平面仓库
+class PhaseContourRepository:
+    """按期像归类的轮廓仓库
 
-    - 使用两个内部PlaneDataManager分别管理舒张末期与收缩末期的平面
-    - 不改变既有PlaneDataManager API，作为上层聚合器存在
+    - 使用两个内部ContourDataManager分别管理舒张末期与收缩末期的轮廓
+    - 不改变既有ContourDataManager API，作为上层聚合器存在
     """
-    diastole: PlaneDataManager
-    systole: PlaneDataManager
+    diastole: ContourDataManager
+    systole: ContourDataManager
 
     @classmethod
-    def create_default(cls) -> 'PhasePlaneRepository':
+    def create_default(cls) -> 'PhaseContourRepository':
         return cls(
-            diastole=PlaneDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value), 
-            systole=PlaneDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
+            diastole=ContourDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value), 
+            systole=ContourDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
         )
 
-    def get_manager(self, phase: Union[str, CardiacPhase]) -> PlaneDataManager:
+    def get_manager(self, phase: Union[str, CardiacPhase]) -> ContourDataManager:
         key = phase.value if isinstance(phase, CardiacPhase) else str(phase)
         if key == CardiacPhase.END_SYSTOLE.value:
             return self.systole
@@ -1299,9 +1299,9 @@ class PhasePlaneRepository:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PhasePlaneRepository':
-        di = PlaneDataManager.from_dict(data.get('diastole', {})) if data.get('diastole') else PlaneDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value)
-        sy = PlaneDataManager.from_dict(data.get('systole', {})) if data.get('systole') else PlaneDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
+    def from_dict(cls, data: Dict[str, Any]) -> 'PhaseContourRepository':
+        di = ContourDataManager.from_dict(data.get('diastole', {})) if data.get('diastole') else ContourDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value)
+        sy = ContourDataManager.from_dict(data.get('systole', {})) if data.get('systole') else ContourDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
         # 确保期像信息正确设置
         di.cardiac_phase = CardiacPhase.END_DIASTOLE.value
         sy.cardiac_phase = CardiacPhase.END_SYSTOLE.value
@@ -1309,13 +1309,13 @@ class PhasePlaneRepository:
 
     def get_loaded_summary(self) -> Dict[str, Any]:
         return {
-            CardiacPhase.END_DIASTOLE.value: self.diastole.get_loaded_planes_summary(),
-            CardiacPhase.END_SYSTOLE.value: self.systole.get_loaded_planes_summary(),
+            CardiacPhase.END_DIASTOLE.value: self.diastole.get_loaded_contours_summary(),
+            CardiacPhase.END_SYSTOLE.value: self.systole.get_loaded_contours_summary(),
         }
 
 
-# ========== 平面工厂注册 ==========
-# 注册所有平面类型到工厂
-PlaneFactory.register(CriticalPlaneType.VALVE_STENT_BOTTOM, ValveStentBottomPlane)
-PlaneFactory.register(CriticalPlaneType.SINUS_OF_VALSALVA, SinusOfValsalvaPlane)
-PlaneFactory.register(CriticalPlaneType.STENT_BEST_FIT, StentBestFitPlane)
+# ========== 轮廓工厂注册 ==========
+# 注册所有轮廓类型到工厂
+ContourFactory.register(CriticalContourType.VALVE_STENT_BOTTOM, ValveStentBottomContour)
+ContourFactory.register(CriticalContourType.SINUS_OF_VALSALVA, SinusOfValsalvaContour)
+ContourFactory.register(CriticalContourType.STENT_BEST_FIT, StentBestFitContour)

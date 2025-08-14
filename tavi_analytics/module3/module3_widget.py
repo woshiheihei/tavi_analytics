@@ -88,7 +88,7 @@ class Module3Widget(qt.QWidget):
             self.switch_to_valve_plane_btn.setText("🔄 正在切换...")
             
             # 执行切换
-            success = self.logic.switch_to_valve_stent_bottom_plane()
+            success = self.logic.switch_to_valve_stent_bottom_contour()
             
             if success:
                 logging.info("成功切换到ValveStent_Bottom_Plane平面")
@@ -196,21 +196,21 @@ class Module3Widget(qt.QWidget):
                 'end_systole': '收缩末期'
             }.get(current_phase, '未知期像')
             
-            # 检查平面可用性
-            availability = self.logic.check_plane_availability()
+            # 检查轮廓可用性
+            availability = self.logic.check_contour_availability()
             
             # 构建状态文本
-            status_lines = [f"📋 平面状态检查结果 (期像: {phase_display}):"]
+            status_lines = [f"📋 轮廓状态检查结果 (期像: {phase_display}):"]
             
-            plane_names = {
-                'valve_stent_bottom': 'ValveStent_Bottom_Plane (瓣膜支架底部)',
-                'sinus_of_valsalva': 'SinusOfValsalva_Plane (窦部)',
-                'stent_best_fit': 'StentBestFit_Plane (支架拟合)'
+            contour_names = {
+                'valve_stent_bottom': 'ValveStent_Bottom_Contour (瓣膜支架底部轮廓)',
+                'sinus_of_valsalva': 'SinusOfValsalva_Contour (窦部轮廓)',
+                'stent_best_fit': 'StentBestFit_Contour (支架拟合轮廓)'
             }
             
-            for plane_type, info in availability.items():
-                if plane_type in plane_names:
-                    plane_display_name = plane_names[plane_type]
+            for contour_type, info in availability.items():
+                if contour_type in contour_names:
+                    contour_display_name = contour_names[contour_type]
                     if info.get('available', False):
                         status_icon = "✅"
                         extra_info = ""
@@ -219,12 +219,12 @@ class Module3Widget(qt.QWidget):
                         # 显示期像感知的节点名称
                         if 'phase_aware_name' in info:
                             extra_info += f" [{info['phase_aware_name']}]"
-                        status_lines.append(f"{status_icon} {plane_display_name}{extra_info}")
+                        status_lines.append(f"{status_icon} {contour_display_name}{extra_info}")
                     else:
                         status_icon = "❌"
                         # 显示期像感知的节点名称（如果有）
                         missing_name = info.get('phase_aware_name', info.get('base_name', ''))
-                        status_lines.append(f"{status_icon} {plane_display_name} - 未找到 [{missing_name}]")
+                        status_lines.append(f"{status_icon} {contour_display_name} - 未找到 [{missing_name}]")
             
             # 更新状态显示
             status_text = "\n".join(status_lines)
