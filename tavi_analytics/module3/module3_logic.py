@@ -109,34 +109,6 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             logging.error(f"切换到SinusOfValsalva轮廓时出错: {e}")
             return False
     
-    def switch_to_stent_best_fit_contour(self, phase: Optional[str] = None) -> bool:
-        """
-        一键将当前MPR视图切换到StentBestFit轮廓
-        
-        Args:
-            phase: 指定期像，如果为None则使用当前期像
-        
-        Returns:
-            bool: 切换成功返回True
-        """
-        try:
-            use_phase = phase or self.current_phase
-            logging.info(f"开始切换到StentBestFit轮廓，期像: {use_phase}")
-            
-            # 使用轮廓定位服务执行切换
-            success = self.contour_service.switch_to_contour('stent_best_fit', phase=use_phase)
-            
-            if success:
-                logging.info("成功切换到StentBestFit轮廓")
-            else:
-                logging.error("切换到StentBestFit轮廓失败")
-            
-            return success
-            
-        except Exception as e:
-            logging.error(f"切换到StentBestFit轮廓时出错: {e}")
-            return False
-    
     def switch_to_sinus_of_valsalva_plane(self, phase: Optional[str] = None) -> bool:
         """
         一键将当前MPR视图切换到SinusOfValsalva_Plane平面
@@ -163,34 +135,6 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             
         except Exception as e:
             logging.error(f"切换到SinusOfValsalva_Plane平面时出错: {e}")
-            return False
-    
-    def switch_to_stent_best_fit_plane(self, phase: Optional[str] = None) -> bool:
-        """
-        一键将当前MPR视图切换到StentBestFit_Plane平面
-        
-        Args:
-            phase: 指定期像，如果为None则使用当前期像
-        
-        Returns:
-            bool: 切换成功返回True
-        """
-        try:
-            use_phase = phase or self.current_phase
-            logging.info(f"开始切换到StentBestFit_Plane平面，期像: {use_phase}")
-            
-            # 使用轮廓定位服务执行切换
-            success = self.contour_service.switch_to_contour('stent_best_fit', phase=use_phase)
-            
-            if success:
-                logging.info("成功切换到StentBestFit_Plane平面")
-            else:
-                logging.error("切换到StentBestFit_Plane平面失败")
-            
-            return success
-            
-        except Exception as e:
-            logging.error(f"切换到StentBestFit_Plane平面时出错: {e}")
             return False
     
     def switch_to_custom_plane(self, node_name: str, phase: Optional[str] = None) -> bool:
@@ -251,7 +195,7 @@ class Module3Logic(ScriptedLoadableModuleLogic):
         通用轮廓切换方法
         
         Args:
-            contour_type: 轮廓类型，支持 'valve_stent_bottom', 'sinus_of_valsalva', 'stent_best_fit'
+            contour_type: 轮廓类型，支持 'valve_stent_bottom', 'sinus_of_valsalva'
             phase: 指定期像，如果为None则使用当前期像
             
         Returns:
