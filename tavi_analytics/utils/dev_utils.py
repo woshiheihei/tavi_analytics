@@ -58,13 +58,23 @@ class DevUtils:
         except Exception:
             patient = {}
 
-        # 序列化平面数据管理器
-        plane_data = {}
+        # 序列化轮廓数据 - 支持新的PhaseContourRepository架构
+        contour_data = {}
         try:
-            if hasattr(session, 'contour_data_manager') and session.contour_data_manager:
-                contour_data = session.contour_data_manager.to_dict()
+            # 优先序列化新的PhaseContourRepository结构
+            if hasattr(session, 'phase_contour_repo') and session.phase_contour_repo:
+                contour_data = session.phase_contour_repo.to_dict()
+                logging.info("成功序列化PhaseContourRepository数据")
+            # 兼容旧版本：序列化单一的contour_data_manager
+            elif hasattr(session, 'contour_data_manager') and session.contour_data_manager:
+                # 将单一管理器包装为舒张末期数据（兼容格式）
+                contour_data = {
+                    'diastole': session.contour_data_manager.to_dict(),
+                    'systole': {}  # 空的收缩末期数据
+                }
+                logging.info("成功序列化兼容的contour_data_manager数据")
         except Exception as e:
-            logging.warning(f"序列化平面数据失败: {e}")
+            logging.warning(f"序列化轮廓数据失败: {e}")
 
         # 安全转换节点对象为ID字符串
         def safe_node_to_id(value):
@@ -106,7 +116,11 @@ class DevUtils:
             "segmentation_node_id": safe_node_to_id(session.segmentation_node_id),
             "landmark_node_ids": safe_dict_conversion(session.landmark_node_ids),
             "reconstructed_planes": safe_dict_conversion(session.reconstructed_planes),
-            "plane_data": plane_data,  # 新增平面数据序列化
+            "contour_data": contour_data,  # 修正：使用contour_data而不是空的plane_data
+            # 添加分期分割节点数据
+            "phase_segmentation_node_ids": safe_dict_conversion(
+                getattr(session, 'phase_segmentation_node_ids', {})
+            ),
         }
 
     @staticmethod
@@ -170,18 +184,52 @@ class DevUtils:
         session.landmark_node_ids = data.get("landmark_node_ids") or {}
         session.reconstructed_planes = data.get("reconstructed_planes") or {}
 
-        # 恢复轮廓数据管理器
+        # 恢复分期分割节点数据
+        phase_seg_ids = data.get("phase_segmentation_node_ids", {})
+        if hasattr(session, 'phase_segmentation_node_ids'):
+            session.phase_segmentation_node_ids.update(phase_seg_ids)
+
+        # 恢复轮廓数据 - 支持新的PhaseContourRepository架构
         contour_data = data.get("contour_data")
         if contour_data:
             try:
-                from core.domain_models import ContourDataManager
-                session.contour_data_manager = ContourDataManager.from_dict(contour_data)
-                logging.info("轮廓数据管理器已恢复")
+                # 导入必要的类
+                from core.domain_models import PhaseContourRepository, ContourDataManager
+                
+                # 检查是否是新的PhaseContourRepository格式
+                if isinstance(contour_data, dict) and ('diastole' in contour_data or 'systole' in contour_data):
+                    # 新格式：直接从字典恢复PhaseContourRepository
+                    session.phase_contour_repo = PhaseContourRepository.from_dict(contour_data)
+                    # 更新兼容性引用
+                    session.contour_data_manager = session.phase_contour_repo.diastole
+                    session.contour_manager = session.contour_data_manager
+                    logging.info("成功恢复PhaseContourRepository轮廓数据")
+                else:
+                    # 旧格式兼容：将单一轮廓数据作为舒张末期数据
+                    session.contour_data_manager = ContourDataManager.from_dict(contour_data)
+                    # 创建新的PhaseContourRepository并将数据复制到舒张末期
+                    session.phase_contour_repo = PhaseContourRepository.create_default()
+                    session.phase_contour_repo.diastole = session.contour_data_manager
+                    session.contour_manager = session.contour_data_manager
+                    logging.info("成功恢复兼容格式的轮廓数据")
+                    
             except Exception as e:
                 logging.warning(f"恢复轮廓数据失败: {e}")
                 # 创建新的空管理器
-                from core.domain_models import ContourDataManager
-                session.contour_data_manager = ContourDataManager()
+                from core.domain_models import PhaseContourRepository, ContourDataManager
+                session.phase_contour_repo = PhaseContourRepository.create_default()
+                session.contour_data_manager = session.phase_contour_repo.diastole
+                session.contour_manager = session.contour_data_manager
+        else:
+            # 没有轮廓数据时，确保有空的管理器
+            try:
+                from core.domain_models import PhaseContourRepository, ContourDataManager
+                session.phase_contour_repo = PhaseContourRepository.create_default()
+                session.contour_data_manager = session.phase_contour_repo.diastole
+                session.contour_manager = session.contour_data_manager
+                logging.info("创建了新的空轮廓数据管理器")
+            except Exception as e:
+                logging.warning(f"创建空轮廓管理器失败: {e}")
 
     @staticmethod
     def _apply_module_states(module_states: Dict[str, Any]) -> None:
