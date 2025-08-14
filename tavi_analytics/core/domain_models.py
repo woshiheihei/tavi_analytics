@@ -4,9 +4,10 @@ TAVI Analytics 领域模型
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Dict, List, Tuple, Optional, Any, Union, Type
 from dataclasses import dataclass
 from enum import Enum
+from abc import ABC, abstractmethod
 
 
 class CriticalPlaneType(Enum):
@@ -124,6 +125,124 @@ class PlaneVisualizationManager:
                 display_node.Modified()
             except Exception:
                 pass
+
+
+class PlaneBase(ABC):
+    """平面基类 - 定义所有平面的通用接口"""
+    
+    def __init__(self, cardiac_phase: Optional[str] = None):
+        self.cardiac_phase = cardiac_phase
+        self._slicer_node_id: Optional[str] = None
+    
+    @property
+    @abstractmethod
+    def plane_type(self) -> CriticalPlaneType:
+        """平面类型"""
+        pass
+    
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """平面描述"""
+        pass
+    
+    @property
+    @abstractmethod
+    def standard_node_name(self) -> str:
+        """标准节点名称"""
+        pass
+    
+    @abstractmethod
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据加载平面"""
+        pass
+    
+    @abstractmethod
+    def create_visualization(self) -> bool:
+        """创建可视化"""
+        pass
+    
+    @abstractmethod
+    def get_measurements(self) -> Dict[str, Any]:
+        """获取测量数据"""
+        pass
+    
+    @abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        pass
+    
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PlaneBase':
+        """从字典创建实例"""
+        pass
+    
+    def get_slicer_node(self):
+        """获取对应的Slicer节点"""
+        if not self._slicer_node_id:
+            return None
+        try:
+            import slicer
+            return slicer.mrmlScene.GetNodeByID(self._slicer_node_id)
+        except:
+            return None
+    
+    def remove_slicer_node(self):
+        """移除对应的Slicer节点"""
+        node = self.get_slicer_node()
+        if node:
+            try:
+                import slicer
+                slicer.mrmlScene.RemoveNode(node)
+                self._slicer_node_id = None
+                logging.info(f"已移除{self.description}节点")
+            except Exception as e:
+                logging.error(f"移除{self.description}节点失败: {e}")
+    
+    def _get_phase_suffix(self, phase: str) -> str:
+        """将期像转换为显示友好的后缀"""
+        if phase == 'end_diastole':
+            return 'End_Diastole'
+        elif phase == 'end_systole':
+            return 'End_Systole'
+        else:
+            return phase
+
+
+class PlaneFactory:
+    """平面工厂 - 负责创建和注册平面类型"""
+    
+    _registry: Dict[CriticalPlaneType, Type[PlaneBase]] = {}
+    
+    @classmethod
+    def register(cls, plane_type: CriticalPlaneType, plane_class: Type[PlaneBase]):
+        """注册平面类型"""
+        cls._registry[plane_type] = plane_class
+        logging.info(f"注册平面类型: {plane_type.value} -> {plane_class.__name__}")
+    
+    @classmethod
+    def create_plane(cls, plane_type: CriticalPlaneType, cardiac_phase: Optional[str] = None) -> Optional[PlaneBase]:
+        """创建平面实例"""
+        if plane_type not in cls._registry:
+            logging.warning(f"未注册的平面类型: {plane_type}")
+            return None
+        
+        plane_class = cls._registry[plane_type]
+        return plane_class(cardiac_phase=cardiac_phase)
+    
+    @classmethod
+    def get_registered_types(cls) -> List[CriticalPlaneType]:
+        """获取所有已注册的平面类型"""
+        return list(cls._registry.keys())
+    
+    @classmethod
+    def load_plane_from_data(cls, plane_type: CriticalPlaneType, data: Dict[str, Any], cardiac_phase: Optional[str] = None) -> Optional[PlaneBase]:
+        """从数据创建并加载平面"""
+        plane = cls.create_plane(plane_type, cardiac_phase)
+        if plane and plane.load_from_data(data):
+            return plane
+        return None
 
 
 @dataclass
@@ -327,8 +446,59 @@ class PlaneGeometry:
 
 
 @dataclass
-class ValveStentBottomPlane(PlaneGeometry):
+class ValveStentBottomPlane(PlaneGeometry, PlaneBase):
     """瓣膜支架最底端平面"""
+    
+    def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
+                 ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
+                 max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
+        # 初始化PlaneGeometry的数据
+        super().__init__(
+            points=points or [],
+            less_points=less_points or [],
+            plane_params=plane_params or [],
+            perimeter=perimeter,
+            area=area,
+            ped=ped,
+            aed=aed,
+            max_dist=max_dist,
+            min_dist=min_dist,
+            average_dist=average_dist,
+            max_dist_pair=max_dist_pair or [],
+            min_dist_pair=min_dist_pair or []
+        )
+        # 初始化PlaneBase
+        PlaneBase.__init__(self, cardiac_phase)
+    
+    @property
+    def plane_type(self) -> CriticalPlaneType:
+        return CriticalPlaneType.VALVE_STENT_BOTTOM
+    
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据字典加载平面数据"""
+        try:
+            # 设置PlaneGeometry的属性
+            self.points = data.get('points', [])
+            self.less_points = data.get('less_points', [])
+            self.plane_params = data.get('plane_params', [])
+            self.perimeter = data.get('perimeter', 0.0)
+            self.area = data.get('area', 0.0)
+            self.ped = data.get('PED', 0.0)
+            self.aed = data.get('AED', 0.0)
+            self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist = data.get('min_dist', 0.0)
+            self.average_dist = data.get('average_dist', 0.0)
+            self.max_dist_pair = data.get('max_dist_pair', [])
+            self.min_dist_pair = data.get('min_dist_pair', [])
+            self._slicer_node_id = data.get('_slicer_node_id')
+            return True
+        except Exception as e:
+            logging.error(f"加载瓣膜支架底部平面数据失败: {e}")
+            return False
+    
+    def get_measurements(self) -> Dict[str, float]:
+        """获取测量数据"""
+        return self.get_stent_diameter()
     
     @property
     def description(self) -> str:
@@ -396,8 +566,59 @@ class ValveStentBottomPlane(PlaneGeometry):
 
 
 @dataclass
-class SinusOfValsalvaPlane(PlaneGeometry):
+class SinusOfValsalvaPlane(PlaneGeometry, PlaneBase):
     """Sinus Of Valsalva平面"""
+    
+    def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
+                 ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
+                 max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
+        # 初始化PlaneGeometry的数据
+        super().__init__(
+            points=points or [],
+            less_points=less_points or [],
+            plane_params=plane_params or [],
+            perimeter=perimeter,
+            area=area,
+            ped=ped,
+            aed=aed,
+            max_dist=max_dist,
+            min_dist=min_dist,
+            average_dist=average_dist,
+            max_dist_pair=max_dist_pair or [],
+            min_dist_pair=min_dist_pair or []
+        )
+        # 初始化PlaneBase
+        PlaneBase.__init__(self, cardiac_phase)
+    
+    @property
+    def plane_type(self) -> CriticalPlaneType:
+        return CriticalPlaneType.SINUS_OF_VALSALVA
+    
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据字典加载平面数据"""
+        try:
+            # 设置PlaneGeometry的属性
+            self.points = data.get('points', [])
+            self.less_points = data.get('less_points', [])
+            self.plane_params = data.get('plane_params', [])
+            self.perimeter = data.get('perimeter', 0.0)
+            self.area = data.get('area', 0.0)
+            self.ped = data.get('PED', 0.0)
+            self.aed = data.get('AED', 0.0)
+            self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist = data.get('min_dist', 0.0)
+            self.average_dist = data.get('average_dist', 0.0)
+            self.max_dist_pair = data.get('max_dist_pair', [])
+            self.min_dist_pair = data.get('min_dist_pair', [])
+            self._slicer_node_id = data.get('_slicer_node_id')
+            return True
+        except Exception as e:
+            logging.error(f"加载Sinus Of Valsalva平面数据失败: {e}")
+            return False
+    
+    def get_measurements(self) -> Dict[str, float]:
+        """获取测量数据"""
+        return self.get_sinus_measurements()
     
     @property
     def description(self) -> str:
@@ -466,17 +687,64 @@ class SinusOfValsalvaPlane(PlaneGeometry):
 
 
 @dataclass
-class StentBestFitPlane:
+class StentBestFitPlane(PlaneBase):
     """支架最佳拟合平面"""
-    name: str
-    plane_params: Optional[List[float]]  # 可能为空字符串
-    distance_to_zjd: float              # 到某个参考点的距离
-    points: Optional[List[List[float]]] = None  # 添加点数据支持
     
-    # Slicer节点管理（对于这个平面，可能不创建曲线，而是创建平面节点）
-    _slicer_node_id: Optional[str] = None
-    # 期像信息，用于生成包含期像的节点名称
-    cardiac_phase: Optional[str] = None  # 'end_diastole' 或 'end_systole'
+    def __init__(self, name="", plane_params=None, distance_to_zjd=0.0, points=None, cardiac_phase=None):
+        super().__init__(cardiac_phase)
+        self.name = name
+        self.plane_params = plane_params  # 可能为空字符串
+        self.distance_to_zjd = distance_to_zjd  # 到某个参考点的距离
+        self.points = points  # 添加点数据支持
+        
+        # Slicer节点管理（对于这个平面，可能不创建曲线，而是创建平面节点）
+        self._slicer_node_id: Optional[str] = None
+    
+    @property
+    def plane_type(self) -> CriticalPlaneType:
+        return CriticalPlaneType.STENT_BEST_FIT
+    
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据字典加载平面数据"""
+        try:
+            self.name = data.get('name', '')
+            self.plane_params = data.get('plane_params')
+            self.distance_to_zjd = data.get('distance_to_zjd', 0.0)
+            self.points = data.get('points')
+            self._slicer_node_id = data.get('_slicer_node_id')
+            return True
+        except Exception as e:
+            logging.error(f"加载支架拟合平面数据失败: {e}")
+            return False
+    
+    def get_measurements(self) -> Dict[str, float]:
+        """获取测量数据"""
+        return self.get_distance_measurement()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将支架最佳拟合平面数据转换为字典格式"""
+        return {
+            'plane_type': 'StentBestFitPlane',
+            'name': self.name,
+            'plane_params': self.plane_params,
+            'distance_to_zjd': self.distance_to_zjd,
+            'points': self.points,
+            '_slicer_node_id': self._slicer_node_id,
+            'cardiac_phase': self.cardiac_phase
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitPlane':
+        """从字典创建支架最佳拟合平面对象"""
+        instance = cls(
+            name=data.get('name', ''),
+            plane_params=data.get('plane_params'),
+            distance_to_zjd=data.get('distance_to_zjd', 0.0),
+            points=data.get('points'),
+            cardiac_phase=data.get('cardiac_phase')
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
     
     @property
     def description(self) -> str:
@@ -719,9 +987,8 @@ class PlaneDataManager:
     
     def __init__(self, cardiac_phase: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
-        self._valve_stent_bottom: Optional[ValveStentBottomPlane] = None
-        self._sinus_of_valsalva: Optional[SinusOfValsalvaPlane] = None
-        self._stent_best_fit: Optional[StentBestFitPlane] = None
+        # 使用动态字典存储平面，替代硬编码字段
+        self._planes: Dict[CriticalPlaneType, PlaneBase] = {}
         self._raw_data: Dict[str, Any] = {}
         self.cardiac_phase = cardiac_phase  # 期像信息：'end_diastole' 或 'end_systole'
     
@@ -739,186 +1006,105 @@ class PlaneDataManager:
             self._raw_data = measurement_data.copy()
             success_count = 0
             
-            # 加载瓣膜支架底部平面
-            if self._load_valve_stent_bottom(measurement_data):
-                success_count += 1
-                
-            # 加载Sinus Of Valsalva平面
-            if self._load_sinus_of_valsalva(measurement_data):
-                success_count += 1
-                
-            # 加载支架最佳拟合平面
-            if self._load_stent_best_fit(measurement_data):
-                success_count += 1
+            # 动态加载所有注册的平面类型
+            for plane_type in PlaneFactory.get_registered_types():
+                if self._load_plane_dynamic(measurement_data, plane_type):
+                    success_count += 1
             
-            self.logger.info(f"成功加载 {success_count}/3 个关键平面")
+            self.logger.info(f"成功加载 {success_count}/{len(PlaneFactory.get_registered_types())} 个关键平面")
             return success_count > 0
             
         except Exception as e:
             self.logger.error(f"加载平面数据失败: {e}")
             return False
     
-    def _load_valve_stent_bottom(self, data: Dict[str, Any]) -> bool:
-        """加载瓣膜支架底部平面"""
+    def _load_plane_dynamic(self, data: Dict[str, Any], plane_type: CriticalPlaneType) -> bool:
+        """动态加载指定类型的平面"""
         try:
-            plane_key = CriticalPlaneType.VALVE_STENT_BOTTOM.value
+            plane_key = plane_type.value
             if plane_key not in data:
                 self.logger.warning(f"未找到 {plane_key} 数据")
                 return False
             
             plane_data = data[plane_key]
             
-            self._valve_stent_bottom = ValveStentBottomPlane(
-                points=plane_data.get('points', []),
-                less_points=plane_data.get('less_points', []),
-                plane_params=plane_data.get('plane_params', []),
-                perimeter=plane_data.get('perimeter', 0.0),
-                area=plane_data.get('area', 0.0),
-                ped=plane_data.get('PED', 0.0),
-                aed=plane_data.get('AED', 0.0),
-                max_dist=plane_data.get('max_dist', 0.0),
-                min_dist=plane_data.get('min_dist', 0.0),
-                average_dist=plane_data.get('average_dist', 0.0),
-                max_dist_pair=plane_data.get('max_dist_pair', []),
-                min_dist_pair=plane_data.get('min_dist_pair', [])
-            )
-            
-            # 设置期像信息
-            self._valve_stent_bottom.cardiac_phase = self.cardiac_phase
-            
-            if self._valve_stent_bottom.has_valid_geometry:
-                self.logger.info(f"成功加载瓣膜支架底部平面，面积: {self._valve_stent_bottom.area}")
+            # 使用工厂创建平面实例
+            plane = PlaneFactory.load_plane_from_data(plane_type, plane_data, self.cardiac_phase)
+            if plane:
+                self._planes[plane_type] = plane
+                self.logger.info(f"成功加载{plane.description}")
                 return True
             else:
-                self.logger.warning("瓣膜支架底部平面几何数据无效")
+                self.logger.error(f"创建{plane_type.value}平面失败")
                 return False
                 
         except Exception as e:
-            self.logger.error(f"加载瓣膜支架底部平面失败: {e}")
+            self.logger.error(f"加载{plane_type.value}平面失败: {e}")
             return False
     
-    def _load_sinus_of_valsalva(self, data: Dict[str, Any]) -> bool:
-        """加载Sinus Of Valsalva平面"""
-        try:
-            plane_key = CriticalPlaneType.SINUS_OF_VALSALVA.value
-            if plane_key not in data:
-                self.logger.warning(f"未找到 {plane_key} 数据")
-                return False
-            
-            plane_data = data[plane_key]
-            
-            self._sinus_of_valsalva = SinusOfValsalvaPlane(
-                points=plane_data.get('points', []),
-                less_points=plane_data.get('less_points', []),
-                plane_params=plane_data.get('plane_params', []),
-                perimeter=plane_data.get('perimeter', 0.0),
-                area=plane_data.get('area', 0.0),
-                ped=plane_data.get('PED', 0.0),
-                aed=plane_data.get('AED', 0.0),
-                max_dist=plane_data.get('max_dist', 0.0),
-                min_dist=plane_data.get('min_dist', 0.0),
-                average_dist=plane_data.get('average_dist', 0.0),
-                max_dist_pair=plane_data.get('max_dist_pair', []),
-                min_dist_pair=plane_data.get('min_dist_pair', [])
-            )
-            
-            # 设置期像信息
-            self._sinus_of_valsalva.cardiac_phase = self.cardiac_phase
-            
-            if self._sinus_of_valsalva.has_valid_geometry:
-                self.logger.info(f"成功加载Sinus Of Valsalva平面，面积: {self._sinus_of_valsalva.area}")
-                return True
-            else:
-                self.logger.warning("Sinus Of Valsalva平面几何数据无效")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"加载Sinus Of Valsalva平面失败: {e}")
-            return False
+    # ========== 动态平面访问方法 ==========
+    def get_plane(self, plane_type: CriticalPlaneType) -> Optional[PlaneBase]:
+        """获取指定类型的平面"""
+        return self._planes.get(plane_type)
     
-    def _load_stent_best_fit(self, data: Dict[str, Any]) -> bool:
-        """加载支架最佳拟合平面"""
-        try:
-            plane_key = CriticalPlaneType.STENT_BEST_FIT.value
-            if plane_key not in data:
-                self.logger.warning(f"未找到 {plane_key} 数据")
-                return False
-            
-            plane_data = data[plane_key]
-            
-            # 处理可能为空字符串的plane_params
-            plane_params = plane_data.get('plane_params')
-            if isinstance(plane_params, str) and plane_params == "":
-                plane_params = None
-            
-            # 尝试提取点数据（用于创建闭合曲线）
-            points = None
-            for points_field in ['points', 'curve_points', 'less_points']:
-                if points_field in plane_data:
-                    candidate_points = plane_data[points_field]
-                    if isinstance(candidate_points, list) and len(candidate_points) >= 3:
-                        # 验证点数据格式
-                        valid_points = []
-                        for point in candidate_points:
-                            if isinstance(point, list) and len(point) >= 3:
-                                valid_points.append([float(point[0]), float(point[1]), float(point[2])])
-                        
-                        if len(valid_points) >= 3:
-                            points = valid_points
-                            self.logger.info(f"从 {points_field} 字段加载了 {len(points)} 个点用于支架最佳拟合平面")
-                            break
-            
-            self._stent_best_fit = StentBestFitPlane(
-                name=plane_data.get('name', plane_key),
-                plane_params=plane_params,
-                distance_to_zjd=plane_data.get('dis_to_zjd', 0.0),
-                points=points
-            )
-            
-            # 设置期像信息
-            self._stent_best_fit.cardiac_phase = self.cardiac_phase
-            
-            # 输出加载信息
-            info_parts = [f"到参考点距离: {self._stent_best_fit.distance_to_zjd}"]
-            if self._stent_best_fit.has_curve_points:
-                info_parts.append(f"包含 {len(points)} 个曲线点")
-            if self._stent_best_fit.has_valid_params:
-                info_parts.append("包含平面参数")
-            
-            self.logger.info(f"成功加载支架最佳拟合平面，{', '.join(info_parts)}")
-            return True
-                
-        except Exception as e:
-            self.logger.error(f"加载支架最佳拟合平面失败: {e}")
-            return False
+    def set_plane(self, plane_type: CriticalPlaneType, plane: PlaneBase):
+        """设置指定类型的平面"""
+        self._planes[plane_type] = plane
     
-    # 业务访问方法
+    def has_plane(self, plane_type: CriticalPlaneType) -> bool:
+        """检查是否有指定类型的平面"""
+        return plane_type in self._planes
+    
+    def get_all_planes(self) -> List[PlaneBase]:
+        """获取所有已加载的平面"""
+        return list(self._planes.values())
+    
+    def get_loaded_plane_types(self) -> List[CriticalPlaneType]:
+        """获取所有已加载的平面类型"""
+        return list(self._planes.keys())
+    
+    # ========== 兼容性访问器（向后兼容） ==========
+    @property 
+    def valve_stent_bottom(self) -> Optional[ValveStentBottomPlane]:
+        """瓣膜支架底部平面（兼容性访问器）"""
+        plane = self.get_plane(CriticalPlaneType.VALVE_STENT_BOTTOM)
+        return plane if isinstance(plane, ValveStentBottomPlane) else None
+    
+    @property
+    def sinus_of_valsalva(self) -> Optional[SinusOfValsalvaPlane]:
+        """Sinus Of Valsalva平面（兼容性访问器）"""
+        plane = self.get_plane(CriticalPlaneType.SINUS_OF_VALSALVA)
+        return plane if isinstance(plane, SinusOfValsalvaPlane) else None
+    
+    @property
+    def stent_best_fit(self) -> Optional[StentBestFitPlane]:
+        """支架最佳拟合平面（兼容性访问器）"""
+        plane = self.get_plane(CriticalPlaneType.STENT_BEST_FIT)
+        return plane if isinstance(plane, StentBestFitPlane) else None
+    
+    # 业务访问方法（现在使用动态访问）
     def get_valve_stent_bottom(self) -> Optional[ValveStentBottomPlane]:
         """获取瓣膜支架底部平面"""
-        return self._valve_stent_bottom
+        return self.valve_stent_bottom
     
     def get_sinus_of_valsalva(self) -> Optional[SinusOfValsalvaPlane]:
         """获取Sinus Of Valsalva平面"""
-        return self._sinus_of_valsalva
+        return self.sinus_of_valsalva
     
     def get_stent_best_fit(self) -> Optional[StentBestFitPlane]:
         """获取支架最佳拟合平面"""
-        return self._stent_best_fit
+        return self.stent_best_fit
     
     def has_critical_planes(self) -> bool:
         """检查是否已加载关键平面"""
-        return any([
-            self._valve_stent_bottom is not None,
-            self._sinus_of_valsalva is not None,
-            self._stent_best_fit is not None
-        ])
+        return len(self._planes) > 0
     
     def get_loaded_planes_summary(self) -> Dict[str, bool]:
         """获取已加载平面的摘要"""
         return {
-            'valve_stent_bottom_loaded': self._valve_stent_bottom is not None,
-            'sinus_of_valsalva_loaded': self._sinus_of_valsalva is not None,
-            'stent_best_fit_loaded': self._stent_best_fit is not None,
+            'valve_stent_bottom_loaded': self.has_plane(CriticalPlaneType.VALVE_STENT_BOTTOM),
+            'sinus_of_valsalva_loaded': self.has_plane(CriticalPlaneType.SINUS_OF_VALSALVA),
+            'stent_best_fit_loaded': self.has_plane(CriticalPlaneType.STENT_BEST_FIT),
             'has_any_critical_plane': self.has_critical_planes()
         }
     
@@ -926,14 +1112,11 @@ class PlaneDataManager:
         """获取所有平面的测量数据"""
         measurements = {}
         
-        if self._valve_stent_bottom:
-            measurements['valve_stent_bottom'] = self._valve_stent_bottom.get_stent_diameter()
-            
-        if self._sinus_of_valsalva:
-            measurements['sinus_of_valsalva'] = self._sinus_of_valsalva.get_sinus_measurements()
-            
-        if self._stent_best_fit:
-            measurements['stent_best_fit'] = self._stent_best_fit.get_distance_measurement()
+        for plane_type, plane in self._planes.items():
+            try:
+                measurements[plane_type.value] = plane.get_measurements()
+            except Exception as e:
+                self.logger.error(f"获取{plane_type.value}测量数据失败: {e}")
         
         return measurements
     
@@ -942,9 +1125,7 @@ class PlaneDataManager:
         # 先移除可视化节点
         self.remove_all_visualizations()
         
-        self._valve_stent_bottom = None
-        self._sinus_of_valsalva = None
-        self._stent_best_fit = None
+        self._planes.clear()
         self._raw_data.clear()
         self.logger.info("已清空所有平面数据")
     
@@ -957,14 +1138,12 @@ class PlaneDataManager:
         """为所有已加载的平面创建可视化"""
         results = {}
         
-        if self._valve_stent_bottom:
-            results["valve_stent_bottom"] = self._valve_stent_bottom.create_visualization()
-        
-        if self._sinus_of_valsalva:
-            results["sinus_of_valsalva"] = self._sinus_of_valsalva.create_visualization()
-        
-        if self._stent_best_fit:
-            results["stent_best_fit"] = self._stent_best_fit.create_visualization()
+        for plane_type, plane in self._planes.items():
+            try:
+                results[plane_type.value] = plane.create_visualization()
+            except Exception as e:
+                self.logger.error(f"创建{plane_type.value}可视化失败: {e}")
+                results[plane_type.value] = False
         
         success_count = sum(1 for success in results.values() if success)
         self.logger.info(f"可视化创建结果: {success_count}/{len(results)}个成功")
@@ -972,14 +1151,11 @@ class PlaneDataManager:
     
     def remove_all_visualizations(self):
         """移除所有平面的可视化节点"""
-        if self._valve_stent_bottom:
-            self._valve_stent_bottom.remove_slicer_node()
-        
-        if self._sinus_of_valsalva:
-            self._sinus_of_valsalva.remove_slicer_node()
-        
-        if self._stent_best_fit:
-            self._stent_best_fit.remove_slicer_node()
+        for plane_type, plane in self._planes.items():
+            try:
+                plane.remove_slicer_node()
+            except Exception as e:
+                self.logger.error(f"移除{plane_type.value}可视化失败: {e}")
         
         self.logger.info("已移除所有平面可视化节点")
     
@@ -987,7 +1163,11 @@ class PlaneDataManager:
         """获取各平面的可视化状态"""
         status = {}
         
-        if self._valve_stent_bottom:
+        for plane_type, plane in self._planes.items():
+            try:
+                status[plane_type.value] = plane.get_slicer_node() is not None
+            except:
+                status[plane_type.value] = False
             node = self._valve_stent_bottom.get_slicer_node()
             status["valve_stent_bottom"] = node is not None
         
@@ -1041,19 +1221,20 @@ class PlaneDataManager:
         data = {
             'raw_data': self._raw_data,
             'cardiac_phase': self.cardiac_phase,
-            'valve_stent_bottom': None,
-            'sinus_of_valsalva': None,
-            'stent_best_fit': None
+            'planes': {}
         }
         
-        if self._valve_stent_bottom:
-            data['valve_stent_bottom'] = self._valve_stent_bottom.to_dict()
+        # 动态序列化所有平面
+        for plane_type, plane in self._planes.items():
+            try:
+                data['planes'][plane_type.value] = plane.to_dict()
+            except Exception as e:
+                self.logger.error(f"序列化{plane_type.value}平面失败: {e}")
         
-        if self._sinus_of_valsalva:
-            data['sinus_of_valsalva'] = self._sinus_of_valsalva.to_dict()
-        
-        if self._stent_best_fit:
-            data['stent_best_fit'] = self._stent_best_fit.to_dict()
+        # 为了向后兼容，也包含旧的字段名
+        data['valve_stent_bottom'] = data['planes'].get(CriticalPlaneType.VALVE_STENT_BOTTOM.value)
+        data['sinus_of_valsalva'] = data['planes'].get(CriticalPlaneType.SINUS_OF_VALSALVA.value)
+        data['stent_best_fit'] = data['planes'].get(CriticalPlaneType.STENT_BEST_FIT.value)
         
         return data
     
@@ -1065,20 +1246,42 @@ class PlaneDataManager:
         manager = cls(cardiac_phase=cardiac_phase)
         manager._raw_data = data.get('raw_data', {})
         
-        # 恢复瓣膜支架底部平面
-        valve_stent_data = data.get('valve_stent_bottom')
-        if valve_stent_data:
-            manager._valve_stent_bottom = ValveStentBottomPlane.from_dict(valve_stent_data)
+        # 首先尝试从新的planes字段加载
+        planes_data = data.get('planes', {})
+        for plane_type_str, plane_data in planes_data.items():
+            try:
+                # 查找对应的平面类型枚举
+                plane_type = None
+                for pt in CriticalPlaneType:
+                    if pt.value == plane_type_str:
+                        plane_type = pt
+                        break
+                
+                if plane_type:
+                    plane = PlaneFactory.load_plane_from_data(plane_type, plane_data, cardiac_phase)
+                    if plane:
+                        manager._planes[plane_type] = plane
+            except Exception as e:
+                manager.logger.error(f"恢复{plane_type_str}平面失败: {e}")
         
-        # 恢复Sinus Of Valsalva平面
-        sinus_data = data.get('sinus_of_valsalva')
-        if sinus_data:
-            manager._sinus_of_valsalva = SinusOfValsalvaPlane.from_dict(sinus_data)
-        
-        # 恢复支架最佳拟合平面
-        stent_data = data.get('stent_best_fit')
-        if stent_data:
-            manager._stent_best_fit = StentBestFitPlane.from_dict(stent_data)
+        # 向后兼容：从旧字段名加载（如果新格式没有数据）
+        if not manager._planes:
+            legacy_mappings = [
+                (CriticalPlaneType.VALVE_STENT_BOTTOM, 'valve_stent_bottom', ValveStentBottomPlane),
+                (CriticalPlaneType.SINUS_OF_VALSALVA, 'sinus_of_valsalva', SinusOfValsalvaPlane),
+                (CriticalPlaneType.STENT_BEST_FIT, 'stent_best_fit', StentBestFitPlane)
+            ]
+            
+            for plane_type, field_name, plane_class in legacy_mappings:
+                plane_data = data.get(field_name)
+                if plane_data:
+                    try:
+                        plane = plane_class.from_dict(plane_data)
+                        if plane:
+                            plane.cardiac_phase = cardiac_phase
+                            manager._planes[plane_type] = plane
+                    except Exception as e:
+                        manager.logger.error(f"恢复{field_name}平面失败: {e}")
         
         return manager
 
@@ -1132,3 +1335,10 @@ class PhasePlaneRepository:
             CardiacPhase.END_DIASTOLE.value: self.diastole.get_loaded_planes_summary(),
             CardiacPhase.END_SYSTOLE.value: self.systole.get_loaded_planes_summary(),
         }
+
+
+# ========== 平面工厂注册 ==========
+# 注册所有平面类型到工厂
+PlaneFactory.register(CriticalPlaneType.VALVE_STENT_BOTTOM, ValveStentBottomPlane)
+PlaneFactory.register(CriticalPlaneType.SINUS_OF_VALSALVA, SinusOfValsalvaPlane)
+PlaneFactory.register(CriticalPlaneType.STENT_BEST_FIT, StentBestFitPlane)

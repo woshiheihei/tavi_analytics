@@ -35,6 +35,7 @@ class PhaseSelectionWidget(qt.QWidget):
     - 自动期像切换
     - 期像状态检查
     - 状态更新回调
+    - 分割和平面的显示/隐藏管理
     """
     
     # 定义信号
@@ -53,6 +54,17 @@ class PhaseSelectionWidget(qt.QWidget):
         
         self.session = session
         self.current_phase = None  # 当前选择的期像
+        
+        # 期像相关节点命名模式
+        self.phase_suffixes = {
+            'diastole': 'End_Diastole',
+            'systole': 'End_Systole'
+        }
+        # 领域模型使用的期像键（与CardiacPhase保持一致）
+        self.phase_domain_keys = {
+            'diastole': 'end_diastole',
+            'systole': 'end_systole',
+        }
         
         # 设置组件属性
         self.setObjectName("PhaseSelectionWidget")
@@ -157,15 +169,221 @@ class PhaseSelectionWidget(qt.QWidget):
     
     def set_current_phase(self, phase: str):
         """
-        设置当前期像并更新按钮状态
+        设置当前期像并更新按钮状态以及节点可视化
         
         Args:
             phase: 期像类型 ('diastole' 或 'systole')
         """
         if phase in ['diastole', 'systole']:
+            old_phase = self.current_phase
             self.current_phase = phase
             self._update_phase_button_states(active_phase=phase)
+            
+            # 管理节点可视化：隐藏旧期像，显示新期像
+            self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
+            
             logging.info(f"期像设置为: {phase}")
+    
+    def _manage_phase_visibility(self, active_phase: str, inactive_phase: Optional[str] = None):
+        """
+        管理期像相关节点的可视化状态
+        
+        Args:
+            active_phase: 要显示的期像 ('diastole' 或 'systole')
+            inactive_phase: 要隐藏的期像 ('diastole' 或 'systole')，为None时隐藏所有其他期像
+        """
+        try:
+            # 隐藏非活动期像的节点
+            phases_to_hide = []
+            if inactive_phase:
+                phases_to_hide = [inactive_phase]
+            else:
+                # 隐藏所有其他期像
+                phases_to_hide = [p for p in ['diastole', 'systole'] if p != active_phase]
+            
+            for phase in phases_to_hide:
+                self._set_phase_nodes_visibility(phase, visible=False)
+            
+            # 显示活动期像的节点
+            self._set_phase_nodes_visibility(active_phase, visible=True)
+            
+            logging.info(f"期像可视化管理完成: 显示 {active_phase}, 隐藏 {phases_to_hide}")
+            
+        except Exception as e:
+            logging.error(f"管理期像可视化失败: {e}")
+    
+    def _set_phase_nodes_visibility(self, phase: str, visible: bool):
+        """
+        设置指定期像的所有节点的可视化状态
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+            visible: 是否可见
+        """
+        try:
+            import slicer
+
+            # 转换为领域模型的期像键
+            phase_key = self.phase_domain_keys.get(phase)
+            if not phase_key:
+                logging.warning(f"未知期像: {phase}")
+                return
+
+            toggled_any = False
+
+            # 1) 分割节点：从会话聚合根获取
+            try:
+                seg_node = None
+                if hasattr(self.session, 'get_phase_segmentation_node'):
+                    seg_node = self.session.get_phase_segmentation_node(phase_key)
+                if seg_node:
+                    seg_disp = seg_node.GetDisplayNode()
+                    if seg_disp:
+                        # 设置主要可视化状态
+                        seg_disp.SetVisibility(visible)
+                        
+                        # 3D 显示控制
+                        try:
+                            seg_disp.SetVisibility3D(visible)
+                        except Exception:
+                            pass
+                        
+                        # 2D 显示控制 - 避免同时关闭Fill和Outline导致的无效状态
+                        try:
+                            if visible:
+                                # 显示时：启用Fill和Outline
+                                seg_disp.SetVisibility2DFill(True)
+                                seg_disp.SetVisibility2DOutline(True)
+                            else:
+                                # 隐藏时：只关闭Fill，保持Outline开启以避免无效状态
+                                seg_disp.SetVisibility2DFill(False)
+                                # 保持Outline开启，但通过主可视化状态控制整体显示
+                                # seg_disp.SetVisibility2DOutline(True)  # 保持开启状态
+                        except Exception:
+                            pass
+                        
+                        logging.info(f"设置分割(phase={phase_key}) 可视化: {visible}")
+                        toggled_any = True
+            except Exception as e:
+                logging.warning(f"更新分割可视化失败(phase={phase_key}): {e}")
+
+            # 2) 平面节点：通过PhasePlaneRepository -> PlaneDataManager -> 所有平面对象
+            try:
+                plane_mgr = None
+                if hasattr(self.session, 'get_phase_plane_manager'):
+                    plane_mgr = self.session.get_phase_plane_manager(phase_key)
+                if plane_mgr and hasattr(plane_mgr, 'get_all_planes'):
+                    # 使用领域模型的通用API获取所有平面，而不是硬编码特定类型
+                    planes = plane_mgr.get_all_planes()
+                    for plane in planes:
+                        if not plane:
+                            continue
+
+                        # 获取或按需创建可视化节点（仅在需要显示时创建）
+                        node = plane.get_slicer_node() if hasattr(plane, 'get_slicer_node') else None
+                        if visible and node is None and hasattr(plane, 'create_visualization'):
+                            try:
+                                created = plane.create_visualization()
+                                if created:
+                                    node = plane.get_slicer_node()
+                            except Exception:
+                                pass
+
+                        if node is None:
+                            continue
+
+                        disp = node.GetDisplayNode()
+                        if disp:
+                            try:
+                                disp.SetVisibility(visible)
+                            except Exception:
+                                pass
+                            # Markups/模型显示
+                            for fn in ('SetVisibility2D', 'SetVisibility3D'):
+                                try:
+                                    getattr(disp, fn)(visible)
+                                except Exception:
+                                    pass
+                            toggled_any = True
+            except Exception as e:
+                logging.warning(f"更新平面可视化失败(phase={phase_key}): {e}")
+
+            # 3) 兜底：若领域模型未能定位任何节点，退回到名称匹配（保证兼容性）
+            if not toggled_any:
+                phase_suffix = self.phase_suffixes.get(phase)
+                if phase_suffix:
+                    # 分割节点名称兜底
+                    for name in (
+                        f"Auto_Analysis_Segmentation_{phase_suffix}",
+                        f"TAVR_Segmentation_{phase_suffix}",
+                        f"Segmentation_{phase_suffix}",
+                    ):
+                        node = slicer.mrmlScene.GetFirstNodeByName(name)
+                        if not node:
+                            continue
+                        disp = node.GetDisplayNode()
+                        if not disp:
+                            continue
+                        try:
+                            disp.SetVisibility(visible)
+                            disp.SetVisibility3D(visible)
+                            
+                            # 避免同时关闭Fill和Outline导致的无效状态
+                            if visible:
+                                disp.SetVisibility2DFill(True)
+                                disp.SetVisibility2DOutline(True)
+                            else:
+                                # 隐藏时：只关闭Fill，保持Outline以避免无效状态
+                                disp.SetVisibility2DFill(False)
+                                # disp.SetVisibility2DOutline(True)  # 保持开启
+                            
+                            toggled_any = True
+                        except Exception:
+                            pass
+                    # 平面节点名称兜底
+                    for name in (
+                        f"ValveStent_Bottom_Plane_{phase_suffix}",
+                        f"SinusOfValsalva_Plane_{phase_suffix}",
+                        f"StentBestFit_Plane_{phase_suffix}",
+                    ):
+                        node = slicer.mrmlScene.GetFirstNodeByName(name)
+                        if not node:
+                            continue
+                        disp = node.GetDisplayNode()
+                        if not disp:
+                            continue
+                        try:
+                            disp.SetVisibility(visible)
+                            for fn in ('SetVisibility2D', 'SetVisibility3D'):
+                                try:
+                                    getattr(disp, fn)(visible)
+                                except Exception:
+                                    pass
+                            toggled_any = True
+                        except Exception:
+                            pass
+
+        except Exception as e:
+            logging.error(f"设置期像 {phase} 节点可视化失败: {e}")
+    
+    def show_only_current_phase(self):
+        """
+        只显示当前期像的节点，隐藏其他期像的节点
+        """
+        if self.current_phase:
+            self._manage_phase_visibility(self.current_phase)
+        else:
+            # 如果没有选择期像，隐藏所有期像相关节点
+            for phase in ['diastole', 'systole']:
+                self._set_phase_nodes_visibility(phase, visible=False)
+    
+    def show_all_phases(self):
+        """
+        显示所有期像的节点（用于对比）
+        """
+        for phase in ['diastole', 'systole']:
+            self._set_phase_nodes_visibility(phase, visible=True)
+        logging.info("显示所有期像的节点")
     
     def auto_activate(self, preferred_phase: str = 'diastole'):
         """
