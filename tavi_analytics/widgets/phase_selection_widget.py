@@ -230,13 +230,34 @@ class PhaseSelectionWidget(qt.QWidget):
                 return
 
             toggled_any = False
+            segmentation_handled = False  # 新增：标记分割节点是否被成功处理
 
             # 1) 分割节点：从会话聚合根获取
             try:
                 seg_node = None
+                seg_node_valid = False
                 if hasattr(self.session, 'get_phase_segmentation_node'):
                     seg_node = self.session.get_phase_segmentation_node(phase_key)
-                if seg_node:
+                    # 验证节点名称是否与期像匹配（防止错误注册）
+                    if seg_node:
+                        node_name = seg_node.GetName().lower()
+                        phase_suffix = self.phase_suffixes.get(phase, '').lower()
+                        if phase_suffix and phase_suffix.replace('_', '') in node_name.replace('_', ''):
+                            seg_node_valid = True
+                            logging.info(f"领域模型找到匹配的分割节点: {seg_node.GetName()}")
+                        else:
+                            logging.warning(f"分割节点名称与期像不匹配: {seg_node.GetName()} vs {phase}")
+                            # 尝试重新注册正确的节点
+                            correct_node = self._find_correct_segmentation_node(phase)
+                            if correct_node:
+                                self.session.set_phase_segmentation_node(phase_key, correct_node.GetID())
+                                seg_node = correct_node
+                                seg_node_valid = True
+                                logging.info(f"重新注册正确的分割节点: {correct_node.GetName()}")
+                            else:
+                                seg_node = None  # 清空无效节点，让兜底机制处理
+                
+                if seg_node and seg_node_valid:
                     seg_disp = seg_node.GetDisplayNode()
                     if seg_disp:
                         # 设置主要可视化状态
@@ -264,6 +285,7 @@ class PhaseSelectionWidget(qt.QWidget):
                         
                         logging.info(f"设置分割(phase={phase_key}) 可视化: {visible}")
                         toggled_any = True
+                        segmentation_handled = True
             except Exception as e:
                 logging.warning(f"更新分割可视化失败(phase={phase_key}): {e}")
 
@@ -308,38 +330,77 @@ class PhaseSelectionWidget(qt.QWidget):
             except Exception as e:
                 logging.warning(f"更新轮廓可视化失败(phase={phase_key}): {e}")
 
-            # 3) 兜底：若领域模型未能定位任何节点，退回到名称匹配（保证兼容性）
-            if not toggled_any:
+            # 3) 兜底：若领域模型未能定位任何节点，或分割节点处理失败，退回到名称匹配（保证兼容性）
+            if not toggled_any or not segmentation_handled:
                 phase_suffix = self.phase_suffixes.get(phase)
                 if phase_suffix:
-                    # 分割节点名称兜底
-                    for name in (
-                        f"Auto_Analysis_Segmentation_{phase_suffix}",
-                        f"TAVR_Segmentation_{phase_suffix}",
-                        f"Segmentation_{phase_suffix}",
-                    ):
-                        node = slicer.mrmlScene.GetFirstNodeByName(name)
-                        if not node:
-                            continue
-                        disp = node.GetDisplayNode()
-                        if not disp:
-                            continue
-                        try:
-                            disp.SetVisibility(visible)
-                            disp.SetVisibility3D(visible)
+                    # 分割节点名称兜底（仅在分割节点处理失败时）
+                    if not segmentation_handled:
+                        logging.info(f"启用分割节点兜底机制，期像: {phase}")
+                    # 分割节点名称兜底（仅在分割节点处理失败时）
+                    if not segmentation_handled:
+                        logging.info(f"启用分割节点兜底机制，期像: {phase}")
+                        for name in (
+                            f"Auto_Analysis_Segmentation_{phase_suffix}",
+                            f"TAVR_Segmentation_{phase_suffix}",
+                            f"Segmentation_{phase_suffix}",
+                        ):
+                            # 改进：处理重复节点名称的情况
+                            nodes = slicer.mrmlScene.GetNodesByName(name)
+                            target_node = None
                             
-                            # 避免同时关闭Fill和Outline导致的无效状态
-                            if visible:
-                                disp.SetVisibility2DFill(True)
-                                disp.SetVisibility2DOutline(True)
-                            else:
-                                # 隐藏时：只关闭Fill，保持Outline以避免无效状态
-                                disp.SetVisibility2DFill(False)
-                                # disp.SetVisibility2DOutline(True)  # 保持开启
+                            if nodes.GetNumberOfItems() == 1:
+                                # 只有一个节点，直接使用
+                                target_node = nodes.GetItemAsObject(0)
+                            elif nodes.GetNumberOfItems() > 1:
+                                # 有多个同名节点，选择最新的分割节点
+                                logging.warning(f"发现{nodes.GetNumberOfItems()}个同名分割节点: {name}")
+                                candidates = []
+                                for i in range(nodes.GetNumberOfItems()):
+                                    node = nodes.GetItemAsObject(i)
+                                    if node.GetClassName() == 'vtkMRMLSegmentationNode':
+                                        candidates.append(node)
+                                
+                                if candidates:
+                                    # 按ID排序选择最新的
+                                    candidates.sort(key=lambda n: int(n.GetID().split('Node')[-1]) if 'Node' in n.GetID() else 0, reverse=True)
+                                    target_node = candidates[0]
+                                    logging.info(f"选择最新的分割节点: {target_node.GetID()}")
                             
-                            toggled_any = True
-                        except Exception:
-                            pass
+                            if not target_node:
+                                continue
+                                
+                            disp = target_node.GetDisplayNode()
+                            if not disp:
+                                continue
+                                
+                            try:
+                                disp.SetVisibility(visible)
+                                disp.SetVisibility3D(visible)
+                                
+                                # 避免同时关闭Fill和Outline导致的无效状态
+                                if visible:
+                                    disp.SetVisibility2DFill(True)
+                                    disp.SetVisibility2DOutline(True)
+                                else:
+                                    # 隐藏时：只关闭Fill，保持Outline以避免无效状态
+                                    disp.SetVisibility2DFill(False)
+                                    # disp.SetVisibility2DOutline(True)  # 保持开启
+                                
+                                logging.info(f"兜底机制成功设置分割节点: {name} (ID: {target_node.GetID()})")
+                                toggled_any = True
+                                
+                                # 将正确的节点注册到领域模型
+                                try:
+                                    self.session.set_phase_segmentation_node(phase_key, target_node.GetID())
+                                    logging.info(f"已将分割节点注册到领域模型: {phase_key} -> {target_node.GetID()}")
+                                except Exception as reg_e:
+                                    logging.warning(f"注册分割节点到领域模型失败: {reg_e}")
+                                
+                                break  # 找到并处理了正确的节点，跳出循环
+                                
+                            except Exception:
+                                pass
                     # 轮廓节点名称兜底
                     for name in (
                         f"ValveStent_Bottom_Contour_{phase_suffix}",
@@ -632,6 +693,55 @@ class PhaseSelectionWidget(qt.QWidget):
             session: TAVR研究会话对象
         """
         self.session = session
+    
+    def _find_correct_segmentation_node(self, phase: str):
+        """
+        查找正确的分割节点
+        
+        当领域模型中注册的节点与期像不匹配时，重新查找正确的节点
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+            
+        Returns:
+            正确的分割节点或None
+        """
+        try:
+            import slicer
+            phase_suffix = self.phase_suffixes.get(phase)
+            if not phase_suffix:
+                return None
+            
+            # 按优先级搜索分割节点
+            search_patterns = [
+                f"Auto_Analysis_Segmentation_{phase_suffix}",
+                f"TAVR_Segmentation_{phase_suffix}",
+                f"Segmentation_{phase_suffix}",
+            ]
+            
+            candidates = []
+            for pattern in search_patterns:
+                # 使用GetNodesByName获取所有匹配的节点
+                nodes = slicer.mrmlScene.GetNodesByName(pattern)
+                if nodes.GetNumberOfItems() > 0:
+                    for i in range(nodes.GetNumberOfItems()):
+                        node = nodes.GetItemAsObject(i)
+                        if node.GetClassName() == 'vtkMRMLSegmentationNode':
+                            candidates.append(node)
+            
+            # 如果有多个候选节点，选择最新创建的
+            if candidates:
+                # 按ID排序，通常较新的节点有较大的ID
+                candidates.sort(key=lambda n: int(n.GetID().split('Node')[-1]) if 'Node' in n.GetID() else 0, reverse=True)
+                selected_node = candidates[0]
+                logging.info(f"找到正确的分割节点: {selected_node.GetName()} (ID: {selected_node.GetID()})")
+                return selected_node
+            
+            return None
+            
+        except Exception as e:
+            logging.error(f"查找正确分割节点时出错: {e}")
+            return None
     
     def cleanup(self):
         """清理资源"""

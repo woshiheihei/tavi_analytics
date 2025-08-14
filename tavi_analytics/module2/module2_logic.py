@@ -801,10 +801,20 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     # 将分割节点存储到会话中（兼容+分期）
                     node_id = seg_node.GetID()
                     self.session.set_segmentation_node(node_id)
-                    phase_key = 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
+                    # 从文件名解析期像信息，而不是依赖当前选择的期像
+                    phase_key = self._extract_phase_from_filename(file_path)
                     try:
+                        # 先检查是否已经有该期像的节点注册
+                        existing_node_id = self.session.get_phase_segmentation_node(phase_key)
+                        if existing_node_id:
+                            existing_node = slicer.mrmlScene.GetNodeByID(existing_node_id.GetID() if hasattr(existing_node_id, 'GetID') else existing_node_id)
+                            if existing_node and existing_node.GetName() != seg_node.GetName():
+                                logging.info(f"替换已注册的分割节点: {existing_node.GetName()} -> {seg_node.GetName()}")
+                        
                         self.session.set_phase_segmentation_node(phase_key, node_id)
-                    except Exception:
+                        logging.info(f"分割节点已注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
+                    except Exception as e:
+                        logging.warning(f"注册分割节点到期像失败: {e}")
                         pass
                     
                     # 设置分段显示属性
@@ -840,10 +850,20 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     # 将分割节点存储到会话中（兼容+分期）
                     node_id = seg_node.GetID()
                     self.session.set_segmentation_node(node_id)
-                    phase_key = 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
+                    # 从文件名解析期像信息，而不是依赖当前选择的期像
+                    phase_key = self._extract_phase_from_filename(file_path)
                     try:
+                        # 先检查是否已经有该期像的节点注册
+                        existing_node_id = self.session.get_phase_segmentation_node(phase_key)
+                        if existing_node_id:
+                            existing_node = slicer.mrmlScene.GetNodeByID(existing_node_id.GetID() if hasattr(existing_node_id, 'GetID') else existing_node_id)
+                            if existing_node and existing_node.GetName() != seg_node.GetName():
+                                logging.info(f"替换已注册的分割节点: {existing_node.GetName()} -> {seg_node.GetName()}")
+                        
                         self.session.set_phase_segmentation_node(phase_key, node_id)
-                    except Exception:
+                        logging.info(f"分割节点已注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
+                    except Exception as e:
+                        logging.warning(f"注册分割节点到期像失败: {e}")
                         pass
                     
                     # 设置分段显示属性
@@ -1068,6 +1088,35 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         except Exception as e:
             logging.error(f"获取期像信息失败: {e}")
             return "Unknown_Phase"
+
+    def _extract_phase_from_filename(self, file_path: str) -> str:
+        """
+        从文件名中解析期像信息
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            str: 期像键 ('end_diastole' 或 'end_systole')
+        """
+        try:
+            import os
+            filename = os.path.basename(file_path).lower()
+            
+            # 从文件名中检测期像关键词
+            if any(keyword in filename for keyword in ['diastole', '舒张', 'ed', 'end_diastole']):
+                return 'end_diastole'
+            elif any(keyword in filename for keyword in ['systole', '收缩', 'es', 'end_systole']):
+                return 'end_systole'
+            else:
+                # 如果无法从文件名判断，回退到当前选择的期像
+                logging.warning(f"无法从文件名 {filename} 中解析期像信息，使用当前选择的期像")
+                return 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
+                
+        except Exception as e:
+            logging.error(f"解析文件名期像信息失败: {e}")
+            # 出错时回退到当前选择的期像
+            return 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
 
     def test_analysis_connection(self) -> bool:
         """
