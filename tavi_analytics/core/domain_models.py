@@ -4,7 +4,7 @@ TAVI Analytics 领域模型
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Union
 from dataclasses import dataclass
 from enum import Enum
 
@@ -14,6 +14,12 @@ class CriticalPlaneType(Enum):
     VALVE_STENT_BOTTOM = "plane_bootom"  # 瓣膜支架的最底端闭合曲线
     SINUS_OF_VALSALVA = "plane_max"     # Sinus Of Valsalva的位置
     STENT_BEST_FIT = "plane_0"          # 支架的best fit plane
+
+
+class CardiacPhase(Enum):
+    """心动周期时相（用于对分割与平面进行“期像”归类）"""
+    END_DIASTOLE = "end_diastole"   # 舒张末期
+    END_SYSTOLE = "end_systole"     # 收缩末期
 
 
 @dataclass
@@ -138,6 +144,8 @@ class PlaneGeometry:
     
     # Slicer节点管理
     _slicer_node_id: Optional[str] = None
+    # 期像信息，用于生成包含期像的节点名称
+    cardiac_phase: Optional[str] = None  # 'end_diastole' 或 'end_systole'
     
     def to_dict(self) -> Dict[str, Any]:
         """将平面几何数据转换为字典格式"""
@@ -167,7 +175,8 @@ class PlaneGeometry:
             'average_dist': self.average_dist,
             'max_dist_pair': self.max_dist_pair,
             'min_dist_pair': self.min_dist_pair,
-            '_slicer_node_id': slicer_node_id  # 安全的节点ID
+            '_slicer_node_id': slicer_node_id,  # 安全的节点ID
+            'cardiac_phase': self.cardiac_phase
         }
     
     @classmethod
@@ -188,6 +197,7 @@ class PlaneGeometry:
             min_dist_pair=data.get('min_dist_pair', [])
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
+        instance.cardiac_phase = data.get('cardiac_phase')
         return instance
     
     @property
@@ -326,7 +336,22 @@ class ValveStentBottomPlane(PlaneGeometry):
     
     @property
     def standard_node_name(self) -> str:
-        return "ValveStent_Bottom_Plane"
+        """生成包含期像信息的标准节点名称"""
+        base_name = "ValveStent_Bottom_Plane"
+        if self.cardiac_phase:
+            # 将期像转换为显示友好的名称
+            phase_suffix = self._get_phase_suffix(self.cardiac_phase)
+            return f"{base_name}_{phase_suffix}"
+        return base_name
+    
+    def _get_phase_suffix(self, phase: str) -> str:
+        """将期像转换为显示友好的后缀"""
+        if phase == 'end_diastole':
+            return 'End_Diastole'
+        elif phase == 'end_systole':
+            return 'End_Systole'
+        else:
+            return phase  # 回退到原始名称
     
     def get_stent_diameter(self) -> Dict[str, float]:
         """获取支架相关的直径测量"""
@@ -380,7 +405,22 @@ class SinusOfValsalvaPlane(PlaneGeometry):
     
     @property
     def standard_node_name(self) -> str:
-        return "SinusOfValsalva_Plane"
+        """生成包含期像信息的标准节点名称"""
+        base_name = "SinusOfValsalva_Plane"
+        if self.cardiac_phase:
+            # 将期像转换为显示友好的名称
+            phase_suffix = self._get_phase_suffix(self.cardiac_phase)
+            return f"{base_name}_{phase_suffix}"
+        return base_name
+    
+    def _get_phase_suffix(self, phase: str) -> str:
+        """将期像转换为显示友好的后缀"""
+        if phase == 'end_diastole':
+            return 'End_Diastole'
+        elif phase == 'end_systole':
+            return 'End_Systole'
+        else:
+            return phase  # 回退到原始名称
     
     def get_sinus_measurements(self) -> Dict[str, float]:
         """获取窦部相关测量"""
@@ -435,6 +475,8 @@ class StentBestFitPlane:
     
     # Slicer节点管理（对于这个平面，可能不创建曲线，而是创建平面节点）
     _slicer_node_id: Optional[str] = None
+    # 期像信息，用于生成包含期像的节点名称
+    cardiac_phase: Optional[str] = None  # 'end_diastole' 或 'end_systole'
     
     @property
     def description(self) -> str:
@@ -442,7 +484,22 @@ class StentBestFitPlane:
     
     @property
     def standard_node_name(self) -> str:
-        return "StentBestFit_Plane"
+        """生成包含期像信息的标准节点名称"""
+        base_name = "StentBestFit_Plane"
+        if self.cardiac_phase:
+            # 将期像转换为显示友好的名称
+            phase_suffix = self._get_phase_suffix(self.cardiac_phase)
+            return f"{base_name}_{phase_suffix}"
+        return base_name
+    
+    def _get_phase_suffix(self, phase: str) -> str:
+        """将期像转换为显示友好的后缀"""
+        if phase == 'end_diastole':
+            return 'End_Diastole'
+        elif phase == 'end_systole':
+            return 'End_Systole'
+        else:
+            return phase  # 回退到原始名称
     
     @property
     def has_valid_params(self) -> bool:
@@ -476,7 +533,8 @@ class StentBestFitPlane:
             'plane_params': self.plane_params,
             'distance_to_zjd': self.distance_to_zjd,
             'points': self.points,
-            '_slicer_node_id': self._slicer_node_id
+            '_slicer_node_id': self._slicer_node_id,
+            'cardiac_phase': self.cardiac_phase
         }
     
     @classmethod
@@ -489,6 +547,7 @@ class StentBestFitPlane:
             points=data.get('points')
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
+        instance.cardiac_phase = data.get('cardiac_phase')
         return instance
     
     def create_visualization(self) -> bool:
@@ -658,12 +717,13 @@ class PlaneDataManager:
     负责管理和访问关键平面数据
     """
     
-    def __init__(self):
+    def __init__(self, cardiac_phase: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
         self._valve_stent_bottom: Optional[ValveStentBottomPlane] = None
         self._sinus_of_valsalva: Optional[SinusOfValsalvaPlane] = None
         self._stent_best_fit: Optional[StentBestFitPlane] = None
         self._raw_data: Dict[str, Any] = {}
+        self.cardiac_phase = cardiac_phase  # 期像信息：'end_diastole' 或 'end_systole'
     
     def load_from_measurement_json(self, measurement_data: Dict[str, Any]) -> bool:
         """
@@ -723,6 +783,9 @@ class PlaneDataManager:
                 min_dist_pair=plane_data.get('min_dist_pair', [])
             )
             
+            # 设置期像信息
+            self._valve_stent_bottom.cardiac_phase = self.cardiac_phase
+            
             if self._valve_stent_bottom.has_valid_geometry:
                 self.logger.info(f"成功加载瓣膜支架底部平面，面积: {self._valve_stent_bottom.area}")
                 return True
@@ -758,6 +821,9 @@ class PlaneDataManager:
                 max_dist_pair=plane_data.get('max_dist_pair', []),
                 min_dist_pair=plane_data.get('min_dist_pair', [])
             )
+            
+            # 设置期像信息
+            self._sinus_of_valsalva.cardiac_phase = self.cardiac_phase
             
             if self._sinus_of_valsalva.has_valid_geometry:
                 self.logger.info(f"成功加载Sinus Of Valsalva平面，面积: {self._sinus_of_valsalva.area}")
@@ -808,6 +874,9 @@ class PlaneDataManager:
                 distance_to_zjd=plane_data.get('dis_to_zjd', 0.0),
                 points=points
             )
+            
+            # 设置期像信息
+            self._stent_best_fit.cardiac_phase = self.cardiac_phase
             
             # 输出加载信息
             info_parts = [f"到参考点距离: {self._stent_best_fit.distance_to_zjd}"]
@@ -971,6 +1040,7 @@ class PlaneDataManager:
         """将平面管理器数据转换为字典格式"""
         data = {
             'raw_data': self._raw_data,
+            'cardiac_phase': self.cardiac_phase,
             'valve_stent_bottom': None,
             'sinus_of_valsalva': None,
             'stent_best_fit': None
@@ -990,7 +1060,9 @@ class PlaneDataManager:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'PlaneDataManager':
         """从字典创建平面管理器对象"""
-        manager = cls()
+        # 恢复期像信息
+        cardiac_phase = data.get('cardiac_phase')
+        manager = cls(cardiac_phase=cardiac_phase)
         manager._raw_data = data.get('raw_data', {})
         
         # 恢复瓣膜支架底部平面
@@ -1009,3 +1081,54 @@ class PlaneDataManager:
             manager._stent_best_fit = StentBestFitPlane.from_dict(stent_data)
         
         return manager
+
+
+# ========== Phase-aware wrapper (非破坏性新增API) ==========
+@dataclass
+class PhasePlaneRepository:
+    """按期像归类的平面仓库
+
+    - 使用两个内部PlaneDataManager分别管理舒张末期与收缩末期的平面
+    - 不改变既有PlaneDataManager API，作为上层聚合器存在
+    """
+    diastole: PlaneDataManager
+    systole: PlaneDataManager
+
+    @classmethod
+    def create_default(cls) -> 'PhasePlaneRepository':
+        return cls(
+            diastole=PlaneDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value), 
+            systole=PlaneDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
+        )
+
+    def get_manager(self, phase: Union[str, CardiacPhase]) -> PlaneDataManager:
+        key = phase.value if isinstance(phase, CardiacPhase) else str(phase)
+        if key == CardiacPhase.END_SYSTOLE.value:
+            return self.systole
+        # 默认回退到舒张末期
+        return self.diastole
+
+    def clear(self):
+        self.diastole.clear()
+        self.systole.clear()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'diastole': self.diastole.to_dict(),
+            'systole': self.systole.to_dict()
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'PhasePlaneRepository':
+        di = PlaneDataManager.from_dict(data.get('diastole', {})) if data.get('diastole') else PlaneDataManager(cardiac_phase=CardiacPhase.END_DIASTOLE.value)
+        sy = PlaneDataManager.from_dict(data.get('systole', {})) if data.get('systole') else PlaneDataManager(cardiac_phase=CardiacPhase.END_SYSTOLE.value)
+        # 确保期像信息正确设置
+        di.cardiac_phase = CardiacPhase.END_DIASTOLE.value
+        sy.cardiac_phase = CardiacPhase.END_SYSTOLE.value
+        return cls(diastole=di, systole=sy)
+
+    def get_loaded_summary(self) -> Dict[str, Any]:
+        return {
+            CardiacPhase.END_DIASTOLE.value: self.diastole.get_loaded_planes_summary(),
+            CardiacPhase.END_SYSTOLE.value: self.systole.get_loaded_planes_summary(),
+        }

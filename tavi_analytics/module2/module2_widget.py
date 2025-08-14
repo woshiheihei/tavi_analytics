@@ -72,7 +72,7 @@ class Module2Widget(qt.QWidget):
         """
         模块激活时的回调方法
         
-        自动切换到舒张末期时相，为全自动分析做准备
+    自动切换到舒张末期时相（优先），为全自动分析做准备
         """
         logging.info("模块二已激活，开始检查和切换期像")
         
@@ -82,8 +82,8 @@ class Module2Widget(qt.QWidget):
             
             # 设置期像选择组件的说明文本
             self.phase_selection.set_info_text(
-                "💡 提示：全自动分析默认使用舒张末期数据进行处理。\n"
-                "请确保在模块一中已正确标记舒张末期，然后点击上方按钮切换。"
+        "💡 提示：全自动分析将默认同时处理舒张末期与收缩末期。\n"
+        "建议在模块一中标记两期像；若未标记，将使用当前帧作为舒张末期来分析。"
             )
             
         except Exception as e:
@@ -192,7 +192,7 @@ class Module2Widget(qt.QWidget):
         
         # 添加期像相关的分析提示
         phase_hint_label = qt.QLabel(
-            "💡 分析提示：全自动分析将使用当前舒张末期的数据进行处理，\n"
+            "💡 分析提示：全自动分析将默认同时处理舒张末期与收缩末期，\n"
             "包括主动脉根部分割、测量分析等，整个过程无需人工干预。"
         )
         phase_hint_label.setStyleSheet("""
@@ -319,20 +319,15 @@ class Module2Widget(qt.QWidget):
         logging.info("用户点击了'开始全自动分析'按钮")
         
         try:
-            # 确保在舒张末期进行分析
-            if not self._ensure_diastolic_phase():
-                self._update_analysis_status("❌ 请先确保已切换到舒张末期时相", "error")
-                return
-            
             # 更新UI状态
-            self._update_analysis_status("🔍 正在检查分析条件和服务器连接...", "info")
+            self._update_analysis_status("🔍 正在检查分析条件和服务器连接（多期像）...", "info")
             self._disable_analysis_button()
             
             # 调用逻辑层开始自动分析
             result = self.logic.start_auto_analysis()
             
             if result:
-                self._update_analysis_status("📤 分析已启动，正在上传数据...", "processing")
+                self._update_analysis_status("📤 分析已启动，正在导出并上传两期像数据...", "processing")
                 self._show_stop_button()
                 
                 # 启动状态监控定时器
@@ -350,31 +345,9 @@ class Module2Widget(qt.QWidget):
             self._update_analysis_status(f"❌ 发生错误: {str(e)}", "error")
             self._enable_analysis_button()
 
+    # 过去的强制舒张末期函数不再需要，保留以兼容但不使用
     def _ensure_diastolic_phase(self) -> bool:
-        """
-        确保当前处于舒张末期
-        
-        如果当前不在舒张末期，尝试自动切换
-        
-        Returns:
-            bool: 是否成功确保在舒张末期
-        """
-        try:
-            # 检查期像选择组件的当前期像
-            current_phase = self.phase_selection.get_current_phase()
-            
-            if current_phase == 'diastole':
-                # 已经在舒张末期
-                return True
-            else:
-                # 需要切换到舒张末期
-                logging.info(f"当前期像 {current_phase}，需要切换到舒张末期")
-                self.phase_selection.auto_activate(preferred_phase='diastole')
-                return self.phase_selection.get_current_phase() == 'diastole'
-                
-        except Exception as e:
-            logging.error(f"检查/切换舒张末期失败: {e}")
-            return False
+        return True
 
     def _on_stop_analysis(self):
         """
@@ -515,17 +488,22 @@ class Module2Widget(qt.QWidget):
             import_result = self.logic.import_analysis_results()
             
             if import_result:
-                # 显示导入成功信息
-                imported_files = import_result.get('imported_files', [])
-                curves_count = import_result.get('curves_count', 0)
-                
+                phases = import_result.get('phases', {})
+                seg_count = import_result.get('total_segmentations', 0)
+                curves_count = import_result.get('total_curves', 0)
+                # 汇总每期像
+                details = []
+                for phase, info in phases.items():
+                    name = "舒张末期" if phase == 'diastole' else "收缩末期"
+                    seg_ok = info.get('segmentation_imported', False)
+                    meas_path = info.get('measurement_path')
+                    details.append(f"• {name}: 分割{'已导入' if seg_ok else '未导入'}; 测量文件: {'有' if meas_path else '无'}")
                 success_msg = (
                     f"✅ 全自动分析完成！\n"
-                    f"• 已导入 {len(imported_files)} 个分析文件\n"
-                    f"• 已创建 {curves_count} 条测量曲线\n"
-                    f"您可以继续查看分析结果或进入下一模块。"
+                    f"• 导入分割: {seg_count} 个期像\n"
+                    f"• 创建曲线: {curves_count} 条（基于舒张末期）\n"
+                    + "\n".join(details)
                 )
-                
                 self._update_analysis_status(success_msg, "success")
                 
                 # 更新进度条

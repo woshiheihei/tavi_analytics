@@ -45,20 +45,23 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         """初始化模块二逻辑类"""
         ScriptedLoadableModuleLogic.__init__(self)
         self.session = TAVRStudySession()
-        
         # 全自动分析相关
         self.dcm_processor = DCMProcessor()
+        # 兼容字段（旧单任务ID）不再使用，保留避免外部访问报错
         self.current_task_id = None
         self.analysis_temp_dir = None
-        
         # 异步分析状态管理
         self.analysis_state = 'idle'  # 当前分析状态
         self.analysis_error = None    # 错误信息
         self.analysis_progress = 0    # 进度百分比
-        
         # 当前选择的期像状态
         self.selected_phase = 'diastole'  # 默认选择舒张期，可选 'diastole' 或 'systole'
-        
+        # 多期像分析状态
+        self.phase_order = ['diastole', 'systole']
+        self.phases_to_analyze = []   # 实际要分析的期像列表
+        self.phase_index = -1         # 当前处理到的期像索引
+        # 每个期像的任务信息：{ phase: { 'task_id': str|None, 'nrrd_path': str|None, 'upload_done': bool } }
+        self.phase_tasks = {}
         logging.info("Module2Logic 初始化完成 - 全自动分析模式")
 
     def set_selected_phase(self, phase: str):
@@ -171,6 +174,16 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             self.analysis_state = 'initializing'
             self.analysis_error = None
             self.analysis_progress = 0
+
+            # 计算本次需要分析的期像
+            self._prepare_phases_to_analyze()
+            # 初始化每期像任务记录
+            self.phase_tasks = {p: {'task_id': None, 'nrrd_path': None, 'upload_done': False} for p in self.phases_to_analyze}
+            self.phase_index = -1
+
+            # 创建根级临时目录（单次分析复用）
+            if not self.analysis_temp_dir:
+                self.analysis_temp_dir = tempfile.mkdtemp(prefix="tavi_analysis_")
             
             # 创建异步处理定时器
             if not hasattr(self, 'async_analysis_timer'):
@@ -229,6 +242,8 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     result = self.connection_future.result()
                     if result:
                         logging.info("服务器连接正常，进入下一步")
+                        # 开始第一个期像
+                        self.phase_index = 0
                         self.analysis_state = 'getting_volume'
                         self.async_analysis_timer.start(100)
                     else:
@@ -258,7 +273,9 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         self.analysis_error = "保存nrrd文件失败"
                 else:
                     # 还在保存中，继续等待，更新进度
-                    progress = min(40 + (time.time() - getattr(self, 'save_start_time', time.time())) * 2, 55)
+                    # 针对多期像，保存阶段按每期像占用约25%的总进度
+                    base = self._current_phase_base_progress()
+                    progress = min(base + 15 + (time.time() - getattr(self, 'save_start_time', time.time())) * 2, base + 25)
                     self.analysis_progress = int(progress)
                     self.async_analysis_timer.start(1000)
         except Exception as e:
@@ -275,10 +292,21 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     try:
                         task_id = self.upload_future.result()
                         if task_id:
-                            self.current_task_id = task_id
-                            logging.info(f"文件上传成功，任务ID: {task_id}")
-                            self.analysis_progress = 100
-                            self.analysis_state = 'completed'
+                            # 记录到当前期像
+                            current_phase = self._get_current_phase()
+                            self.phase_tasks[current_phase]['task_id'] = task_id
+                            self.phase_tasks[current_phase]['upload_done'] = True
+                            logging.info(f"文件上传成功，期像={current_phase}，任务ID: {task_id}")
+
+                            # 进入下一期像或完成启动流程
+                            if self._advance_to_next_phase():
+                                # 继续下一期像的导出/上传
+                                self.analysis_state = 'getting_volume'
+                                self.async_analysis_timer.start(200)
+                            else:
+                                # 两个期像均已上传完成
+                                self.analysis_progress = 100
+                                self.analysis_state = 'completed'
                         else:
                             self.analysis_state = 'failed'
                             self.analysis_error = "文件上传失败，未获得任务ID"
@@ -287,7 +315,9 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         self.analysis_error = f"上传失败: {str(e)}"
                 else:
                     # 还在上传中，继续等待，更新进度
-                    progress = min(60 + (time.time() - getattr(self, 'upload_start_time', time.time())) * 3, 95)
+                    # 每个期像上传阶段约占总进度的25%-50%区间
+                    base = self._current_phase_base_progress()
+                    progress = min(base + 30 + (time.time() - getattr(self, 'upload_start_time', time.time())) * 3, base + 45)
                     self.analysis_progress = int(progress)
                     self.async_analysis_timer.start(2000)
         except Exception as e:
@@ -328,7 +358,12 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         """步骤2: 获取当前体积数据"""
         try:
             logging.info("步骤2: 获取当前体积数据...")
-            self.analysis_progress = 20
+            # 预估进度 - 当前期像阶段起始
+            self.analysis_progress = max(self.analysis_progress, int(self._current_phase_base_progress() + 5))
+
+            # 切换到对应期像（若可用）
+            current_phase = self._get_current_phase()
+            self._try_switch_to_phase(current_phase)
             
             # 获取当前体积数据（这个操作通常很快）
             volume_node = self._get_current_volume_node()
@@ -339,9 +374,12 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             
             self.current_volume_node = volume_node
             
-            # 创建临时目录
-            self.analysis_temp_dir = tempfile.mkdtemp(prefix="tavi_analysis_")
-            self.temp_nrrd_path = os.path.join(self.analysis_temp_dir, "current_volume.nrrd")
+            # 以期像命名，以便区分
+            phase_suffix = 'End_Diastole' if current_phase == 'diastole' else 'End_Systole'
+            self.temp_nrrd_path = os.path.join(self.analysis_temp_dir, f"{phase_suffix}.nrrd")
+            # 记录到期像任务
+            if current_phase in self.phase_tasks:
+                self.phase_tasks[current_phase]['nrrd_path'] = self.temp_nrrd_path
             
             # 安排下一步
             self.analysis_state = 'saving_nrrd'
@@ -356,7 +394,7 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         """步骤3: 保存nrrd文件（异步）"""
         try:
             logging.info("步骤3: 保存nrrd文件...")
-            self.analysis_progress = 40
+            self.analysis_progress = max(self.analysis_progress, int(self._current_phase_base_progress() + 15))
             self.save_start_time = time.time()  # 记录开始时间
             
             # 使用线程池进行文件保存，避免阻塞UI
@@ -380,7 +418,7 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         """步骤4: 上传文件（异步）"""
         try:
             logging.info("步骤4: 上传文件到服务器...")
-            self.analysis_progress = 60
+            self.analysis_progress = max(self.analysis_progress, int(self._current_phase_base_progress() + 30))
             self.upload_start_time = time.time()  # 记录开始时间
             
             # 使用线程池进行文件上传，避免阻塞UI
@@ -451,43 +489,55 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         'error': self.analysis_error or '未知错误'
                     }
                 elif self.analysis_state == 'completed':
-                    # 启动流程完成，检查远程任务状态
-                    if self.current_task_id:
-                        # 查询远程服务器的任务状态
-                        status = self.dcm_processor.check_status(self.current_task_id)
-                        
-                        # 转换为标准化状态格式
-                        if status == 'completed':
-                            return {
-                                'status': 'completed',
-                                'progress': 100,
-                                'message': '分析已完成'
-                            }
-                        elif status == 'failed':
-                            return {
-                                'status': 'failed',
-                                'progress': 0,
-                                'message': '分析失败',
-                                'error': '远程服务器分析失败'
-                            }
-                        elif status in ['processing', 'running']:
-                            return {
-                                'status': 'processing',
-                                'progress': 50,  # 假设50%进度
-                                'message': '正在进行分析'
-                            }
-                        else:
-                            return {
-                                'status': 'processing',
-                                'progress': 25,
-                                'message': f'任务状态: {status}'
-                            }
-                    else:
+                    # 启动流程完成，检查远程任务状态（多期像）
+                    if not self.phase_tasks:
                         return {
                             'status': 'failed',
                             'progress': 0,
-                            'error': '任务ID丢失'
+                            'error': '无有效任务'
                         }
+
+                    total = len(self.phase_tasks)
+                    completed = 0
+                    failed = 0
+                    phase_messages = []
+                    for phase, info in self.phase_tasks.items():
+                        task_id = info.get('task_id')
+                        if not task_id:
+                            phase_messages.append(f"{phase}: 无任务ID")
+                            continue
+                        try:
+                            s = self.dcm_processor.check_status(task_id)
+                            if s == 'completed':
+                                completed += 1
+                                phase_messages.append(f"{phase}: 完成")
+                            elif s == 'failed':
+                                failed += 1
+                                phase_messages.append(f"{phase}: 失败")
+                            else:
+                                phase_messages.append(f"{phase}: {s}")
+                        except Exception as e:
+                            phase_messages.append(f"{phase}: 状态查询异常 {e}")
+
+                    if failed > 0 and completed + failed == total:
+                        return {
+                            'status': 'failed',
+                            'progress': int(80 + completed/total*20),
+                            'message': '部分任务失败',
+                            'error': '; '.join(phase_messages)
+                        }
+                    if completed == total:
+                        return {
+                            'status': 'completed',
+                            'progress': 100,
+                            'message': '两期像分析均已完成'
+                        }
+                    # 仍在处理中
+                    return {
+                        'status': 'processing',
+                        'progress': int(70 + completed/total*20),
+                        'message': '远程分析进行中: ' + ' | '.join(phase_messages)
+                    }
                 else:
                     # 启动流程进行中
                     progress = getattr(self, 'analysis_progress', 0)
@@ -502,7 +552,9 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         'uploading_file_result': '正在上传到服务器...'
                     }
                     
-                    message = state_messages.get(self.analysis_state, f'正在处理: {self.analysis_state}')
+                    current_phase = self._get_current_phase()
+                    phase_cn = '舒张末期' if current_phase == 'diastole' else '收缩末期'
+                    message = f"[{phase_cn}] " + state_messages.get(self.analysis_state, f'正在处理: {self.analysis_state}')
                     
                     return {
                         'status': 'uploading' if 'upload' in self.analysis_state else 'processing',
@@ -510,37 +562,29 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                         'message': message
                     }
             
-            # 如果没有启动流程状态，但有任务ID，检查远程状态
-            if self.current_task_id:
-                # 查询远程服务器的任务状态
-                status = self.dcm_processor.check_status(self.current_task_id)
-                
-                # 转换为标准化状态格式
-                if status == 'completed':
-                    return {
-                        'status': 'completed',
-                        'progress': 100,
-                        'message': '分析已完成'
-                    }
-                elif status == 'failed':
-                    return {
-                        'status': 'failed',
-                        'progress': 0,
-                        'message': '分析失败',
-                        'error': '远程服务器分析失败'
-                    }
-                elif status in ['processing', 'running']:
-                    return {
-                        'status': 'processing',
-                        'progress': 50,  # 假设50%进度
-                        'message': '正在进行分析'
-                    }
-                else:
-                    return {
-                        'status': 'processing',
-                        'progress': 25,
-                        'message': f'任务状态: {status}'
-                    }
+            # 如果没有启动流程状态，但有任务，检查远程状态（例如应用重启后）
+            if self.phase_tasks:
+                total = len(self.phase_tasks)
+                completed = 0
+                failed = 0
+                for phase, info in self.phase_tasks.items():
+                    task_id = info.get('task_id')
+                    if not task_id:
+                        continue
+                    try:
+                        s = self.dcm_processor.check_status(task_id)
+                        if s == 'completed':
+                            completed += 1
+                        elif s == 'failed':
+                            failed += 1
+                    except Exception:
+                        pass
+                if completed == total and total > 0:
+                    return {'status': 'completed', 'progress': 100, 'message': '两期像分析均已完成'}
+                if failed > 0:
+                    return {'status': 'failed', 'progress': int(80 + completed/total*20), 'message': '部分任务失败'}
+                if total > 0:
+                    return {'status': 'processing', 'progress': int(70 + completed/total*20), 'message': '远程分析进行中'}
             
             # 没有活动的分析任务
             return None
@@ -563,8 +607,8 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             Dict: 包含导入结果信息的字典，失败返回None
         """
         try:
-            if not self.current_task_id:
-                logging.error("没有有效的任务ID")
+            if not self.phase_tasks:
+                logging.error("没有可导入的任务")
                 return None
             
             logging.info("开始导入分析结果")
@@ -573,56 +617,67 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             results_dir = os.path.join(self.analysis_temp_dir, "results")
             os.makedirs(results_dir, exist_ok=True)
             
-            # 下载分割结果
-            segmentation_path = os.path.join(results_dir, "segment_result.nrrd")
-            measurement_path = os.path.join(results_dir, "measurement.json")
+            summary = {
+                'phases': {},
+                'total_curves': 0,
+                'total_segmentations': 0
+            }
             
-            imported_files = []
-            
-            try:
-                # 下载分割文件
-                self.dcm_processor.download_segmentation_result(
-                    self.current_task_id, 
-                    segmentation_path
-                )
-                
-                if os.path.exists(segmentation_path):
-                    # 导入分割文件到Slicer
-                    seg_node = self._import_segmentation_file(segmentation_path)
-                    if seg_node:
-                        imported_files.append("分割结果")
-                        logging.info("分割结果导入成功")
-                    
-            except Exception as e:
-                logging.warning(f"下载/导入分割文件失败: {e}")
-            
-            curves_count = 0
-            try:
-                # 下载测量数据
-                self.dcm_processor.download_measurement_result(
-                    self.current_task_id,
-                    measurement_path
-                )
-                
-                if os.path.exists(measurement_path):
-                    # 导入测量数据（使用模块三的逻辑）
-                    curves_count = self._import_measurement_data(measurement_path)
-                    if curves_count > 0:
-                        imported_files.append("测量数据")
-                        logging.info(f"测量数据导入成功，创建了 {curves_count} 条曲线")
-                    
-            except Exception as e:
-                logging.warning(f"下载/导入测量数据失败: {e}")
-            
-            # 清理任务
+            for phase in self.phases_to_analyze:
+                info = self.phase_tasks.get(phase, {})
+                task_id = info.get('task_id')
+                if not task_id:
+                    summary['phases'][phase] = {'status': 'no_task'}
+                    continue
+                phase_dir = os.path.join(results_dir, phase)
+                os.makedirs(phase_dir, exist_ok=True)
+                seg_path = os.path.join(phase_dir, f"segment_result_{phase}.nrrd")
+                meas_path = os.path.join(phase_dir, f"measurement_{phase}.json")
+
+                seg_imported = False
+                curves_count = 0
+
+                # 下载并导入分割
+                try:
+                    self.dcm_processor.download_segmentation_result(task_id, seg_path)
+                    if os.path.exists(seg_path):
+                        # 为命名正确，临时设置当前期像
+                        old_phase = self.selected_phase
+                        try:
+                            self.selected_phase = 'diastole' if phase == 'diastole' else 'systole'
+                            seg_node = self._import_segmentation_file(seg_path)
+                            if seg_node:
+                                seg_imported = True
+                                summary['total_segmentations'] += 1
+                                logging.info(f"[{phase}] 分割结果导入成功")
+                        finally:
+                            self.selected_phase = old_phase
+                except Exception as e:
+                    logging.warning(f"[{phase}] 下载/导入分割文件失败: {e}")
+
+                # 下载测量数据（将两期像都导入到各自的平面管理器中）
+                try:
+                    self.dcm_processor.download_measurement_result(task_id, meas_path)
+                    if os.path.exists(meas_path):
+                        phase_key = 'end_diastole' if phase == 'diastole' else 'end_systole'
+                        curves_count = self._import_measurement_data_for_phase(meas_path, phase_key)
+                        if curves_count > 0:
+                            summary['total_curves'] += curves_count
+                            logging.info(f"[{phase}] 测量数据导入成功，创建了 {curves_count} 条曲线")
+                except Exception as e:
+                    logging.warning(f"[{phase}] 下载/处理测量数据失败: {e}")
+
+                summary['phases'][phase] = {
+                    'segmentation_imported': seg_imported,
+                    'measurement_path': meas_path if os.path.exists(meas_path) else None,
+                    'segmentation_path': seg_path if os.path.exists(seg_path) else None,
+                    'curves_count': curves_count
+                }
+
+            # 清理旧兼容字段
             self.current_task_id = None
             
-            return {
-                'imported_files': imported_files,
-                'curves_count': curves_count,
-                'segmentation_imported': "分割结果" in imported_files,
-                'measurement_imported': "测量数据" in imported_files
-            }
+            return summary
             
         except Exception as e:
             logging.error(f"导入分析结果失败: {e}")
@@ -743,8 +798,14 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     num_segments = seg_node.GetSegmentation().GetNumberOfSegments()
                     logging.info(f"分割文件已导入为分割节点，包含 {num_segments} 个分段")
                     
-                    # 将分割节点存储到会话中
-                    self.session.set_segmentation_node(seg_node)
+                    # 将分割节点存储到会话中（兼容+分期）
+                    node_id = seg_node.GetID()
+                    self.session.set_segmentation_node(node_id)
+                    phase_key = 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
+                    try:
+                        self.session.set_phase_segmentation_node(phase_key, node_id)
+                    except Exception:
+                        pass
                     
                     # 设置分段显示属性
                     self._configure_segmentation_display(seg_node)
@@ -776,8 +837,14 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     num_segments = seg_node.GetSegmentation().GetNumberOfSegments()
                     logging.info(f"通过体积转换成功导入分割节点，包含 {num_segments} 个分段")
                     
-                    # 将分割节点存储到会话中
-                    self.session.set_segmentation_node(seg_node)
+                    # 将分割节点存储到会话中（兼容+分期）
+                    node_id = seg_node.GetID()
+                    self.session.set_segmentation_node(node_id)
+                    phase_key = 'end_diastole' if self.selected_phase == 'diastole' else 'end_systole'
+                    try:
+                        self.session.set_phase_segmentation_node(phase_key, node_id)
+                    except Exception:
+                        pass
                     
                     # 设置分段显示属性
                     self._configure_segmentation_display(seg_node)
@@ -920,6 +987,55 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             logging.error(f"导入测量数据失败: {e}")
             return 0
 
+    def _import_measurement_data_for_phase(self, json_path: str, phase_key: str) -> int:
+        """导入测量数据到指定期像的平面管理器
+
+        Args:
+            json_path: JSON文件路径
+            phase_key: 'end_diastole' 或 'end_systole'
+
+        Returns:
+            int: 成功加载的关键平面数量
+        """
+        try:
+            if not os.path.exists(json_path):
+                logging.error(f"测量数据文件不存在: {json_path}")
+                return 0
+
+            with open(json_path, 'r', encoding='utf-8') as f:
+                measurement_data = json.load(f)
+
+            logging.info(f"成功读取测量数据文件: {json_path} -> 导入到 {phase_key}")
+
+            # 加载到对应期像
+            success = self.session.load_measurement_planes_for_phase(phase_key, measurement_data)
+            if not success:
+                logging.warning(f"[{phase_key}] 未能加载任何关键平面数据")
+                return 0
+
+            mgr = self.session.get_phase_plane_manager(phase_key)
+            business_summary = mgr.get_business_summary()
+            loaded_planes = business_summary['loaded_planes']
+
+            loaded_plane_names = [k for k, v in loaded_planes.items() if v and k != 'has_any_critical_plane']
+            logging.info(f"[{phase_key}] 已加载的关键平面: {loaded_plane_names}")
+
+            # 创建可视化
+            visualization_results = mgr.create_all_visualizations()
+            successful_visualizations = sum(1 for s in visualization_results.values() if s)
+            logging.info(f"[{phase_key}] 可视化创建结果: {successful_visualizations}/{len(visualization_results)} 个成功")
+
+            # 输出测量数据
+            measurements = business_summary['measurements']
+            for plane_name, plane_measurements in measurements.items():
+                logging.info(f"[{phase_key}] {plane_name} 测量数据: {plane_measurements}")
+
+            successful_planes = sum(1 for v in loaded_planes.values() if v and isinstance(v, bool))
+            return successful_planes
+        except Exception as e:
+            logging.error(f"[{phase_key}] 导入测量数据失败: {e}")
+            return 0
+
     def _cleanup_temp_files(self):
         """清理临时文件"""
         try:
@@ -1003,3 +1119,66 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             
         except Exception as e:
             logging.error(f"Module2Logic 清理失败: {e}")
+
+    # ====== 多期像辅助方法 ======
+    def _prepare_phases_to_analyze(self):
+        """根据会话标记准备需要分析的期像列表（默认两期像都需要，缺失则跳过）"""
+        phases = []
+        try:
+            ed = self.session.get_marked_phase('end_diastole')
+            es = self.session.get_marked_phase('end_systole')
+            # 总是分析舒张末期
+            if not (ed and ed.get('frame_index') is not None):
+                logging.warning("未标记舒张末期，将使用当前帧作为替代进行分析")
+            phases.append('diastole')
+            # 收缩末期也默认分析，但若未标记则无法自动跳帧
+            if not (es and es.get('frame_index') is not None):
+                logging.warning("未标记收缩末期，将分析当前帧状态（如未手动切换可能与舒张相同帧）")
+            phases.append('systole')
+        except Exception as e:
+            logging.warning(f"准备期像列表时发生异常: {e}")
+            phases = ['diastole']
+        self.phases_to_analyze = phases
+
+    def _get_current_phase(self) -> str:
+        """获取当前处理的期像标识"""
+        if 0 <= self.phase_index < len(self.phases_to_analyze):
+            return self.phases_to_analyze[self.phase_index]
+        # 默认返回舒张末期
+        return 'diastole'
+
+    def _advance_to_next_phase(self) -> bool:
+        """推进到下一期像，返回是否还有下一期像需要处理"""
+        if self.phase_index < 0:
+            self.phase_index = 0
+        else:
+            self.phase_index += 1
+        has_more = self.phase_index < len(self.phases_to_analyze)
+        if has_more:
+            logging.info(f"准备处理期像: {self._get_current_phase()}")
+        return has_more
+
+    def _current_phase_base_progress(self) -> int:
+        """根据当前期像返回进度的基线（两期像：0与50）"""
+        idx = 0
+        if 0 <= self.phase_index < len(self.phases_to_analyze):
+            idx = self.phase_index
+        return 0 if idx == 0 else 50
+
+    def _try_switch_to_phase(self, phase: str) -> bool:
+        """尝试切换序列浏览器到指定期像的帧（若有标记）"""
+        try:
+            browser = self.session.get_sequence_browser_node()
+            if not browser:
+                return False
+            if phase == 'diastole':
+                info = self.session.get_marked_phase('end_diastole')
+            else:
+                info = self.session.get_marked_phase('end_systole')
+            if info and info.get('frame_index') is not None:
+                browser.SetSelectedItemNumber(int(info['frame_index']))
+                logging.info(f"已切换到{('舒张末期' if phase=='diastole' else '收缩末期')}帧: {info['frame_index']}")
+                return True
+        except Exception as e:
+            logging.warning(f"切换到期像 {phase} 失败: {e}")
+        return False

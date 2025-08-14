@@ -17,7 +17,7 @@ TAVR Analytics - 会话管理模块
 
 import logging
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 import slicer
 from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode
@@ -26,11 +26,11 @@ from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode
 try:
     # 尝试相对导入
     from .data_models import PatientData
-    from .domain_models import PlaneDataManager
+    from .domain_models import PlaneDataManager, PhasePlaneRepository, CardiacPhase
 except ImportError:
     # 回退到绝对导入
     from data_models import PatientData
-    from domain_models import PlaneDataManager
+    from domain_models import PlaneDataManager, PhasePlaneRepository, CardiacPhase
 
 
 class TAVRStudySession:
@@ -105,13 +105,23 @@ class TAVRStudySession:
                 }
             }
             
-            # 几何数据存储
-            self.segmentation_node_id = None  # 主分割节点ID
+            # 几何数据存储（总览）
+            self.segmentation_node_id = None  # 主分割节点ID（兼容旧逻辑，默认指向舒张末期导入的分割）
             self.landmark_node_ids = {}  # 标志点节点ID字典
             self.reconstructed_planes = {}  # 重建平面存储
             
-            # 平面数据管理器
-            self.plane_data_manager = PlaneDataManager()
+            # 分期分割节点与测量（新增）
+            # 期像 -> 分割节点ID
+            self.phase_segmentation_node_ids: Dict[str, Optional[str]] = {
+                CardiacPhase.END_DIASTOLE.value: None,
+                CardiacPhase.END_SYSTOLE.value: None,
+            }
+
+            # 分期平面仓库（各期像一个PlaneDataManager）
+            self.phase_plane_repo: PhasePlaneRepository = PhasePlaneRepository.create_default()
+
+            # 平面数据管理器（兼容旧API，默认返回舒张末期管理器）
+            self.plane_data_manager = self.phase_plane_repo.diastole
             
             # 兼容性属性 - 指向同一个管理器
             self.plane_manager = self.plane_data_manager
@@ -192,8 +202,10 @@ class TAVRStudySession:
         Args:
             node_id (str): 分割节点ID
         """
+        # 兼容旧API：写入总览segmentation，并默认记作舒张末期分割
         self.segmentation_node_id = node_id
-        self.logger.info(f"设置分割节点: {node_id}")
+        self.phase_segmentation_node_ids[CardiacPhase.END_DIASTOLE.value] = node_id
+        self.logger.info(f"设置分割节点(兼容): {node_id} -> 归为 {CardiacPhase.END_DIASTOLE.value}")
     
     def get_segmentation_node(self):
         """
@@ -208,6 +220,30 @@ class TAVRStudySession:
                 self.logger.warning(f"分割节点不存在: {self.segmentation_node_id}")
             return node
         return None
+
+    # ====== 分期分割节点API ======
+    def set_phase_segmentation_node(self, phase: str, node_id: Optional[str]):
+        """设置某期像的分割节点ID"""
+        if phase not in (CardiacPhase.END_DIASTOLE.value, CardiacPhase.END_SYSTOLE.value):
+            raise ValueError(f"无效的期像: {phase}")
+        self.phase_segmentation_node_ids[phase] = node_id
+        # 约定：舒张末期作为默认总览分割
+        if phase == CardiacPhase.END_DIASTOLE.value:
+            self.segmentation_node_id = node_id
+        self.logger.info(f"设置{phase}分割节点: {node_id}")
+
+    def get_phase_segmentation_node(self, phase: str):
+        """获取某期像的分割节点对象"""
+        node_id = self.phase_segmentation_node_ids.get(phase)
+        if node_id:
+            node = slicer.mrmlScene.GetNodeByID(node_id)
+            if node is None:
+                self.logger.warning(f"{phase} 分割节点不存在: {node_id}")
+            return node
+        return None
+
+    def get_all_phase_segmentation_ids(self) -> Dict[str, Optional[str]]:
+        return dict(self.phase_segmentation_node_ids)
     
     def set_landmark_node(self, landmark_name: str, node_id: str):
         """
@@ -671,85 +707,26 @@ class TAVRStudySession:
         self.reconstructed_planes = {}
         
         # 重置平面数据管理器
-        self.plane_data_manager.clear()
+        try:
+            self.plane_data_manager.clear()
+        except Exception:
+            pass
+
+        # 重置分期结构
+        self.phase_segmentation_node_ids = {
+            CardiacPhase.END_DIASTOLE.value: None,
+            CardiacPhase.END_SYSTOLE.value: None,
+        }
+        try:
+            self.phase_plane_repo.clear()
+        except Exception:
+            self.phase_plane_repo = PhasePlaneRepository.create_default()
+        # 兼容默认指向舒张末期
+        self.plane_data_manager = self.phase_plane_repo.diastole
+        self.plane_manager = self.plane_data_manager
         
         self.logger.info("会话重置完成")
-    
-    def set_landmark_node(self, landmark_name: str, node_id: str):
-        """
-        设置标志点节点ID
-        
-        Args:
-            landmark_name (str): 标志点名称
-            node_id (str): 节点ID
-        """
-        self.landmark_node_ids[landmark_name] = node_id
-        self.logger.info(f"设置标志点节点: {landmark_name} -> {node_id}")
-    
-    def get_landmark_node(self, landmark_name: str):
-        """
-        获取标志点节点
-        
-        Args:
-            landmark_name (str): 标志点名称
-            
-        Returns:
-            标志点节点，如果不存在返回None
-        """
-        node_id = self.landmark_node_ids.get(landmark_name)
-        if node_id:
-            node = slicer.mrmlScene.GetNodeByID(node_id)
-            if node is None:
-                self.logger.warning(f"标志点节点不存在: {landmark_name} ({node_id})")
-            return node
-        return None
-    
-    def set_reconstructed_plane(self, plane_name: str, plane_data: Dict[str, Any]):
-        """
-        设置重建平面数据
-        
-        Args:
-            plane_name (str): 平面名称
-            plane_data (Dict[str, Any]): 平面数据，包含origin、normal等
-        """
-        self.reconstructed_planes[plane_name] = plane_data
-        self.logger.info(f"设置重建平面: {plane_name}")
-    
-    def get_reconstructed_plane(self, plane_name: str) -> Optional[Dict[str, Any]]:
-        """
-        获取重建平面数据
-        
-        Args:
-            plane_name (str): 平面名称
-            
-        Returns:
-            平面数据字典，如果不存在返回None
-        """
-        return self.reconstructed_planes.get(plane_name)
-    
-    def set_segmentation_node(self, node_id: str):
-        """
-        设置主分割节点ID
-        
-        Args:
-            node_id (str): 分割节点ID
-        """
-        self.segmentation_node_id = node_id
-        self.logger.info(f"设置分割节点: {node_id}")
-    
-    def get_segmentation_node(self):
-        """
-        获取主分割节点
-        
-        Returns:
-            分割节点，如果不存在返回None
-        """
-        if self.segmentation_node_id:
-            node = slicer.mrmlScene.GetNodeByID(self.segmentation_node_id)
-            if node is None:
-                self.logger.warning(f"分割节点不存在: {self.segmentation_node_id}")
-            return node
-        return None
+
 
     def get_session_info(self) -> Dict[str, Any]:
         """
@@ -782,7 +759,7 @@ class TAVRStudySession:
         return cls()
     
     # ====== 平面数据管理方法 ======
-    
+    # 兼容API：将传入的测量默认加载到舒张末期
     def load_measurement_planes(self, measurement_data: Dict[str, Any]) -> bool:
         """
         从measurement.json数据中加载关键平面
@@ -833,3 +810,23 @@ class TAVRStudySession:
         """清空平面数据"""
         self.plane_data_manager.clear()
         self.logger.info("已清空会话中的平面数据")
+
+    # ====== 分期平面管理API（新增） ======
+    def get_phase_plane_manager(self, phase: Union[str, CardiacPhase]) -> PlaneDataManager:
+        """获取某期像对应的PlaneDataManager"""
+        if isinstance(phase, CardiacPhase):
+            phase = phase.value
+        return self.phase_plane_repo.get_manager(phase)
+
+    def load_measurement_planes_for_phase(self, phase: Union[str, CardiacPhase], measurement_data: Dict[str, Any]) -> bool:
+        """将measurement.json加载到指定期像的PlaneDataManager中"""
+        mgr = self.get_phase_plane_manager(phase)
+        ok = mgr.load_from_measurement_json(measurement_data)
+        # 同步兼容默认：若是舒张末期则刷新旧引用
+        if (phase.value if isinstance(phase, CardiacPhase) else phase) == CardiacPhase.END_DIASTOLE.value:
+            self.plane_data_manager = mgr
+            self.plane_manager = mgr
+        return ok
+
+    def get_phase_planes_summary(self) -> Dict[str, Any]:
+        return self.phase_plane_repo.get_loaded_summary()
