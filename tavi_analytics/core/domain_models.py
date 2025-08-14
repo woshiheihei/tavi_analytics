@@ -24,6 +24,21 @@ class CardiacPhase(Enum):
     END_SYSTOLE = "end_systole"     # 收缩末期
 
 
+class LeafletType(Enum):
+    """瓣叶类型枚举"""
+    LEFT_CORONARY = "left_coronary"     # 左冠状瓣叶
+    RIGHT_CORONARY = "right_coronary"   # 右冠状瓣叶  
+    NON_CORONARY = "non_coronary"       # 无冠状瓣叶
+
+
+class PasteAnalysisType(Enum):
+    """PASTE分析类型枚举"""
+    HALT = "halt"   # Heart Arrested Leaflet Timing
+    RELM = "relm"   # Radial Extension Leaflet Motion
+    SFD = "sfd"     # Systolic Flow Dynamics
+    PFD = "pfd"     # Post-implant Flow Dynamics
+
+
 @dataclass
 class VisualizationConfig:
     """可视化配置"""

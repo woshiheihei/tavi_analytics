@@ -14,18 +14,23 @@ try:
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module3_logic import Module3Logic
+    from .paste_analysis_widget import PasteAnalysisWidget
 except ImportError:
     import os
     import sys
     current_dir = os.path.dirname(__file__)
     parent_dir = os.path.dirname(current_dir)
+    # 添加父目录和当前目录到sys.path
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.phase_selection_widget import PhaseSelectionWidget
-    from module3.module3_logic import Module3Logic
+    from module3_logic import Module3Logic
+    from paste_analysis_widget import PasteAnalysisWidget
 
 
 class Module3Widget(qt.QWidget):
@@ -40,6 +45,9 @@ class Module3Widget(qt.QWidget):
         self.phase_selection = PhaseSelectionWidget(session, self)
         self.phase_selection.phaseChanged.connect(self._on_phase_changed)
         self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
+        
+        # 创建PASTE分析组件
+        self.paste_analysis = PasteAnalysisWidget(session, parent=self)
         
         self.setObjectName("Module3Widget")
         self._setup_ui()
@@ -360,12 +368,18 @@ class Module3Widget(qt.QWidget):
         self.refresh_status_btn.clicked.connect(self._on_refresh_plane_status)
         plane_control_layout.addWidget(self.refresh_status_btn)
 
+        # 添加PASTE分析区域
+        paste_frame = LayoutManager.create_section_frame("瓣叶功能评估 (PASTE分析)")
+        paste_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, paste_frame)
+        paste_layout.addWidget(self.paste_analysis)
+
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title)
         container_layout.addWidget(self.phase_selection)  # 添加期像选择组件
         container_layout.addWidget(plane_control_frame)   # 添加平面控制区域
+        container_layout.addWidget(paste_frame)           # 添加PASTE分析区域
 
         main_layout.addWidget(container, 1)
         LayoutManager.add_stretch_with_ratio(main_layout, 1)
@@ -374,6 +388,8 @@ class Module3Widget(qt.QWidget):
         self.session = session
         if hasattr(self, 'phase_selection'):
             self.phase_selection.set_session(session)
+        if hasattr(self, 'paste_analysis'):
+            self.paste_analysis.set_session(session)
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
             pass
@@ -385,15 +401,23 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.auto_activate(preferred_phase='diastole')
         
+        # 激活PASTE分析组件
+        if hasattr(self, 'paste_analysis'):
+            self.paste_analysis.on_activated()
+        
         # 自动检查平面状态
         qt.QTimer.singleShot(500, self._on_refresh_plane_status)  # 延迟500ms执行，确保UI完全加载
 
     def on_deactivated(self):
         logging.info("模块三已停用")
+        if hasattr(self, 'paste_analysis'):
+            self.paste_analysis.on_deactivated()
 
     def cleanup(self):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.cleanup()
+        if hasattr(self, 'paste_analysis'):
+            self.paste_analysis.cleanup()
         if self.logic:
             self.logic.cleanup()
         logging.info("模块三界面清理完成")

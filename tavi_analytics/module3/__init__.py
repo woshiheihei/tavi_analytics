@@ -5,12 +5,16 @@
 包括瓣膜形态、血栓检测、功能评估等。
 """
 
-from .module3_widget import Module3Widget
 from .module3_logic import Module3Logic
 from .module3_adapter import Module3Adapter
+from .paste_analysis_logic import PasteAnalysisLogic
+from .paste_analysis_widget import PasteAnalysisWidget
+from .module3_widget import Module3Widget
 
 __all__ = [
     "Module3Widget",
-    "Module3Logic",
-    "Module3Adapter"
+    "Module3Logic", 
+    "Module3Adapter",
+    "PasteAnalysisLogic",
+    "PasteAnalysisWidget"
 ]

@@ -10,11 +10,13 @@ current_dir = os.path.dirname(__file__)
 parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 from core.module_manager import ModuleInterface, ModuleEvent
 from core.session import TAVRStudySession
-from module3.module3_widget import Module3Widget
-from module3.module3_logic import Module3Logic
+from module3_widget import Module3Widget
+from module3_logic import Module3Logic
 
 
 class Module3Adapter(ModuleInterface):

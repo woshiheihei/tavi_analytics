@@ -21,6 +21,7 @@ class LayoutType(Enum):
     MAIN_CONTAINER = "main_container"      # 主容器
     MODULE_CONTAINER = "module_container"   # 模块容器
     SECTION_CONTAINER = "section_container" # 区域容器
+    FORM_CONTAINER = "form_container"       # 表单容器
     BUTTON_GROUP = "button_group"          # 按钮组
     INFO_DISPLAY = "info_display"          # 信息显示
     CONTROL_PANEL = "control_panel"        # 控制面板
@@ -45,6 +46,7 @@ class LayoutManager:
         LayoutType.MAIN_CONTAINER: 12,
         LayoutType.MODULE_CONTAINER: 10,
         LayoutType.SECTION_CONTAINER: 8,
+        LayoutType.FORM_CONTAINER: 6,
         LayoutType.BUTTON_GROUP: 6,
         LayoutType.INFO_DISPLAY: 4,
         LayoutType.CONTROL_PANEL: 8,
@@ -55,6 +57,7 @@ class LayoutManager:
         LayoutType.MAIN_CONTAINER: (10, 10, 10, 10),
         LayoutType.MODULE_CONTAINER: (8, 8, 8, 8),
         LayoutType.SECTION_CONTAINER: (6, 6, 6, 6),
+        LayoutType.FORM_CONTAINER: (4, 6, 4, 6),
         LayoutType.BUTTON_GROUP: (4, 4, 4, 4),
         LayoutType.INFO_DISPLAY: (6, 8, 6, 8),
         LayoutType.CONTROL_PANEL: (8, 8, 8, 8),
@@ -71,7 +74,7 @@ class LayoutManager:
     }
     
     @staticmethod
-    def create_layout(layout_type: LayoutType, parent_widget: qt.QWidget) -> qt.QVBoxLayout:
+    def create_layout(layout_type: LayoutType, parent_widget: qt.QWidget):
         """创建标准化布局
         
         Args:
@@ -79,8 +82,13 @@ class LayoutManager:
             parent_widget: 父组件
             
         Returns:
-            配置好的布局对象
+            配置好的布局对象（QVBoxLayout或QFormLayout）
         """
+        # 如果是表单容器，创建表单布局
+        if layout_type == LayoutType.FORM_CONTAINER:
+            return LayoutManager.create_form_layout(layout_type, parent_widget)
+        
+        # 否则创建垂直布局
         layout = qt.QVBoxLayout(parent_widget)
         
         # 设置间距
@@ -112,6 +120,30 @@ class LayoutManager:
         # 设置间距
         spacing = LayoutManager.SPACING_CONFIG.get(layout_type, 8)
         layout.setSpacing(spacing)
+        
+        # 设置边距
+        margins = LayoutManager.MARGINS_CONFIG.get(layout_type, (8, 8, 8, 8))
+        layout.setContentsMargins(*margins)
+        
+        return layout
+    
+    @staticmethod
+    def create_form_layout(layout_type: LayoutType, parent_widget: qt.QWidget) -> qt.QFormLayout:
+        """创建表单布局
+        
+        Args:
+            layout_type: 布局类型
+            parent_widget: 父组件
+            
+        Returns:
+            配置好的表单布局对象
+        """
+        layout = qt.QFormLayout(parent_widget)
+        
+        # 设置间距
+        spacing = LayoutManager.SPACING_CONFIG.get(layout_type, 8)
+        layout.setVerticalSpacing(spacing)
+        layout.setHorizontalSpacing(spacing)
         
         # 设置边距
         margins = LayoutManager.MARGINS_CONFIG.get(layout_type, (8, 8, 8, 8))
