@@ -4,6 +4,7 @@ TAVI Analytics 领域模型
 """
 
 import logging
+import numpy as np
 from typing import Dict, List, Tuple, Optional, Any, Union, Type
 from dataclasses import dataclass
 from enum import Enum
@@ -208,6 +209,92 @@ class ContourBase(ABC):
             return 'End_Systole'
         else:
             return phase
+    
+    def calculate_plane_parameters(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """
+        计算轮廓的平面参数（中心点和法向量）
+        
+        Returns:
+            Tuple[Optional[np.ndarray], Optional[np.ndarray]]: (中心点, 法向量)
+        """
+        try:
+            # 查找对应的轮廓节点
+            node_name = self.get_node_name()
+            import slicer
+            contour_node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+            
+            if not contour_node:
+                logging.error(f"未找到轮廓节点: {node_name}")
+                return None, None
+            
+            return self._calculate_contour_geometry(contour_node)
+            
+        except Exception as e:
+            logging.error(f"计算轮廓平面参数时出错: {e}")
+            return None, None
+    
+    def _calculate_contour_geometry(self, contour_node) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """
+        从轮廓节点的标记点计算几何参数
+        
+        Args:
+            contour_node: 轮廓标记点节点
+            
+        Returns:
+            Tuple[Optional[np.ndarray], Optional[np.ndarray]]: (中心点, 法向量)
+        """
+        try:
+            import numpy as np
+            
+            num_points = contour_node.GetNumberOfControlPoints()
+            if num_points < 3:
+                logging.error(f"标记点数量不足，需要至少3个点，当前有{num_points}个点")
+                return None, None
+            
+            # 获取所有标记点的坐标（RAS坐标系）
+            points = []
+            for i in range(num_points):
+                point = [0.0, 0.0, 0.0]
+                contour_node.GetNthControlPointPosition(i, point)
+                points.append(point)
+            
+            points_array = np.array(points)
+            logging.debug(f"获取到{num_points}个标记点")
+            
+            # 1. 计算中心点（所有点的质心）
+            center_point = np.mean(points_array, axis=0)
+            
+            # 2. 使用奇异值分解(SVD)最小二乘法拟合平面
+            # 将点相对于中心点进行中心化
+            centered_points = points_array - center_point
+            
+            # 使用SVD找到最佳拟合平面
+            # 法向量是最小奇异值对应的方向
+            U, S, Vt = np.linalg.svd(centered_points)
+            normal_vector = Vt[-1]  # 最后一行是最小奇异值对应的方向
+            
+            # 确保法向量指向正Z方向（头部方向）
+            if normal_vector[2] < 0:
+                normal_vector = -normal_vector
+            
+            # 归一化法向量
+            normal_vector = normal_vector / np.linalg.norm(normal_vector)
+            
+            return center_point, normal_vector
+            
+        except Exception as e:
+            logging.error(f"计算轮廓几何参数时出错: {e}")
+            return None, None
+    
+    def get_node_name(self) -> str:
+        """
+        获取期像感知的节点名称
+        
+        Returns:
+            str: 包含期像后缀的完整节点名称
+        """
+        # standard_node_name 已经包含期像后缀，直接返回
+        return self.standard_node_name
 
 
 class ContourFactory:

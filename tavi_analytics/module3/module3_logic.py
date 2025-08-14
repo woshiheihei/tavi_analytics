@@ -7,9 +7,9 @@ import logging
 from typing import Dict, List, Tuple, Optional
 from slicer.ScriptedLoadableModule import ScriptedLoadableModuleLogic
 
-# 导入轮廓定位管理器
+# 导入轮廓定位服务
 try:
-    from ..utils.contour_position import get_contour_manager
+    from ..services.contour_positioning_service import get_contour_position_service
 except ImportError:
     import os
     import sys
@@ -17,7 +17,7 @@ except ImportError:
     parent_dir = os.path.dirname(current_dir)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from utils.contour_position import get_contour_manager
+    from services.contour_positioning_service import get_contour_position_service
 
 
 class Module3Logic(ScriptedLoadableModuleLogic):
@@ -25,7 +25,7 @@ class Module3Logic(ScriptedLoadableModuleLogic):
 
     def __init__(self) -> None:
         super().__init__()
-        self.contour_manager = get_contour_manager()
+        self.contour_service = get_contour_position_service()
         self.current_phase = None  # 当前期像
         logging.info("Module3Logic 初始化完成")
     
@@ -37,8 +37,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             phase: 期像类型 ('diastole', 'systole', 'end_diastole', 'end_systole')
         """
         self.current_phase = phase
-        # 同步到平面管理器
-        self.contour_manager.set_current_phase(phase)
+        # 同步到轮廓定位服务
+        self.contour_service.set_current_phase(phase)
         logging.info(f"Module3Logic 当前期像设置为: {phase}")
     
     def get_current_phase(self) -> Optional[str]:
@@ -59,8 +59,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             use_phase = phase or self.current_phase
             logging.info(f"开始切换到ValveStent_Bottom_Contour轮廓，期像: {use_phase}")
             
-            # 使用轮廓定位管理器执行切换
-            success = self.contour_manager.switch_to_contour('valve_stent_bottom', phase=use_phase)
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('valve_stent_bottom', phase=use_phase)
             
             if success:
                 logging.info("成功切换到ValveStent_Bottom_Contour轮廓")
@@ -78,6 +78,62 @@ class Module3Logic(ScriptedLoadableModuleLogic):
         """兼容方法：调用新的轮廓方法"""
         return self.switch_to_valve_stent_bottom_contour(phase)
     
+    def switch_to_sinus_of_valsalva_contour(self, phase: Optional[str] = None) -> bool:
+        """
+        一键将当前MPR视图切换到SinusOfValsalva轮廓
+        
+        Args:
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            use_phase = phase or self.current_phase
+            logging.info(f"开始切换到SinusOfValsalva轮廓，期像: {use_phase}")
+            
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('sinus_of_valsalva', phase=use_phase)
+            
+            if success:
+                logging.info("成功切换到SinusOfValsalva轮廓")
+            else:
+                logging.error("切换到SinusOfValsalva轮廓失败")
+            
+            return success
+            
+        except Exception as e:
+            logging.error(f"切换到SinusOfValsalva轮廓时出错: {e}")
+            return False
+    
+    def switch_to_stent_best_fit_contour(self, phase: Optional[str] = None) -> bool:
+        """
+        一键将当前MPR视图切换到StentBestFit轮廓
+        
+        Args:
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            use_phase = phase or self.current_phase
+            logging.info(f"开始切换到StentBestFit轮廓，期像: {use_phase}")
+            
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('stent_best_fit', phase=use_phase)
+            
+            if success:
+                logging.info("成功切换到StentBestFit轮廓")
+            else:
+                logging.error("切换到StentBestFit轮廓失败")
+            
+            return success
+            
+        except Exception as e:
+            logging.error(f"切换到StentBestFit轮廓时出错: {e}")
+            return False
+    
     def switch_to_sinus_of_valsalva_plane(self, phase: Optional[str] = None) -> bool:
         """
         一键将当前MPR视图切换到SinusOfValsalva_Plane平面
@@ -92,8 +148,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             use_phase = phase or self.current_phase
             logging.info(f"开始切换到SinusOfValsalva_Plane平面，期像: {use_phase}")
             
-            # 使用平面定位管理器执行切换
-            success = self.contour_manager.switch_to_contour('sinus_of_valsalva', phase=use_phase)
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('sinus_of_valsalva', phase=use_phase)
             
             if success:
                 logging.info("成功切换到SinusOfValsalva_Plane平面")
@@ -120,8 +176,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             use_phase = phase or self.current_phase
             logging.info(f"开始切换到StentBestFit_Plane平面，期像: {use_phase}")
             
-            # 使用平面定位管理器执行切换
-            success = self.contour_manager.switch_to_contour('stent_best_fit', phase=use_phase)
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('stent_best_fit', phase=use_phase)
             
             if success:
                 logging.info("成功切换到StentBestFit_Plane平面")
@@ -149,8 +205,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             use_phase = phase or self.current_phase
             logging.info(f"开始切换到自定义平面: {node_name}，期像: {use_phase}")
             
-            # 使用平面定位管理器执行切换
-            success = self.contour_manager.switch_to_contour('custom', node_name, phase=use_phase)
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('custom', node_name, phase=use_phase)
             
             if success:
                 logging.info(f"成功切换到自定义平面: {node_name}")
@@ -170,7 +226,7 @@ class Module3Logic(ScriptedLoadableModuleLogic):
         Returns:
             Dict[str, str]: 平面类型到期像感知节点名称的映射
         """
-        return self.contour_manager.get_phase_aware_supported_contours()
+        return self.contour_service.get_phase_aware_supported_contours()
     
     def get_contour_info(self, contour_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> Optional[Dict]:
         """
@@ -185,7 +241,7 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             Optional[Dict]: 轮廓信息字典，包含中心点、法向量等
         """
         use_phase = phase or self.current_phase
-        return self.contour_manager.get_contour_info(contour_type, node_name, use_phase)
+        return self.contour_service.get_contour_info(contour_type, node_name, use_phase)
     
     def switch_to_contour_by_type(self, contour_type: str, phase: Optional[str] = None) -> bool:
         """
@@ -202,8 +258,8 @@ class Module3Logic(ScriptedLoadableModuleLogic):
             use_phase = phase or self.current_phase
             logging.info(f"开始切换到{contour_type}轮廓，期像: {use_phase}")
             
-            # 使用轮廓定位管理器执行切换
-            success = self.contour_manager.switch_to_contour(contour_type, phase=use_phase)
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour(contour_type, phase=use_phase)
             
             if success:
                 logging.info(f"成功切换到{contour_type}轮廓")
@@ -228,7 +284,7 @@ class Module3Logic(ScriptedLoadableModuleLogic):
         """
         try:
             use_phase = phase or self.current_phase
-            return self.contour_manager.check_phase_contour_availability(use_phase)
+            return self.contour_service.check_phase_contour_availability(use_phase)
         except Exception as e:
             logging.error(f"检查轮廓可用性时出错: {e}")
             return {}
