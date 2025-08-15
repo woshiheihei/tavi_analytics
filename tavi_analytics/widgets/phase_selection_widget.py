@@ -260,26 +260,27 @@ class PhaseSelectionWidget(qt.QWidget):
                 if seg_node and seg_node_valid:
                     seg_disp = seg_node.GetDisplayNode()
                     if seg_disp:
-                        # 设置主要可视化状态
+                        # 设置主要可视化状态 - 根据期像可见性控制
                         seg_disp.SetVisibility(visible)
                         
-                        # 3D 显示控制
+                        # 3D 显示控制 - 根据期像显示/隐藏分割模型
                         try:
                             seg_disp.SetVisibility3D(visible)
+                            
+                            # 确保所有分段也按期像控制3D显示
+                            segmentation = seg_node.GetSegmentation()
+                            for i in range(segmentation.GetNumberOfSegments()):
+                                segment_id = segmentation.GetNthSegmentID(i)
+                                seg_disp.SetSegmentVisibility3D(segment_id, visible)
+                                seg_disp.SetSegmentVisibility(segment_id, visible)
                         except Exception:
                             pass
                         
-                        # 2D 显示控制 - 避免同时关闭Fill和Outline导致的无效状态
+                        # 2D 显示控制 - 需求：在三个 slice 窗口中不显示分割
+                        # 无论当前期像是否激活，统一关闭 2D 填充与轮廓
                         try:
-                            if visible:
-                                # 显示时：启用Fill和Outline
-                                seg_disp.SetVisibility2DFill(True)
-                                seg_disp.SetVisibility2DOutline(True)
-                            else:
-                                # 隐藏时：只关闭Fill，保持Outline开启以避免无效状态
-                                seg_disp.SetVisibility2DFill(False)
-                                # 保持Outline开启，但通过主可视化状态控制整体显示
-                                # seg_disp.SetVisibility2DOutline(True)  # 保持开启状态
+                            seg_disp.SetVisibility2DFill(False)
+                            seg_disp.SetVisibility2DOutline(False)
                         except Exception:
                             pass
                         
@@ -320,12 +321,18 @@ class PhaseSelectionWidget(qt.QWidget):
                                 disp.SetVisibility(visible)
                             except Exception:
                                 pass
-                            # Markups/模型显示
-                            for fn in ('SetVisibility2D', 'SetVisibility3D'):
-                                try:
-                                    getattr(disp, fn)(visible)
-                                except Exception:
-                                    pass
+                            # 2D 禁用
+                            try:
+                                disp.SetVisibility2D(False)
+                            except Exception:
+                                pass
+                            # 3D：StentBestFit 永远关闭，其它按期像控制
+                            try:
+                                n = node.GetName() if hasattr(node, 'GetName') else ''
+                                is_stent_best_fit = isinstance(n, str) and n.startswith('StentBestFit_Contour')
+                                disp.SetVisibility3D(False if is_stent_best_fit else visible)
+                            except Exception:
+                                pass
                             toggled_any = True
             except Exception as e:
                 logging.warning(f"更新轮廓可视化失败(phase={phase_key}): {e}")
@@ -376,16 +383,25 @@ class PhaseSelectionWidget(qt.QWidget):
                                 
                             try:
                                 disp.SetVisibility(visible)
-                                disp.SetVisibility3D(visible)
-                                
-                                # 避免同时关闭Fill和Outline导致的无效状态
-                                if visible:
-                                    disp.SetVisibility2DFill(True)
-                                    disp.SetVisibility2DOutline(True)
-                                else:
-                                    # 隐藏时：只关闭Fill，保持Outline以避免无效状态
+                                # 3D：根据期像显示/隐藏分割模型，并确保分段级别可见性
+                                try:
+                                    disp.SetVisibility3D(visible)
+                                    
+                                    # 确保所有分段也按期像控制3D显示
+                                    if target_node.GetClassName() == 'vtkMRMLSegmentationNode':
+                                        segmentation = target_node.GetSegmentation()
+                                        for i in range(segmentation.GetNumberOfSegments()):
+                                            segment_id = segmentation.GetNthSegmentID(i)
+                                            disp.SetSegmentVisibility3D(segment_id, visible)
+                                            disp.SetSegmentVisibility(segment_id, visible)
+                                except Exception:
+                                    pass
+                                # 2D 一律关闭
+                                try:
                                     disp.SetVisibility2DFill(False)
-                                    # disp.SetVisibility2DOutline(True)  # 保持开启
+                                    disp.SetVisibility2DOutline(False)
+                                except Exception:
+                                    pass
                                 
                                 logging.info(f"兜底机制成功设置分割节点: {name} (ID: {target_node.GetID()})")
                                 toggled_any = True
@@ -415,14 +431,21 @@ class PhaseSelectionWidget(qt.QWidget):
                             continue
                         try:
                             disp.SetVisibility(visible)
-                            for fn in ('SetVisibility2D', 'SetVisibility3D'):
-                                try:
-                                    getattr(disp, fn)(visible)
-                                except Exception:
-                                    pass
-                            toggled_any = True
                         except Exception:
                             pass
+                        # 2D 禁用
+                        try:
+                            disp.SetVisibility2D(False)
+                        except Exception:
+                            pass
+                        # 3D：StentBestFit 永远关闭
+                        try:
+                            n = node.GetName() if hasattr(node, 'GetName') else ''
+                            is_stent_best_fit = isinstance(n, str) and n.startswith('StentBestFit_Contour')
+                            disp.SetVisibility3D(False if is_stent_best_fit else visible)
+                        except Exception:
+                            pass
+                        toggled_any = True
 
         except Exception as e:
             logging.error(f"设置期像 {phase} 节点可视化失败: {e}")

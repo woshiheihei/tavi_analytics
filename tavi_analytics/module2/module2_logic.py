@@ -919,19 +919,60 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     # 如果无法解析分段编号，保持原名称
                     pass
             
+            # 关键步骤：创建3D闭合表面表示（类似点击"Show 3D"按钮）
+            logging.info("创建分割的3D闭合表面表示...")
+            try:
+                # 方法1：直接创建闭合表面表示
+                segmentation.CreateRepresentation("Closed surface")
+                logging.info("✓ 成功创建3D闭合表面表示")
+            except Exception as e:
+                logging.warning(f"创建3D表面失败: {e}")
+                # 如果失败，尝试强制重新创建
+                try:
+                    segmentation.CreateRepresentation("Closed surface", True)  # True表示强制重新创建
+                    logging.info("✓ 强制重新创建3D表面成功")
+                except Exception as e2:
+                    logging.error(f"强制创建3D表面也失败: {e2}")
+            
+            # 确保有显示节点
+            if not seg_node.GetDisplayNode():
+                seg_node.CreateDefaultDisplayNodes()
+                logging.info("创建了默认显示节点")
+            
             # 设置分割显示属性
             display_node = seg_node.GetDisplayNode()
             if display_node:
+                # 设置主要可见性为True（需求：在3D窗口中默认显示分割模型）
+                display_node.SetVisibility(True)
                 # 设置为3D显示
                 display_node.SetVisibility3D(True)
                 # 设置透明度
                 display_node.SetOpacity3D(0.6)
-                # 设置2D显示
-                display_node.SetVisibility2DFill(True)
-                display_node.SetOpacity2DFill(0.4)
-                display_node.SetVisibility2DOutline(True)
                 
-                logging.info("分割显示属性已配置")
+                # 关键步骤：为每个分段启用3D可见性
+                for i in range(segmentation.GetNumberOfSegments()):
+                    segment_id = segmentation.GetNthSegmentID(i)
+                    segment_name = segmentation.GetSegment(segment_id).GetName()
+                    
+                    # 启用分段的3D显示
+                    display_node.SetSegmentVisibility3D(segment_id, True)
+                    display_node.SetSegmentVisibility(segment_id, True)
+                    
+                    logging.info(f"✓ 启用分段 {segment_name} 的3D显示")
+                
+                # 设置2D显示（需求：在三个 slice 窗口中不显示分割）
+                try:
+                    display_node.SetVisibility2DFill(False)
+                    display_node.SetOpacity2DFill(0.0)
+                    display_node.SetVisibility2DOutline(False)
+                except Exception:
+                    # 某些版本API差异，忽略
+                    pass
+                
+                # 刷新显示
+                display_node.Modified()
+                
+                logging.info("分割显示属性已配置，3D表面已启用")
             
         except Exception as e:
             logging.warning(f"配置分割显示属性失败: {e}")

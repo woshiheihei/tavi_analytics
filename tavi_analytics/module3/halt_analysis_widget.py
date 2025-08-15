@@ -772,6 +772,9 @@ class HaltAnalysisWidget(qt.QWidget):
         # 隐藏分析控制区域
         self.control_frame.setVisible(False)
         
+        # 默认显示axial切片在3D视图中
+        self._show_axial_slice_in_3d()
+        
         # 更新其他区域的可见性
         self._update_analysis_control_visibility()
         
@@ -879,6 +882,90 @@ class HaltAnalysisWidget(qt.QWidget):
                 
         except Exception as e:
             logging.error(f"记录可用轮廓节点时出错: {e}")
+    
+    def _show_axial_slice_in_3d(self):
+        """在3D视图中显示axial切片"""
+        try:
+            import slicer
+            
+            # 获取axial切片节点（Red切片）
+            axial_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeRed")
+            
+            if axial_slice_node:
+                # 设置axial切片在3D视图中可见
+                axial_slice_node.SetSliceVisible(True)
+                
+                # 确保其他切片在3D视图中不可见（保持focus在axial）
+                green_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeGreen")
+                yellow_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeYellow")
+                
+                if green_slice_node:
+                    green_slice_node.SetSliceVisible(False)
+                if yellow_slice_node:
+                    yellow_slice_node.SetSliceVisible(False)
+                
+                # 刷新3D视图以确保变更生效
+                self._refresh_3d_view()
+                
+                logging.info("已在3D视图中显示axial切片")
+                
+            else:
+                logging.warning("无法找到axial切片节点")
+                
+        except Exception as e:
+            logging.error(f"在3D视图中显示axial切片失败: {e}")
+    
+    def _refresh_3d_view(self):
+        """刷新3D视图"""
+        try:
+            import slicer
+            
+            layout_manager = slicer.app.layoutManager()
+            if layout_manager:
+                # 刷新主3D视图
+                threeDWidget = layout_manager.threeDWidget(0)
+                if threeDWidget:
+                    threeDView = threeDWidget.threeDView()
+                    if threeDView:
+                        threeDView.forceRender()
+                
+                # 如果有多个3D视图，也一并刷新
+                for i in range(layout_manager.threeDViewCount):
+                    widget = layout_manager.threeDWidget(i)
+                    if widget:
+                        view = widget.threeDView()
+                        if view:
+                            view.forceRender()
+                
+                logging.debug("3D视图刷新完成")
+                
+        except Exception as e:
+            logging.error(f"刷新3D视图时出错: {e}")
+    
+    def _restore_default_slice_visibility(self):
+        """恢复默认的切片显示状态"""
+        try:
+            import slicer
+            
+            # 获取所有切片节点
+            slice_nodes = {
+                'Red': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeRed"),
+                'Green': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeGreen"), 
+                'Yellow': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeYellow")
+            }
+            
+            # 恢复所有切片的默认显示状态（通常是可见的）
+            for name, node in slice_nodes.items():
+                if node:
+                    node.SetSliceVisible(True)
+            
+            # 刷新3D视图
+            self._refresh_3d_view()
+            
+            logging.info("已恢复默认切片显示状态")
+            
+        except Exception as e:
+            logging.error(f"恢复默认切片显示状态失败: {e}")
     
     def _on_leaflet_grade_changed(self, leaflet_name: str, grade: str):
         """瓣叶分级改变时的回调"""
@@ -1018,6 +1105,9 @@ class HaltAnalysisWidget(qt.QWidget):
             self._update_analysis_control_visibility()
             self._emit_status_changed()
             
+            # 重新显示axial切片
+            self._show_axial_slice_in_3d()
+            
             logging.info("HALT分析已重置")
     
     def _export_results(self):
@@ -1141,10 +1231,16 @@ class HaltAnalysisWidget(qt.QWidget):
     def on_activated(self):
         """模块激活时调用"""
         logging.info("HALT分析界面激活")
+        
+        # 默认显示axial切片在3D视图中
+        self._show_axial_slice_in_3d()
     
     def on_deactivated(self):
         """模块取消激活时调用"""
         logging.info("HALT分析界面取消激活")
+        
+        # 可选：恢复所有切片的默认显示状态
+        self._restore_default_slice_visibility()
     
     def cleanup(self):
         """清理资源"""

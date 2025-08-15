@@ -142,6 +142,19 @@ class ContourVisualizationManager:
             except Exception:
                 pass
 
+            # 需求：在三个 slice 窗口中不显示轮廓（关闭所有2D相关渲染）
+            try:
+                if hasattr(display_node, 'SetVisibility2D'):
+                    display_node.SetVisibility2D(False)
+            except Exception:
+                pass
+            try:
+                # 对 Markups 显示节点，关闭切片投影
+                if hasattr(display_node, 'SetSliceProjection'):
+                    display_node.SetSliceProjection(False)
+            except Exception:
+                pass
+
 
 class ContourBase(ABC):
     """轮廓基类 - 定义所有轮廓的通用接口"""
@@ -513,6 +526,17 @@ class ContourGeometry:
                     # 使用默认配置
                     default_config = VisualizationConfig.create_default_curve_config()
                     ContourVisualizationManager.apply_display_properties(display_node, default_config)
+                # 明确关闭2D显示与投影
+                try:
+                    if hasattr(display_node, 'SetVisibility2D'):
+                        display_node.SetVisibility2D(False)
+                except Exception:
+                    pass
+                try:
+                    if hasattr(display_node, 'SetSliceProjection'):
+                        display_node.SetSliceProjection(False)
+                except Exception:
+                    pass
             
             self._slicer_node_id = curve_node.GetID()
             logging.info(f"成功创建平面曲线节点: {node_name} (ID: {self._slicer_node_id})")
@@ -979,6 +1003,23 @@ class StentBestFitContour(ContourBase):
                 if display_node:
                     config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
                     ContourVisualizationManager.apply_display_properties(display_node, config)
+                    # 关闭2D
+                    try:
+                        if hasattr(display_node, 'SetVisibility2D'):
+                            display_node.SetVisibility2D(False)
+                    except Exception:
+                        pass
+                    try:
+                        if hasattr(display_node, 'SetSliceProjection'):
+                            display_node.SetSliceProjection(False)
+                    except Exception:
+                        pass
+                    # 关闭3D（需求：StentBestFit 不在三维窗口显示）
+                    try:
+                        if hasattr(display_node, 'SetVisibility3D'):
+                            display_node.SetVisibility3D(False)
+                    except Exception:
+                        pass
                 
                 self._slicer_node_id = curve_node.GetID()
                 logging.info(f"成功创建支架拟合闭合曲线: {self.standard_node_name}")
@@ -1015,6 +1056,23 @@ class StentBestFitContour(ContourBase):
                             display_node.SetOpacity(0.3)
                         except Exception:
                             pass
+                        # 关闭2D
+                        try:
+                            if hasattr(display_node, 'SetVisibility2D'):
+                                display_node.SetVisibility2D(False)
+                        except Exception:
+                            pass
+                        try:
+                            if hasattr(display_node, 'SetSliceProjection'):
+                                display_node.SetSliceProjection(False)
+                        except Exception:
+                            pass
+                        # 关闭3D（需求：StentBestFit 不在三维窗口显示）
+                        try:
+                            if hasattr(display_node, 'SetVisibility3D'):
+                                display_node.SetVisibility3D(False)
+                        except Exception:
+                            pass
                     
                     self._slicer_node_id = plane_node.GetID()
                     logging.info(f"成功创建支架拟合平面节点: {self.standard_node_name}")
@@ -1037,6 +1095,23 @@ class StentBestFitContour(ContourBase):
                     # 放大标记点便于查看
                     try:
                         display_node.SetGlyphScale(3.0)
+                    except Exception:
+                        pass
+                    # 关闭2D
+                    try:
+                        if hasattr(display_node, 'SetVisibility2D'):
+                            display_node.SetVisibility2D(False)
+                    except Exception:
+                        pass
+                    try:
+                        if hasattr(display_node, 'SetSliceProjection'):
+                            display_node.SetSliceProjection(False)
+                    except Exception:
+                        pass
+                    # 关闭3D（需求：StentBestFit 不在三维窗口显示）
+                    try:
+                        if hasattr(display_node, 'SetVisibility3D'):
+                            display_node.SetVisibility3D(False)
                     except Exception:
                         pass
 
