@@ -321,6 +321,9 @@ class Module3Widget(qt.QWidget):
     def on_activated(self):
         logging.info("模块三已激活")
         
+        # 启用MPR交互式切片相交线功能
+        self._enable_mpr_crosshairs()
+        
         # 激活期像选择组件，默认选择舒张末期
         if hasattr(self, 'phase_selection'):
             self.phase_selection.auto_activate(preferred_phase='diastole')
@@ -337,6 +340,71 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_deactivated()
 
+    def _enable_mpr_crosshairs(self):
+        """
+        启用MPR交互式切片相交线功能
+        
+        根据 3D Slicer 交互式切片相交线功能开启方法，启用：
+        - 切片相交线可见性
+        - 交互式拖动
+        - 平移
+        - 旋转
+        """
+        try:
+            import slicer
+            
+            # 获取 Application Logic
+            appLogic = slicer.app.applicationLogic()
+            if not appLogic:
+                logging.error("无法获取 Application Logic")
+                return False
+            
+            # 获取枚举标志位
+            flag = slicer.vtkMRMLApplicationLogic
+            
+            # 启用各项功能
+            logging.info("启用MPR交互式切片相交线功能...")
+            
+            # 开启切片相交线可见性
+            appLogic.SetIntersectingSlicesEnabled(flag.IntersectingSlicesVisibility, True)
+            logging.info("✅ 切片相交线可见性已启用")
+            
+            # 支持交互式拖动
+            appLogic.SetIntersectingSlicesEnabled(flag.IntersectingSlicesInteractive, True)
+            logging.info("✅ 交互式拖动已启用")
+            
+            # 支持平移
+            appLogic.SetIntersectingSlicesEnabled(flag.IntersectingSlicesTranslation, True)
+            logging.info("✅ 平移功能已启用")
+            
+            # 支持旋转
+            appLogic.SetIntersectingSlicesEnabled(flag.IntersectingSlicesRotation, True)
+            logging.info("✅ 旋转功能已启用")
+            
+            # 检查功能状态并输出
+            states = {
+                'Visibility': bool(appLogic.GetIntersectingSlicesEnabled(flag.IntersectingSlicesVisibility)),
+                'Interactive': bool(appLogic.GetIntersectingSlicesEnabled(flag.IntersectingSlicesInteractive)),
+                'Translation': bool(appLogic.GetIntersectingSlicesEnabled(flag.IntersectingSlicesTranslation)),
+                'Rotation': bool(appLogic.GetIntersectingSlicesEnabled(flag.IntersectingSlicesRotation)),
+            }
+            
+            logging.info(f"MPR Crosshairs 功能状态: {states}")
+            
+            # 在控制台也输出状态
+            print("🎯 MPR Crosshairs 功能已启用:")
+            for feature, enabled in states.items():
+                status_icon = "✅" if enabled else "❌"
+                print(f"  {status_icon} {feature}: {enabled}")
+            
+            return all(states.values())
+            
+        except Exception as e:
+            error_message = f"启用MPR Crosshairs功能时出错: {e}"
+            logging.error(error_message)
+            print(f"❌ {error_message}")
+            return False
+    
     def cleanup(self):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.cleanup()
