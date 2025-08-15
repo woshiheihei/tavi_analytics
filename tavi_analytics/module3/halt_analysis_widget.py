@@ -148,197 +148,90 @@ class ViewMarkingManager:
             return False
 
 
-class LeafletHaltForm(qt.QWidget):
-    """单个瓣叶的HALT状态记录表单"""
+class LeafletGradeRow(qt.QWidget):
+    """单个瓣叶的HALT分级行"""
     
-    # 信号：当状态改变时发出
-    statusChanged = qt.Signal(str, dict)  # (leaflet_name, status_data)
+    # 信号：当分级改变时发出
+    gradeChanged = qt.Signal(str, str)  # (leaflet_name, grade)
     
     def __init__(self, leaflet_name: str, parent=None):
         super().__init__(parent)
         self.leaflet_name = leaflet_name
-        self.setObjectName(f"LeafletHaltForm_{leaflet_name}")
+        self.setObjectName(f"LeafletGradeRow_{leaflet_name}")
         self._setup_ui()
     
     def _setup_ui(self):
-        """设置瓣叶HALT表单界面"""
-        main_layout = LayoutManager.create_layout(LayoutType.FORM_CONTAINER, self)
+        """设置瓣叶分级行界面"""
+        layout = qt.QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(15)
         
-        # 瓣叶标题
-        title = qt.QLabel(f"{self.leaflet_name} 瓣叶")
-        title.setStyleSheet(StyleManager.get_label_style("medium"))
-        title.setAlignment(qt.Qt.AlignCenter)
-        main_layout.addRow(title)
+        # 瓣叶名称标签
+        name_label = qt.QLabel(f"{self.leaflet_name}:")
+        name_label.setStyleSheet("font-weight: bold; color: #333; font-size: 14px;")
+        name_label.setMinimumWidth(40)
+        layout.addWidget(name_label)
         
-        # HALT存在性评估
-        self.halt_status_group = qt.QButtonGroup()
-        self.halt_none_radio = qt.QRadioButton("无HALT")
-        self.halt_present_radio = qt.QRadioButton("有HALT")
-        self.halt_unclear_radio = qt.QRadioButton("难以判定")
+        # 分级按钮组
+        self.grade_group = qt.QButtonGroup()
+        self.grade_buttons = {}
         
-        self.halt_status_group.addButton(self.halt_none_radio, 0)
-        self.halt_status_group.addButton(self.halt_present_radio, 1)
-        self.halt_status_group.addButton(self.halt_unclear_radio, 2)
+        grades = ["0", "≤25%", "25-50%", "50%-75%", ">75%"]
+        colors = ["#e8f5e8", "#fff3cd", "#ffeaa7", "#fab1a0", "#e17055"]
         
-        # 默认选择"无HALT"
-        self.halt_none_radio.setChecked(True)
-        
-        self.halt_status_group.buttonClicked.connect(self._on_halt_status_changed)
-        
-        status_layout = qt.QHBoxLayout()
-        status_layout.addWidget(self.halt_none_radio)
-        status_layout.addWidget(self.halt_present_radio)
-        status_layout.addWidget(self.halt_unclear_radio)
-        
-        main_layout.addRow("HALT状态:", status_layout)
-        
-        # 面积测量（当有HALT时启用）
-        self.area_spinbox = qt.QDoubleSpinBox()
-        self.area_spinbox.setRange(0.0, 100.0)
-        self.area_spinbox.setDecimals(1)
-        self.area_spinbox.setSuffix(" mm²")
-        self.area_spinbox.setEnabled(False)
-        self.area_spinbox.valueChanged.connect(self._on_measurement_changed)
-        
-        main_layout.addRow("面积:", self.area_spinbox)
-        
-        # 占比计算（当有HALT时启用）
-        self.percentage_spinbox = qt.QDoubleSpinBox()
-        self.percentage_spinbox.setRange(0.0, 100.0)
-        self.percentage_spinbox.setDecimals(1)
-        self.percentage_spinbox.setSuffix(" %")
-        self.percentage_spinbox.setEnabled(False)
-        self.percentage_spinbox.valueChanged.connect(self._on_measurement_changed)
-        
-        main_layout.addRow("占比:", self.percentage_spinbox)
-        
-        # 分级评估
-        self.grade_combo = qt.QComboBox()
-        self.grade_combo.addItems([
-            "无HALT", "≤25%", "25-50%", "50%-75%", ">75%"
-        ])
-        self.grade_combo.setEnabled(False)
-        self.grade_combo.currentTextChanged.connect(self._on_grade_changed)
-        
-        main_layout.addRow("分级:", self.grade_combo)
-        
-        # 备注
-        self.notes_edit = qt.QTextEdit()
-        self.notes_edit.setMaximumHeight(60)
-        self.notes_edit.setPlaceholderText("备注信息...")
-        self.notes_edit.textChanged.connect(self._on_notes_changed)
-        
-        main_layout.addRow("备注:", self.notes_edit)
-        
-        # 设置表单样式
-        self.setStyleSheet("""
-            QWidget#LeafletHaltForm_LC,
-            QWidget#LeafletHaltForm_RC,
-            QWidget#LeafletHaltForm_NC {
-                border: 1px solid #ddd;
-                border-radius: 6px;
-                background-color: #f9f9f9;
-                padding: 8px;
-                margin: 4px;
-            }
-        """)
-    
-    def _on_halt_status_changed(self, button):
-        """HALT状态改变时的回调"""
-        button_id = self.halt_status_group.id(button)
-        
-        if button_id == 1:  # 有HALT
-            self.area_spinbox.setEnabled(True)
-            self.percentage_spinbox.setEnabled(True)
-            self.grade_combo.setEnabled(True)
-            self.grade_combo.setCurrentIndex(1)  # 默认设为"≤25%"
-        else:  # 无HALT或难以判定
-            self.area_spinbox.setEnabled(False)
-            self.percentage_spinbox.setEnabled(False)
-            self.grade_combo.setEnabled(False)
-            self.grade_combo.setCurrentIndex(0)  # 设为"无HALT"
+        for i, grade in enumerate(grades):
+            button = qt.QRadioButton(grade)
+            button.setStyleSheet(f"""
+                QRadioButton {{
+                    font-size: 13px;
+                    padding: 6px 12px;
+                    margin: 2px;
+                    background-color: {colors[i]};
+                    border: 2px solid transparent;
+                    border-radius: 6px;
+                }}
+                QRadioButton:checked {{
+                    background-color: {colors[i]};
+                    border: 2px solid #3498db;
+                    font-weight: bold;
+                }}
+                QRadioButton:hover {{
+                    border: 1px solid #bdc3c7;
+                }}
+            """)
             
-            # 清空测量值
-            self.area_spinbox.setValue(0.0)
-            self.percentage_spinbox.setValue(0.0)
+            self.grade_group.addButton(button, i)
+            self.grade_buttons[grade] = button
+            layout.addWidget(button)
         
-        self._emit_status_changed()
+        # 默认选择"0"
+        self.grade_buttons["0"].setChecked(True)
+        
+        # 连接信号
+        self.grade_group.buttonClicked.connect(self._on_grade_changed)
+        
+        layout.addStretch()
     
-    def _on_measurement_changed(self):
-        """测量值改变时的回调"""
-        self._emit_status_changed()
-    
-    def _on_grade_changed(self):
+    def _on_grade_changed(self, button):
         """分级改变时的回调"""
-        self._emit_status_changed()
+        grade = button.text()
+        self.gradeChanged.emit(self.leaflet_name, grade)
     
-    def _on_notes_changed(self):
-        """备注改变时的回调"""
-        self._emit_status_changed()
+    def get_grade(self) -> str:
+        """获取当前分级"""
+        checked_button = self.grade_group.checkedButton()
+        return checked_button.text() if checked_button else "0"
     
-    def _emit_status_changed(self):
-        """发出状态改变信号"""
-        status_data = self.get_status_data()
-        self.statusChanged.emit(self.leaflet_name, status_data)
-    
-    def get_status_data(self) -> Dict[str, Any]:
-        """获取当前状态数据"""
-        button_id = self.halt_status_group.checkedId()
-        
-        if button_id == 0:
-            halt_status = "无HALT"
-        elif button_id == 1:
-            halt_status = "有HALT"
-        else:
-            halt_status = "难以判定"
-        
-        return {
-            'leaflet': self.leaflet_name,
-            'halt_status': halt_status,
-            'area': self.area_spinbox.value() if self.area_spinbox.isEnabled() else 0.0,
-            'percentage': self.percentage_spinbox.value() if self.percentage_spinbox.isEnabled() else 0.0,
-            'grade': self.grade_combo.currentText(),
-            'notes': self.notes_edit.toPlainText().strip()
-        }
-    
-    def set_status_data(self, data: Dict[str, Any]):
-        """设置状态数据"""
-        try:
-            halt_status = data.get('halt_status', '无HALT')
-            
-            if halt_status == '无HALT':
-                self.halt_none_radio.setChecked(True)
-            elif halt_status == '有HALT':
-                self.halt_present_radio.setChecked(True)
-            else:
-                self.halt_unclear_radio.setChecked(True)
-            
-            # 触发状态更新
-            self._on_halt_status_changed(self.halt_status_group.checkedButton())
-            
-            # 设置测量值
-            self.area_spinbox.setValue(data.get('area', 0.0))
-            self.percentage_spinbox.setValue(data.get('percentage', 0.0))
-            
-            # 设置分级
-            grade = data.get('grade', '无HALT')
-            index = self.grade_combo.findText(grade)
-            if index >= 0:
-                self.grade_combo.setCurrentIndex(index)
-            
-            # 设置备注
-            self.notes_edit.setPlainText(data.get('notes', ''))
-            
-        except Exception as e:
-            logging.error(f"设置瓣叶状态数据失败: {e}")
+    def set_grade(self, grade: str):
+        """设置分级"""
+        if grade in self.grade_buttons:
+            self.grade_buttons[grade].setChecked(True)
 
 
 class HaltAnalysisWidget(qt.QWidget):
-    """HALT分析主界面"""
+    """HALT分析主界面 - 重新设计为更符合医生需求的表单"""
     
-    # 信号：分析开始、结束、状态改变
-    analysisStarted = qt.Signal()
-    analysisFinished = qt.Signal()
+    # 信号：状态改变
     statusChanged = qt.Signal(dict)  # 发出完整的HALT分析状态
     
     def __init__(self, session: TAVRStudySession, parent=None):
@@ -355,7 +248,9 @@ class HaltAnalysisWidget(qt.QWidget):
         
         # 分析状态
         self.analysis_started = False
-        self.leaflet_data: Dict[str, Dict[str, Any]] = {}
+        self.overall_halt_status = "无"  # 无/有/难以判定
+        self.measurement_phase = "舒张末期"  # 测量期相
+        self.leaflet_grades: Dict[str, str] = {"LC": "0", "RC": "0", "NC": "0"}
         
         self.setObjectName("HaltAnalysisWidget")
         self._setup_ui()
@@ -364,171 +259,432 @@ class HaltAnalysisWidget(qt.QWidget):
     def _setup_ui(self):
         """设置HALT分析主界面"""
         main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(20)
         
         # 主标题
-        title = qt.QLabel("HALT分析 (低密度瓣叶增厚)")
+        title = qt.QLabel("瓣叶低密度增厚（HALT）评估")
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet(StyleManager.get_label_style("large"))
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                margin-bottom: 10px;
+            }
+        """)
         main_layout.addWidget(title)
         
-        # 分析控制区域
+        # 0. 分析控制区域（开始HALT分析）
         self._create_analysis_control_section(main_layout)
         
-        # 分隔线
-        separator1 = qt.QFrame()
-        separator1.setFrameShape(qt.QFrame.HLine)
-        separator1.setFrameShadow(qt.QFrame.Sunken)
-        main_layout.addWidget(separator1)
+        # 1. 整体HALT状态选择
+        self._create_overall_status_section(main_layout)
         
-        # 瓣叶状态记录区域
-        self._create_leaflet_forms_section(main_layout)
+        # 2. 测量期相选择（条件显示）
+        self._create_phase_section(main_layout)
         
-        # 分隔线
-        separator2 = qt.QFrame()
-        separator2.setFrameShape(qt.QFrame.HLine)
-        separator2.setFrameShadow(qt.QFrame.Sunken)
-        main_layout.addWidget(separator2)
+        # 3. 瓣叶分级表格（条件显示）
+        self._create_grading_section(main_layout)
         
-        # 视图标记区域
+        # 4. 统计信息（条件显示）
+        self._create_summary_section(main_layout)
+        
+        # 5. 视图标记（简化版）
         self._create_view_marking_section(main_layout)
         
-        # 分隔线
-        separator3 = qt.QFrame()
-        separator3.setFrameShape(qt.QFrame.HLine)
-        separator3.setFrameShadow(qt.QFrame.Sunken)
-        main_layout.addWidget(separator3)
-        
-        # 操作按钮区域
+        # 6. 操作按钮
         self._create_action_buttons_section(main_layout)
+        
+        # 初始状态更新
+        self._update_visibility()
+        self._update_analysis_control_visibility()
     
     def _create_analysis_control_section(self, parent_layout):
-        """创建分析控制区域"""
-        control_frame = LayoutManager.create_section_frame("分析控制")
-        control_layout = qt.QVBoxLayout(control_frame)
+        """创建分析控制区域（简化版）"""
+        self.control_frame = qt.QFrame()
+        self.control_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 10px;
+            }
+        """)
         
-        # 说明文字
-        instruction_label = qt.QLabel(
-            "点击'开始HALT分析'将自动:\n"
-            "1. 切换到舒张末期时相\n"
-            "2. MPR自动定位到支架底部平面\n"
-            "3. 启用瓣叶状态记录表单"
-        )
-        instruction_label.setStyleSheet(StyleManager.get_label_style("info"))
-        instruction_label.setWordWrap(True)
+        control_layout = qt.QHBoxLayout(self.control_frame)
+        control_layout.setSpacing(10)
+        
+        # 简化的说明
+        instruction_label = qt.QLabel("💡 自动准备分析环境：")
+        instruction_label.setStyleSheet("font-size: 12px; color: #6c757d;")
         control_layout.addWidget(instruction_label)
         
-        # 开始分析按钮
-        self.start_analysis_btn = LayoutManager.create_button_with_style(
-            "开始HALT分析", "primary", "default", 45
-        )
+        # 开始分析按钮（紧凑版）
+        self.start_analysis_btn = qt.QPushButton("🚀 开始分析")
+        self.start_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: bold;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
         self.start_analysis_btn.clicked.connect(self._on_start_analysis)
         control_layout.addWidget(self.start_analysis_btn)
         
-        # 状态显示
-        self.analysis_status_label = qt.QLabel("等待开始分析...")
-        self.analysis_status_label.setStyleSheet(StyleManager.get_label_style("secondary"))
-        self.analysis_status_label.setAlignment(qt.Qt.AlignCenter)
+        # 跳过按钮（更小）
+        self.skip_analysis_btn = qt.QPushButton("跳过")
+        self.skip_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 12px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        self.skip_analysis_btn.clicked.connect(self._on_skip_analysis)
+        control_layout.addWidget(self.skip_analysis_btn)
+        
+        # 状态显示（内联）
+        self.analysis_status_label = qt.QLabel("等待开始")
+        self.analysis_status_label.setStyleSheet("font-size: 11px; color: #868e96; font-style: italic;")
         control_layout.addWidget(self.analysis_status_label)
         
-        parent_layout.addWidget(control_frame)
+        control_layout.addStretch()
+        
+        parent_layout.addWidget(self.control_frame)
     
-    def _create_leaflet_forms_section(self, parent_layout):
-        """创建瓣叶状态记录区域"""
-        forms_frame = LayoutManager.create_section_frame("瓣叶HALT状态记录")
-        forms_layout = qt.QHBoxLayout(forms_frame)
+    def _create_overall_status_section(self, parent_layout):
+        """创建整体HALT状态选择区域"""
+        status_frame = qt.QFrame()
+        status_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
         
-        # 创建三个瓣叶的表单
-        self.leaflet_forms: Dict[str, LeafletHaltForm] = {}
+        status_layout = qt.QVBoxLayout(status_frame)
         
-        for leaflet in ['LC', 'RC', 'NC']:
-            form = LeafletHaltForm(leaflet)
-            form.statusChanged.connect(self._on_leaflet_status_changed)
-            form.setEnabled(False)  # 初始状态禁用
+        # 标题
+        status_title = qt.QLabel("1. 瓣叶低密度增厚（HALT）：")
+        status_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        status_layout.addWidget(status_title)
+        
+        # 选项按钮
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(20)
+        
+        self.overall_status_group = qt.QButtonGroup()
+        
+        # 样式定义
+        button_styles = {
+            "无": "background-color: #d4edda; border: 2px solid #c3e6cb;",
+            "有": "background-color: #f8d7da; border: 2px solid #f5c6cb;",
+            "难以判定": "background-color: #fff3cd; border: 2px solid #ffeaa7;"
+        }
+        
+        self.status_buttons = {}
+        for i, status in enumerate(["无", "有", "难以判定"]):
+            button = qt.QRadioButton(status)
+            button.setStyleSheet(f"""
+                QRadioButton {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 12px 20px;
+                    margin: 5px;
+                    {button_styles[status]}
+                    border-radius: 8px;
+                }}
+                QRadioButton:checked {{
+                    border: 3px solid #007bff;
+                    background-color: #e3f2fd;
+                }}
+            """)
             
-            self.leaflet_forms[leaflet] = form
-            forms_layout.addWidget(form)
+            self.overall_status_group.addButton(button, i)
+            self.status_buttons[status] = button
+            buttons_layout.addWidget(button)
         
-        parent_layout.addWidget(forms_frame)
+        # 默认选择"无"
+        self.status_buttons["无"].setChecked(True)
+        
+        # 连接信号
+        self.overall_status_group.buttonClicked.connect(self._on_overall_status_changed)
+        
+        buttons_layout.addStretch()
+        status_layout.addLayout(buttons_layout)
+        
+        parent_layout.addWidget(status_frame)
+    
+    def _create_phase_section(self, parent_layout):
+        """创建测量期相选择区域"""
+        self.phase_frame = qt.QFrame()
+        self.phase_frame.setStyleSheet("""
+            QFrame {
+                background-color: #e8f4f8;
+                border: 1px solid #bee5eb;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
+        
+        phase_layout = qt.QVBoxLayout(self.phase_frame)
+        
+        # 标题
+        phase_title = qt.QLabel("2. 测量期相：")
+        phase_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        phase_layout.addWidget(phase_title)
+        
+        # 期相选择
+        phase_buttons_layout = qt.QHBoxLayout()
+        
+        self.phase_group = qt.QButtonGroup()
+        
+        self.phase_buttons = {}
+        for i, phase in enumerate(["舒张末期", "收缩末期"]):
+            button = qt.QRadioButton(phase)
+            button.setStyleSheet("""
+                QRadioButton {
+                    font-size: 14px;
+                    padding: 8px 16px;
+                    margin: 5px;
+                    background-color: white;
+                    border: 2px solid #6c757d;
+                    border-radius: 6px;
+                }
+                QRadioButton:checked {
+                    border: 2px solid #007bff;
+                    background-color: #e3f2fd;
+                    font-weight: bold;
+                }
+            """)
+            
+            self.phase_group.addButton(button, i)
+            self.phase_buttons[phase] = button
+            phase_buttons_layout.addWidget(button)
+        
+        # 默认选择舒张末期
+        self.phase_buttons["舒张末期"].setChecked(True)
+        
+        # 连接信号
+        self.phase_group.buttonClicked.connect(self._on_phase_changed)
+        
+        phase_buttons_layout.addStretch()
+        phase_layout.addLayout(phase_buttons_layout)
+        
+        parent_layout.addWidget(self.phase_frame)
+    
+    def _create_grading_section(self, parent_layout):
+        """创建瓣叶分级区域"""
+        self.grading_frame = qt.QFrame()
+        self.grading_frame.setStyleSheet("""
+            QFrame {
+                background-color: #fff;
+                border: 2px solid #007bff;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
+        
+        grading_layout = qt.QVBoxLayout(self.grading_frame)
+        
+        # 标题和快速操作
+        header_layout = qt.QHBoxLayout()
+        
+        grading_title = qt.QLabel("3. HALT分级：")
+        grading_title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        header_layout.addWidget(grading_title)
+        
+        header_layout.addStretch()
+        
+        # 快速设置按钮
+        quick_label = qt.QLabel("快速设置所有瓣叶：")
+        quick_label.setStyleSheet("font-size: 12px; color: #6c757d;")
+        header_layout.addWidget(quick_label)
+        
+        quick_grades = ["0", "≤25%", "25-50%", "50%-75%", ">75%"]
+        for grade in quick_grades:
+            quick_btn = qt.QPushButton(grade)
+            quick_btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 11px;
+                    padding: 4px 8px;
+                    margin: 1px;
+                    border: 1px solid #6c757d;
+                    border-radius: 4px;
+                    background-color: #f8f9fa;
+                }
+                QPushButton:hover {
+                    background-color: #e9ecef;
+                }
+            """)
+            quick_btn.clicked.connect(lambda checked, g=grade: self._set_all_grades(g))
+            header_layout.addWidget(quick_btn)
+        
+        grading_layout.addLayout(header_layout)
+        
+        # 分级表格
+        self.leaflet_grade_rows = {}
+        for leaflet in ["LC", "RC", "NC"]:
+            row = LeafletGradeRow(leaflet)
+            row.gradeChanged.connect(self._on_leaflet_grade_changed)
+            self.leaflet_grade_rows[leaflet] = row
+            grading_layout.addWidget(row)
+        
+        parent_layout.addWidget(self.grading_frame)
+    
+    def _create_summary_section(self, parent_layout):
+        """创建统计信息区域"""
+        self.summary_frame = qt.QFrame()
+        self.summary_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f1f3f4;
+                border: 1px solid #dadce0;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
+        
+        summary_layout = qt.QHBoxLayout(self.summary_frame)
+        
+        # 受累瓣叶个数
+        self.affected_count_label = qt.QLabel("受累瓣叶个数：0")
+        self.affected_count_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
+        summary_layout.addWidget(self.affected_count_label)
+        
+        summary_layout.addStretch()
+        
+        # 最高分级
+        self.max_grade_label = qt.QLabel("最高分级：0")
+        self.max_grade_label.setStyleSheet("font-size: 14px; color: #34495e;")
+        summary_layout.addWidget(self.max_grade_label)
+        
+        parent_layout.addWidget(self.summary_frame)
     
     def _create_view_marking_section(self, parent_layout):
-        """创建视图标记区域"""
-        marking_frame = LayoutManager.create_section_frame("关键视图标记")
-        marking_layout = qt.QVBoxLayout(marking_frame)
+        """创建视图标记区域（简化版）"""
+        self.view_frame = qt.QFrame()
+        self.view_frame.setStyleSheet("""
+            QFrame {
+                background-color: #e8f5e8;
+                border: 1px solid #c3e6cb;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
         
-        # 说明文字
-        marking_instruction = qt.QLabel(
-            "通过调节MPR视图观察三个瓣叶的HALT情况，"
-            "可以标记关键视图以便后续快速回到该状态"
-        )
-        marking_instruction.setStyleSheet(StyleManager.get_label_style("info"))
-        marking_instruction.setWordWrap(True)
-        marking_layout.addWidget(marking_instruction)
+        view_layout = qt.QHBoxLayout(self.view_frame)
         
-        # 视图标记控制
-        marking_controls_layout = qt.QHBoxLayout()
+        view_title = qt.QLabel("关键视图标记：")
+        view_title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        view_layout.addWidget(view_title)
         
-        # 视图名称输入
-        self.view_name_edit = qt.QLineEdit()
-        self.view_name_edit.setPlaceholderText("输入视图标记名称...")
-        self.view_name_edit.setEnabled(False)
+        # 快速标记按钮
+        mark_btn = qt.QPushButton("标记当前视图")
+        mark_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        mark_btn.clicked.connect(self._quick_mark_view)
+        view_layout.addWidget(mark_btn)
         
-        # 标记按钮
-        self.mark_view_btn = LayoutManager.create_button_with_style(
-            "标记当前视图", "secondary", "default", 35
-        )
-        self.mark_view_btn.clicked.connect(self._on_mark_view)
-        self.mark_view_btn.setEnabled(False)
+        view_layout.addStretch()
         
-        marking_controls_layout.addWidget(qt.QLabel("视图名称:"))
-        marking_controls_layout.addWidget(self.view_name_edit)
-        marking_controls_layout.addWidget(self.mark_view_btn)
+        # 已标记视图数量
+        self.marked_views_count = qt.QLabel("已标记：0个视图")
+        self.marked_views_count.setStyleSheet("font-size: 12px; color: #6c757d;")
+        view_layout.addWidget(self.marked_views_count)
         
-        marking_layout.addLayout(marking_controls_layout)
-        
-        # 已标记视图列表
-        self.marked_views_list = qt.QListWidget()
-        self.marked_views_list.setMaximumHeight(100)
-        self.marked_views_list.setEnabled(False)
-        self.marked_views_list.itemDoubleClicked.connect(self._on_restore_view)
-        
-        marking_layout.addWidget(qt.QLabel("已标记视图（双击恢复）:"))
-        marking_layout.addWidget(self.marked_views_list)
-        
-        parent_layout.addWidget(marking_frame)
+        parent_layout.addWidget(self.view_frame)
     
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
         actions_layout = qt.QHBoxLayout()
         
         # 重置按钮
-        self.reset_btn = LayoutManager.create_button_with_style(
-            "重置分析", "warning", "default", 40
-        )
-        self.reset_btn.clicked.connect(self._on_reset_analysis)
-        self.reset_btn.setEnabled(False)
-        
-        # 完成分析按钮
-        self.finish_btn = LayoutManager.create_button_with_style(
-            "完成分析", "success", "default", 40
-        )
-        self.finish_btn.clicked.connect(self._on_finish_analysis)
-        self.finish_btn.setEnabled(False)
+        reset_btn = qt.QPushButton("重置")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 14px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        reset_btn.clicked.connect(self._reset_analysis)
         
         # 导出结果按钮
-        self.export_btn = LayoutManager.create_button_with_style(
-            "导出结果", "primary", "default", 40
-        )
-        self.export_btn.clicked.connect(self._on_export_results)
-        self.export_btn.setEnabled(False)
+        export_btn = qt.QPushButton("导出结果")
+        export_btn.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                font-size: 14px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        export_btn.clicked.connect(self._export_results)
         
-        actions_layout.addWidget(self.reset_btn)
+        actions_layout.addWidget(reset_btn)
         actions_layout.addStretch()
-        actions_layout.addWidget(self.finish_btn)
-        actions_layout.addWidget(self.export_btn)
+        actions_layout.addWidget(export_btn)
         
         parent_layout.addLayout(actions_layout)
+    
+    def _on_overall_status_changed(self, button):
+        """整体HALT状态改变时的回调"""
+        self.overall_halt_status = button.text
+        self._update_visibility()
+        self._update_summary()
+        self._emit_status_changed()
+        
+        logging.info(f"整体HALT状态更新为: {self.overall_halt_status}")
+    
+    def _on_phase_changed(self, button):
+        """测量期相改变时的回调"""
+        self.measurement_phase = button.text
+        self._emit_status_changed()
+        
+        logging.info(f"测量期相更新为: {self.measurement_phase}")
     
     def _on_start_analysis(self):
         """开始HALT分析"""
@@ -536,10 +692,13 @@ class HaltAnalysisWidget(qt.QWidget):
             logging.info("用户开始HALT分析")
             
             # 更新状态
-            self.analysis_status_label.setText("正在准备分析环境...")
+            self.analysis_status_label.setText("准备中...")
+            self.start_analysis_btn.setEnabled(False)
+            self.skip_analysis_btn.setEnabled(False)
+            qt.QApplication.processEvents()
             
             # 1. 切换到舒张末期
-            self.analysis_status_label.setText("切换到舒张末期...")
+            self.analysis_status_label.setText("切换期相...")
             qt.QApplication.processEvents()
             
             # 检查是否有舒张末期标记
@@ -549,9 +708,9 @@ class HaltAnalysisWidget(qt.QWidget):
                     self,
                     "警告",
                     "未找到舒张末期标记！\n\n"
-                    "请先在模块一中标记舒张末期时相，然后重新开始HALT分析。"
+                    "请先在模块一中标记舒张末期时相。"
                 )
-                self.analysis_status_label.setText("等待开始分析...")
+                self._reset_analysis_buttons()
                 return
             
             # 切换到舒张末期
@@ -560,41 +719,26 @@ class HaltAnalysisWidget(qt.QWidget):
                 qt.QMessageBox.warning(
                     self,
                     "错误",
-                    "切换到舒张末期失败！\n\n"
-                    "请检查模块一中的期像标记。"
+                    "切换到舒张末期失败！请检查模块一中的期像标记。"
                 )
-                self.analysis_status_label.setText("等待开始分析...")
+                self._reset_analysis_buttons()
                 return
             
             # 2. MPR定位到支架底部平面
-            self.analysis_status_label.setText("定位到支架底部平面...")
+            self.analysis_status_label.setText("定位平面...")
             qt.QApplication.processEvents()
             
             success = self._position_to_stent_bottom()
             if not success:
-                qt.QMessageBox.warning(
+                # 简化警告信息
+                qt.QMessageBox.information(
                     self,
-                    "警告",
-                    "定位到支架底部平面失败！\n\n"
-                    "可能原因：\n"
-                    "1. 未找到期像相关的轮廓节点 'ValveStent_Bottom_Contour_End_Diastole'\n"
-                    "2. 轮廓数据不完整或损坏\n"
-                    "3. 模块二中的轮廓重建未完成\n\n"
-                    "HALT分析可以继续进行，但建议：\n"
-                    "• 检查模块二中的轮廓重建结果\n"
-                    "• 确认舒张末期的支架底部轮廓已正确标记\n"
-                    "• 手动调整MPR视图到合适的观察位置"
+                    "提示",
+                    "自动定位失败，请手动调整MPR视图到合适位置。\n分析可以继续进行。"
                 )
             
-            # 3. 启用界面
-            self._enable_analysis_interface()
-            
-            # 更新状态
-            self.analysis_started = True
-            self.analysis_status_label.setText("✓ 分析环境准备完成，请观察三个瓣叶的HALT情况")
-            
-            # 发出信号
-            self.analysisStarted.emit()
+            # 3. 完成准备
+            self._complete_analysis_preparation()
             
             logging.info("HALT分析环境准备完成")
             
@@ -603,9 +747,41 @@ class HaltAnalysisWidget(qt.QWidget):
             qt.QMessageBox.critical(
                 self,
                 "错误", 
-                f"开始HALT分析时出现错误：\n{e}"
+                f"分析启动失败：\n{e}"
             )
-            self.analysis_status_label.setText("分析启动失败")
+            self._reset_analysis_buttons()
+    
+    def _on_skip_analysis(self):
+        """跳过自动分析，直接进入评估"""
+        reply = qt.QMessageBox.question(
+            self,
+            "跳过自动分析",
+            "跳过自动分析，直接开始评估？",
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        
+        if reply == qt.QMessageBox.Yes:
+            self._complete_analysis_preparation()
+            logging.info("用户选择跳过自动分析")
+    
+    def _complete_analysis_preparation(self):
+        """完成分析准备"""
+        self.analysis_started = True
+        self.analysis_status_label.setText("已就绪")
+        
+        # 隐藏分析控制区域
+        self.control_frame.setVisible(False)
+        
+        # 更新其他区域的可见性
+        self._update_analysis_control_visibility()
+        
+        logging.info("HALT分析准备完成")
+    
+    def _reset_analysis_buttons(self):
+        """重置分析按钮状态"""
+        self.start_analysis_btn.setEnabled(True)
+        self.skip_analysis_btn.setEnabled(True)
+        self.analysis_status_label.setText("等待开始")
     
     def _switch_to_end_diastole(self) -> bool:
         """切换到舒张末期 - 复用PhaseSelectionWidget的逻辑"""
@@ -704,242 +880,249 @@ class HaltAnalysisWidget(qt.QWidget):
         except Exception as e:
             logging.error(f"记录可用轮廓节点时出错: {e}")
     
-    def _enable_analysis_interface(self):
-        """启用分析界面"""
-        # 禁用开始按钮
-        self.start_analysis_btn.setEnabled(False)
+    def _on_leaflet_grade_changed(self, leaflet_name: str, grade: str):
+        """瓣叶分级改变时的回调"""
+        self.leaflet_grades[leaflet_name] = grade
+        self._update_summary()
+        self._emit_status_changed()
         
-        # 启用瓣叶表单
-        for form in self.leaflet_forms.values():
-            form.setEnabled(True)
-        
-        # 启用视图标记
-        self.view_name_edit.setEnabled(True)
-        self.mark_view_btn.setEnabled(True)
-        self.marked_views_list.setEnabled(True)
-        
-        # 启用操作按钮
-        self.reset_btn.setEnabled(True)
-        self.finish_btn.setEnabled(True)
+        logging.info(f"瓣叶 {leaflet_name} 分级更新为: {grade}")
     
-    def _on_leaflet_status_changed(self, leaflet_name: str, status_data: Dict[str, Any]):
-        """瓣叶状态改变时的回调"""
-        self.leaflet_data[leaflet_name] = status_data
+    def _set_all_grades(self, grade: str):
+        """快速设置所有瓣叶为同一分级"""
+        for leaflet_name, row in self.leaflet_grade_rows.items():
+            row.set_grade(grade)
+            self.leaflet_grades[leaflet_name] = grade
         
-        # 检查是否所有瓣叶都有数据
-        complete_data = len(self.leaflet_data) == 3
+        self._update_summary()
+        self._emit_status_changed()
         
-        if complete_data:
-            self.export_btn.setEnabled(True)
-        
-        # 发出状态改变信号
-        self.statusChanged.emit(self.get_analysis_results())
-        
-        logging.info(f"瓣叶 {leaflet_name} 状态更新: {status_data['halt_status']}")
+        logging.info(f"所有瓣叶分级设置为: {grade}")
     
-    def _on_mark_view(self):
-        """标记当前视图"""
-        view_name = self.view_name_edit.text().strip()
-        if not view_name:
-            qt.QMessageBox.warning(
-                self,
-                "警告",
-                "请输入视图标记名称！"
-            )
+    def _update_visibility(self):
+        """根据整体HALT状态更新界面可见性"""
+        has_halt = self.overall_halt_status == "有"
+        
+        self.phase_frame.setVisible(has_halt)
+        self.grading_frame.setVisible(has_halt)
+        self.summary_frame.setVisible(has_halt)
+        
+        if not has_halt:
+            # 重置所有瓣叶分级为0
+            for leaflet_name, row in self.leaflet_grade_rows.items():
+                row.set_grade("0")
+                self.leaflet_grades[leaflet_name] = "0"
+            self._update_summary()
+    
+    def _update_analysis_control_visibility(self):
+        """根据分析状态更新分析控制区域的可见性"""
+        # 如果分析已经开始，隐藏控制区域
+        if hasattr(self, 'control_frame'):
+            self.control_frame.setVisible(not self.analysis_started)
+    
+    def _update_summary(self):
+        """更新统计信息"""
+        if self.overall_halt_status != "有":
+            self.affected_count_label.setText("受累瓣叶个数：0")
+            self.max_grade_label.setText("最高分级：0")
             return
         
-        # 检查名称是否已存在
-        marked_views = self.view_marking_manager.get_marked_views()
-        if view_name in marked_views:
-            reply = qt.QMessageBox.question(
-                self,
-                "确认",
-                f"视图标记 '{view_name}' 已存在，是否覆盖？",
-                qt.QMessageBox.Yes | qt.QMessageBox.No
-            )
-            if reply != qt.QMessageBox.Yes:
-                return
+        # 计算受累瓣叶个数（分级不为"0"的瓣叶）
+        affected_count = sum(1 for grade in self.leaflet_grades.values() if grade != "0")
         
-        # 标记视图
+        # 找出最高分级
+        grade_order = ["0", "≤25%", "25-50%", "50%-75%", ">75%"]
+        max_grade = "0"
+        for grade in reversed(grade_order):
+            if grade in self.leaflet_grades.values():
+                max_grade = grade
+                break
+        
+        # 更新标签
+        self.affected_count_label.setText(f"受累瓣叶个数：{affected_count}")
+        self.max_grade_label.setText(f"最高分级：{max_grade}")
+        
+        # 更新颜色
+        if affected_count == 0:
+            color = "#28a745"  # 绿色
+        elif affected_count <= 2:
+            color = "#ffc107"  # 黄色
+        else:
+            color = "#dc3545"  # 红色
+        
+        self.affected_count_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+    
+    def _quick_mark_view(self):
+        """快速标记当前视图"""
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        view_name = f"HALT视图_{timestamp}"
+        
         success = self.view_marking_manager.mark_current_view(view_name)
         if success:
-            self._update_marked_views_list()
-            self.view_name_edit.clear()
+            marked_count = len(self.view_marking_manager.get_marked_views())
+            self.marked_views_count.setText(f"已标记：{marked_count}个视图")
+            
+            # 显示成功提示
             qt.QMessageBox.information(
                 self,
-                "成功",
-                f"视图 '{view_name}' 已标记！\n\n"
-                "双击列表中的项目可以快速恢复到该视图。"
+                "标记成功",
+                f"视图已标记为：{view_name}"
             )
         else:
             qt.QMessageBox.warning(
                 self,
-                "错误",
-                "标记视图失败！"
+                "标记失败",
+                "标记当前视图失败，请检查MPR视图状态。"
             )
     
-    def _on_restore_view(self, item):
-        """恢复视图标记"""
-        view_name = item.text()
-        success = self.view_marking_manager.restore_view(view_name)
-        
-        if success:
-            self.analysis_status_label.setText(f"✓ 已恢复视图: {view_name}")
-        else:
-            qt.QMessageBox.warning(
-                self,
-                "错误",
-                f"恢复视图 '{view_name}' 失败！"
-            )
-    
-    def _update_marked_views_list(self):
-        """更新已标记视图列表"""
-        self.marked_views_list.clear()
-        marked_views = self.view_marking_manager.get_marked_views()
-        
-        for view_name in marked_views.keys():
-            self.marked_views_list.addItem(view_name)
-    
-    def _on_reset_analysis(self):
+    def _reset_analysis(self):
         """重置分析"""
         reply = qt.QMessageBox.question(
             self,
             "确认重置",
-            "确定要重置HALT分析吗？\n\n"
-            "这将清除所有瓣叶状态记录和视图标记。",
+            "确定要重置HALT分析吗？\n\n这将清除所有输入的数据并返回到初始状态。",
             qt.QMessageBox.Yes | qt.QMessageBox.No
         )
         
         if reply == qt.QMessageBox.Yes:
-            self._reset_analysis_state()
-    
-    def _reset_analysis_state(self):
-        """重置分析状态"""
-        # 重置标志
-        self.analysis_started = False
-        
-        # 清空瓣叶数据
-        self.leaflet_data.clear()
-        
-        # 重置瓣叶表单
-        for form in self.leaflet_forms.values():
-            form.halt_none_radio.setChecked(True)
-            form._on_halt_status_changed(form.halt_none_radio)
-            form.notes_edit.clear()
-            form.setEnabled(False)
-        
-        # 清空视图标记
-        self.view_marking_manager.marked_views.clear()
-        self.view_name_edit.clear()
-        self.marked_views_list.clear()
-        
-        # 重置界面状态
-        self.start_analysis_btn.setEnabled(True)
-        self.view_name_edit.setEnabled(False)
-        self.mark_view_btn.setEnabled(False)
-        self.marked_views_list.setEnabled(False)
-        self.reset_btn.setEnabled(False)
-        self.finish_btn.setEnabled(False)
-        self.export_btn.setEnabled(False)
-        
-        # 更新状态
-        self.analysis_status_label.setText("等待开始分析...")
-        
-        logging.info("HALT分析已重置")
-    
-    def _on_finish_analysis(self):
-        """完成分析"""
-        # 检查是否有数据
-        if not self.leaflet_data:
-            qt.QMessageBox.warning(
-                self,
-                "警告",
-                "尚未记录任何瓣叶状态！\n\n"
-                "请先记录各瓣叶的HALT状态。"
-            )
-            return
-        
-        # 显示分析结果摘要
-        self._show_analysis_summary()
-        
-        # 发出完成信号
-        self.analysisFinished.emit()
-    
-    def _show_analysis_summary(self):
-        """显示分析结果摘要"""
-        summary_text = "HALT分析结果摘要:\n\n"
-        
-        for leaflet, data in self.leaflet_data.items():
-            summary_text += f"{leaflet} 瓣叶:\n"
-            summary_text += f"  状态: {data['halt_status']}\n"
+            # 重置分析状态
+            self.analysis_started = False
             
-            if data['halt_status'] == '有HALT':
-                summary_text += f"  面积: {data['area']:.1f} mm²\n"
-                summary_text += f"  占比: {data['percentage']:.1f}%\n"
-                summary_text += f"  分级: {data['grade']}\n"
+            # 重置整体状态
+            self.status_buttons["无"].setChecked(True)
+            self.overall_halt_status = "无"
             
-            if data['notes']:
-                summary_text += f"  备注: {data['notes']}\n"
+            # 重置期相
+            self.phase_buttons["舒张末期"].setChecked(True)
+            self.measurement_phase = "舒张末期"
             
-            summary_text += "\n"
-        
-        # 视图标记信息
-        marked_views = self.view_marking_manager.get_marked_views()
-        if marked_views:
-            summary_text += f"已标记关键视图 {len(marked_views)} 个:\n"
-            for view_name in marked_views.keys():
-                summary_text += f"  - {view_name}\n"
-        
-        qt.QMessageBox.information(
-            self,
-            "分析完成",
-            summary_text
-        )
+            # 重置所有瓣叶分级
+            for leaflet_name, row in self.leaflet_grade_rows.items():
+                row.set_grade("0")
+                self.leaflet_grades[leaflet_name] = "0"
+            
+            # 清除视图标记
+            self.view_marking_manager.marked_views.clear()
+            self.marked_views_count.setText("已标记：0个视图")
+            
+            # 重置分析控制区域
+            if hasattr(self, 'control_frame'):
+                self.control_frame.setVisible(True)
+                self.start_analysis_btn.setEnabled(True)
+                self.skip_analysis_btn.setEnabled(True)
+                self.analysis_status_label.setText("等待开始")
+            
+            # 更新界面
+            self._update_visibility()
+            self._update_analysis_control_visibility()
+            self._emit_status_changed()
+            
+            logging.info("HALT分析已重置")
     
-    def _on_export_results(self):
+    def _export_results(self):
         """导出结果"""
         try:
             results = self.get_analysis_results()
             
-            # 简单的JSON导出示例
-            import json
-            from pathlib import Path
+            # 生成可读的分析报告
+            report = self._generate_analysis_report(results)
             
-            # 创建导出目录
+            # 简单的文本导出
+            from pathlib import Path
+            import json
+            
             export_dir = Path.home() / "TAVR_Analytics_Exports"
             export_dir.mkdir(exist_ok=True)
             
-            # 生成文件名
             timestamp = qt.QDateTime.currentDateTime().toString("yyyy-MM-dd_hh-mm-ss")
-            filename = f"HALT_Analysis_{timestamp}.json"
-            filepath = export_dir / filename
             
-            # 写入文件
-            with open(filepath, 'w', encoding='utf-8') as f:
+            # 导出JSON数据
+            json_file = export_dir / f"HALT_Analysis_{timestamp}.json"
+            with open(json_file, 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
+            
+            # 导出可读报告
+            report_file = export_dir / f"HALT_Report_{timestamp}.txt"
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write(report)
             
             qt.QMessageBox.information(
                 self,
                 "导出成功",
-                f"HALT分析结果已导出到:\n{filepath}"
+                f"HALT分析结果已导出：\n\n"
+                f"数据文件：{json_file}\n"
+                f"报告文件：{report_file}"
             )
-            
-            logging.info(f"HALT分析结果已导出: {filepath}")
             
         except Exception as e:
             logging.error(f"导出HALT分析结果失败: {e}")
             qt.QMessageBox.critical(
                 self,
                 "导出失败",
-                f"导出过程中出现错误:\n{e}"
+                f"导出过程中出现错误：\n{e}"
             )
+    
+    def _generate_analysis_report(self, results: Dict[str, Any]) -> str:
+        """生成可读的分析报告"""
+        report = []
+        report.append("=== HALT分析报告 ===")
+        report.append(f"生成时间：{results['analysis_timestamp']}")
+        report.append("")
+        
+        # 整体状态
+        report.append(f"瓣叶低密度增厚（HALT）：{results['overall_status']}")
+        
+        if results['overall_status'] == "有":
+            report.append(f"测量期相：{results['measurement_phase']}")
+            report.append(f"受累瓣叶个数：{results['affected_leaflets_count']}")
+            report.append("")
+            
+            # 各瓣叶分级
+            report.append("HALT分级：")
+            for leaflet, grade in results['leaflet_grades'].items():
+                if grade != "0":
+                    report.append(f"  {leaflet}瓣叶：{grade}")
+                else:
+                    report.append(f"  {leaflet}瓣叶：无HALT")
+            
+            report.append("")
+            report.append(f"最高分级：{results['max_grade']}")
+        
+        # 视图标记
+        marked_views = results.get('marked_views', {})
+        if marked_views:
+            report.append("")
+            report.append(f"关键视图标记：{len(marked_views)}个")
+            for view_name in marked_views.keys():
+                report.append(f"  - {view_name}")
+        
+        return "\n".join(report)
+    
+    def _emit_status_changed(self):
+        """发出状态改变信号"""
+        self.statusChanged.emit(self.get_analysis_results())
     
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取完整的分析结果"""
+        # 计算受累瓣叶个数
+        affected_count = sum(1 for grade in self.leaflet_grades.values() if grade != "0")
+        
+        # 找出最高分级
+        grade_order = ["0", "≤25%", "25-50%", "50%-75%", ">75%"]
+        max_grade = "0"
+        for grade in reversed(grade_order):
+            if grade in self.leaflet_grades.values():
+                max_grade = grade
+                break
+        
         return {
             'analysis_type': 'HALT',
-            'analysis_started': self.analysis_started,
-            'leaflets': dict(self.leaflet_data),
+            'overall_status': self.overall_halt_status,
+            'measurement_phase': self.measurement_phase if self.overall_halt_status == "有" else None,
+            'leaflet_grades': dict(self.leaflet_grades),
+            'affected_leaflets_count': affected_count,
+            'max_grade': max_grade,
             'marked_views': self.view_marking_manager.marked_views,
             'analysis_timestamp': qt.QDateTime.currentDateTime().toString(),
             'session_info': {
