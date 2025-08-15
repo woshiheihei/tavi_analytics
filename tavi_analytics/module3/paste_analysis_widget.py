@@ -195,12 +195,6 @@ class RelmAnalysisSection(qt.QWidget):
         self.manual_grade_combo.currentTextChanged.connect(self._on_manual_grade_changed)
         
         main_layout.addRow("调整分级:", self.manual_grade_combo)
-        
-        self.manual_grade_combo = qt.QComboBox()
-        self.manual_grade_combo.addItems([
-            "自动", "轻度", "中度", "重度", "不活动"
-        ])
-        self.manual_grade_combo.currentTextChanged.connect(self._on_manual_grade_changed)
     
     def _on_leaflet_changed(self, leaflet: str):
         """瓣叶选择改变时的回调"""
@@ -229,8 +223,8 @@ class RelmAnalysisSection(qt.QWidget):
     
     def _check_calculate_ready(self):
         """检查是否可以计算RELM"""
-        if (self.width_label.text() != "待测量" and 
-            self.diameter_label.text() != "待测量"):
+        if (self.width_label.text() != "--" and 
+            self.diameter_label.text() != "--"):
             self.calculate_relm_btn.setEnabled(True)
     
     def _on_calculate_relm(self):
@@ -422,13 +416,6 @@ class PfdAnalysisSection(qt.QWidget):
         self.thickness_spinbox.valueChanged.connect(self._on_manual_thickness_changed)
         
         main_layout.addRow("手动厚度:", self.thickness_spinbox)
-        
-        self.thickness_spinbox = qt.QDoubleSpinBox()
-        self.thickness_spinbox.setRange(0.0, 50.0)
-        self.thickness_spinbox.setDecimals(1)
-        self.thickness_spinbox.setSuffix(" mm")
-        self.thickness_spinbox.setEnabled(False)
-        self.thickness_spinbox.valueChanged.connect(self._on_manual_thickness_changed)
     
     def _on_pfd_status_changed(self, button):
         """PFD状态改变时的回调"""
