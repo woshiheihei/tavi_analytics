@@ -14,7 +14,6 @@ try:
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module3_logic import Module3Logic
-    from .paste_analysis_widget import PasteAnalysisWidget
     from .halt_analysis_widget import HaltAnalysisWidget
 except ImportError:
     import os
@@ -31,7 +30,6 @@ except ImportError:
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.phase_selection_widget import PhaseSelectionWidget
     from module3_logic import Module3Logic
-    from paste_analysis_widget import PasteAnalysisWidget
     from halt_analysis_widget import HaltAnalysisWidget
 
 
@@ -47,9 +45,6 @@ class Module3Widget(qt.QWidget):
         self.phase_selection = PhaseSelectionWidget(session, self)
         self.phase_selection.phaseChanged.connect(self._on_phase_changed)
         self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
-        
-        # 创建PASTE分析组件
-        self.paste_analysis = PasteAnalysisWidget(session, parent=self)
         
         # 创建HALT分析组件
         self.halt_analysis = HaltAnalysisWidget(session, parent=self)
@@ -297,19 +292,10 @@ class Module3Widget(qt.QWidget):
         # 组装平面控制区域
         plane_control_layout.addWidget(buttons_widget)
         
-        # 创建选项卡容器来容纳PASTE分析和HALT分析
-        analysis_tabs = qt.QTabWidget()
-        
-        # 添加PASTE分析选项卡
-        analysis_tabs.addTab(self.paste_analysis, "完整PASTE分析")
-        
-        # 添加HALT分析选项卡
-        analysis_tabs.addTab(self.halt_analysis, "HALT专项分析")
-        
-        # 添加分析区域
+        # 添加分析区域 - 仅显示HALT分析
         analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
         analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
-        analysis_layout.addWidget(analysis_tabs)
+        analysis_layout.addWidget(self.halt_analysis)
 
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
@@ -326,8 +312,6 @@ class Module3Widget(qt.QWidget):
         self.session = session
         if hasattr(self, 'phase_selection'):
             self.phase_selection.set_session(session)
-        if hasattr(self, 'paste_analysis'):
-            self.paste_analysis.set_session(session)
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.set_session(session)
         if self.logic:
@@ -341,10 +325,6 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.auto_activate(preferred_phase='diastole')
         
-        # 激活PASTE分析组件
-        if hasattr(self, 'paste_analysis'):
-            self.paste_analysis.on_activated()
-        
         # 激活HALT分析组件
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_activated()
@@ -354,16 +334,12 @@ class Module3Widget(qt.QWidget):
 
     def on_deactivated(self):
         logging.info("模块三已停用")
-        if hasattr(self, 'paste_analysis'):
-            self.paste_analysis.on_deactivated()
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_deactivated()
 
     def cleanup(self):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.cleanup()
-        if hasattr(self, 'paste_analysis'):
-            self.paste_analysis.cleanup()
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.cleanup()
         if self.logic:
