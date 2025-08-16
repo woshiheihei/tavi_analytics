@@ -81,19 +81,19 @@ class Module2Widget(qt.QWidget):
         layout = qt.QVBoxLayout(self)
         layout.setSpacing(20)
         layout.setContentsMargins(20, 20, 20, 20)
-        
+
         # 添加标题
         self._create_title_section(layout)
-        
+
         # 添加全自动分析区域 (Auto Analysis)
         self._create_auto_analysis_section(layout)
-        
+
         # 添加进度状态区域 (Progress Status)
         self._create_progress_section(layout)
-        
-        # 添加操作控制区域 (Operations)
-        self._create_operations_section(layout)
-        
+
+        # 添加导航按钮：进入分析页面（module3）
+        self._create_navigation_section(layout)
+
         # 添加弹性空间
         layout.addStretch()
 
@@ -181,35 +181,44 @@ class Module2Widget(qt.QWidget):
         
         layout.addWidget(progress_group)
 
-    def _create_operations_section(self, layout):
-        """创建操作控制区域"""
-        # 使用标准化的section_frame替代直接创建QGroupBox - 与模块一保持一致
-        operations_group = LayoutManager.create_section_frame("操作")
-        operations_layout = qt.QHBoxLayout(operations_group)
-        
-        # 重置按钮 - 使用destructive样式表示危险操作
-        reset_button = LayoutManager.create_button_with_style(
-            text="重置",
-            button_type="destructive",
-            size="default",
-            min_height=40
-        )
-        reset_button.setObjectName("resetModuleButton")
-        reset_button.clicked.connect(lambda: self._on_button_clicked("重置"))
-        operations_layout.addWidget(reset_button)
-        
-        # 完成模块按钮 - 使用primary样式表示主要操作
-        complete_button = LayoutManager.create_button_with_style(
-            text="完成模块",
+    def _create_navigation_section(self, layout):
+        """创建进入分析页面的导航按钮"""
+        nav_group = LayoutManager.create_section_frame("前往分析页面")
+        nav_layout = qt.QHBoxLayout(nav_group)
+
+        go_button = LayoutManager.create_button_with_style(
+            text="➡ 进入分析页面",
             button_type="primary",
             size="default",
             min_height=40
         )
-        complete_button.setObjectName("completeModuleButton")
-        complete_button.clicked.connect(lambda: self._on_button_clicked("完成模块"))
-        operations_layout.addWidget(complete_button)
-        
-        layout.addWidget(operations_group)
+        go_button.setObjectName("enterAnalysisPageButton")
+        go_button.clicked.connect(self._on_enter_analysis_page)
+        nav_layout.addWidget(go_button)
+
+        layout.addWidget(nav_group)
+
+    def _on_enter_analysis_page(self):
+        """跳转到 module3（自动化测量）标签页"""
+        try:
+            plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
+            if hasattr(plugin, 'main_ui') and plugin.main_ui:
+                plugin.main_ui.switch_to_module("module3")
+            else:
+                # 后备：通过插件暴露的模块管理器激活
+                if hasattr(plugin, 'module_manager') and plugin.module_manager:
+                    plugin.module_manager.activate_module("module3")
+                else:
+                    # 最终后备：直接使用全局单例的ModuleManager
+                    try:
+                        from ..core.module_manager import ModuleManager as _MM
+                    except Exception:
+                        from core.module_manager import ModuleManager as _MM
+                    _MM().activate_module("module3")
+            logging.info("已跳转到模块三（自动化测量）")
+        except Exception as e:
+            logging.error(f"跳转到分析页面失败: {e}")
+            self._update_analysis_status("❌ 跳转失败，请稍后重试", "error")
 
     def _on_start_auto_analysis(self):
         """

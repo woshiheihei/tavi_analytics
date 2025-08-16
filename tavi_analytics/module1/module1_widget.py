@@ -463,7 +463,10 @@ class Module1Widget(qt.QWidget):
             # 检查是否满足进入下一模块的条件
             if self._check_ready_for_next_module():
                 logging.info("准备进入模块二")
+                # 先发出信号，供上层监听（保持兼容）
                 self.readyForNextModule.emit()
+                # 直接在插件中导航到模块二（与模块二跳转到模块三的方式一致）
+                self._navigate_to_module2()
             else:
                 # 显示未满足条件的提示
                 missing_items = self._get_missing_requirements()
@@ -474,6 +477,31 @@ class Module1Widget(qt.QWidget):
                 
         except Exception as e:
             logging.error(f"检查下一模块条件时发生错误: {str(e)}")
+
+    def _navigate_to_module2(self):
+        """跳转到 module2（全自动分析）标签页"""
+        try:
+            plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
+            if hasattr(plugin, 'main_ui') and plugin.main_ui:
+                plugin.main_ui.switch_to_module("module2")
+            else:
+                # 后备：通过插件暴露的模块管理器激活
+                if hasattr(plugin, 'module_manager') and plugin.module_manager:
+                    plugin.module_manager.activate_module("module2")
+                else:
+                    # 最终后备：直接使用全局单例的ModuleManager
+                    try:
+                        from ..core.module_manager import ModuleManager as _MM
+                    except Exception:
+                        from core.module_manager import ModuleManager as _MM
+                    _MM().activate_module("module2")
+            logging.info("已跳转到模块二（全自动分析）")
+        except Exception as e:
+            logging.error(f"跳转到模块二失败: {e}")
+            try:
+                qt.QMessageBox.warning(self, "跳转失败", "无法跳转到模块二，请稍后重试。")
+            except Exception:
+                pass
             
     def _update_button_style(self, button: qt.QPushButton, button_type: str, size: str = "default"):
         """更新按钮样式的辅助方法

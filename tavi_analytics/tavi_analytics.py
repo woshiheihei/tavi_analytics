@@ -133,6 +133,19 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # 调用父类构造函数（会自动调用setup方法）
         ScriptedLoadableModuleWidget.__init__(self, parent)
         VTKObservationMixin.__init__(self)
+    
+    # 对外暴露便捷属性，供其他模块访问
+    @property
+    def module_manager(self) -> ModuleManager:
+        return self._manager
+
+    @property
+    def main_ui(self) -> Optional[MainUI]:
+        return self._main_ui
+
+    @property
+    def session(self) -> TAVRStudySession:
+        return self._session
         
     def setup(self) -> None:
         """设置界面"""
