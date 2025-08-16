@@ -55,7 +55,7 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         self.analysis_error = None    # 错误信息
         self.analysis_progress = 0    # 进度百分比
         # 当前选择的期像状态
-        self.selected_phase = 'diastole'  # 默认选择舒张期，可选 'diastole' 或 'systole'
+        self.selected_phase = 'diastole'  # 默认选择舒张期，可选 'diastole' 或 'systole'（兼容字段，保留用于结果命名，不再由UI控制）
         # 多期像分析状态
         self.phase_order = ['diastole', 'systole']
         self.phases_to_analyze = []   # 实际要分析的期像列表
@@ -65,25 +65,13 @@ class Module2Logic(ScriptedLoadableModuleLogic):
         logging.info("Module2Logic 初始化完成 - 全自动分析模式")
 
     def set_selected_phase(self, phase: str):
-        """
-        设置当前选择的期像
-        
-        Args:
-            phase (str): 期像类型，'diastole' 或 'systole'
-        """
+        """兼容接口：不再暴露给UI，内部用于结果命名"""
         if phase in ['diastole', 'systole']:
             self.selected_phase = phase
             logging.info(f"设置当前选择期像为: {phase}")
-        else:
-            logging.warning(f"无效的期像类型: {phase}")
 
     def get_selected_phase(self) -> str:
-        """
-        获取当前选择的期像
-        
-        Returns:
-            str: 当前选择的期像，'diastole' 或 'systole'
-        """
+        """兼容接口：返回内部期像状态，用于结果命名"""
         return self.selected_phase
 
     def initialize_segmentation(self) -> bool:
@@ -361,30 +349,30 @@ class Module2Logic(ScriptedLoadableModuleLogic):
             # 预估进度 - 当前期像阶段起始
             self.analysis_progress = max(self.analysis_progress, int(self._current_phase_base_progress() + 5))
 
-            # 切换到对应期像（若可用）
+            # 如可用则尝试切换到对应期像
             current_phase = self._get_current_phase()
             self._try_switch_to_phase(current_phase)
-            
-            # 获取当前体积数据（这个操作通常很快）
+
+            # 获取当前体积数据（通常很快）
             volume_node = self._get_current_volume_node()
             if not volume_node:
                 self.analysis_state = 'failed'
                 self.analysis_error = "未找到当前体积数据"
                 return
-            
+
             self.current_volume_node = volume_node
-            
+
             # 以期像命名，以便区分
             phase_suffix = 'End_Diastole' if current_phase == 'diastole' else 'End_Systole'
             self.temp_nrrd_path = os.path.join(self.analysis_temp_dir, f"{phase_suffix}.nrrd")
             # 记录到期像任务
             if current_phase in self.phase_tasks:
                 self.phase_tasks[current_phase]['nrrd_path'] = self.temp_nrrd_path
-            
+
             # 安排下一步
             self.analysis_state = 'saving_nrrd'
             self.async_analysis_timer.start(100)
-            
+
         except Exception as e:
             logging.error(f"获取体积数据步骤失败: {e}")
             self.analysis_state = 'failed'

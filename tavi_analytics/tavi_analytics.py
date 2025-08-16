@@ -81,7 +81,7 @@ class tavi_analytics(ScriptedLoadableModule):
                 from module2.module2_adapter import Module2Adapter  # 导入适配器
                 module2_info = ModuleInfo(
                     name="module2",
-                    display_name="引导式分割",  # 与适配器中保持一致
+                    display_name="全自动分析",  # 与适配器中保持一致
                     module_class=Module2Adapter,
                     dependencies=["module1"],
                     enabled=True

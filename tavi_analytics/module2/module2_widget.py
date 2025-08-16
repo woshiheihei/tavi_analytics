@@ -14,7 +14,6 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager
-    from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module2_logic import Module2Logic
 except ImportError:
     import os
@@ -27,7 +26,6 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager
-    from widgets.phase_selection_widget import PhaseSelectionWidget
     from module2.module2_logic import Module2Logic
 
 
@@ -55,11 +53,6 @@ class Module2Widget(qt.QWidget):
         self.session = session
         self.logic = logic or Module2Logic()
         
-        # 创建期像选择组件
-        self.phase_selection = PhaseSelectionWidget(session, self)
-        self.phase_selection.phaseChanged.connect(self._on_phase_changed)
-        self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
-        
         # 设置组件属性
         self.setObjectName("Module2Widget")
         
@@ -71,76 +64,15 @@ class Module2Widget(qt.QWidget):
     def on_activated(self):
         """
         模块激活时的回调方法
-        
-    自动切换到舒张末期时相（优先），为全自动分析做准备
         """
-        logging.info("模块二已激活，开始检查和切换期像")
-        
-        try:
-            # 使用期像选择组件自动激活
-            self.phase_selection.auto_activate(preferred_phase='diastole')
-            
-            # 设置期像选择组件的说明文本
-            self.phase_selection.set_info_text(
-        "💡 提示：全自动分析将默认同时处理舒张末期与收缩末期。\n"
-        "建议在模块一中标记两期像；若未标记，将使用当前帧作为舒张末期来分析。"
-            )
-            
-        except Exception as e:
-            logging.error(f"自动时相切换失败: {e}")
-            self._update_status("时相切换失败，请检查时相标记")
+    logging.info("模块二已激活")
 
-    def _on_phase_changed(self, phase: str):
-        """
-        期像改变时的回调
-        
-        Args:
-            phase: 新的期像 ('diastole' 或 'systole')
-        """
-        logging.info(f"期像已切换到: {phase}")
-        
-        # 通知逻辑类更新选择的期像
-        if self.logic:
-            self.logic.set_selected_phase(phase)
-        
-        # 更新主状态显示
-        phase_name = "舒张末期" if phase == 'diastole' else "收缩末期"
-        self._update_status(f"已切换到{phase_name}，可以开始分析")
-    
-    def _on_phase_status_updated(self, status: str):
-        """
-        期像状态更新时的回调
-        
-        Args:
-            status: 状态消息
-        """
-        # 这里可以将期像选择组件的状态同步到主界面
-        logging.debug(f"期像状态更新: {status}")
-    
-    def _restore_phase_selection_state(self):
-        """恢复期像选择状态"""
-        try:
-            if self.logic:
-                selected_phase = self.logic.get_selected_phase()
-                self.phase_selection.set_current_phase(selected_phase)
-                logging.info(f"已恢复期像选择状态: {selected_phase}")
-        except Exception as e:
-            logging.warning(f"恢复期像选择状态失败: {e}")
-
-    def _check_marked_phases(self):
-        """
-        检查已标记的期像状态（保留用于兼容性）
-        
-        委托给期像选择组件处理
-        """
-        if hasattr(self, 'phase_selection'):
-            return self.phase_selection._check_marked_phases()
-        return {}
+    # 已移除期像切换组件相关回调与状态恢复逻辑
 
     def _update_status(self, message: str):
         """更新状态显示"""
         if hasattr(self, 'status_label'):
-            self.status_label.text = message
+            self.status_label.setText(message)
             logging.info(f"状态更新: {message}")
 
     def _setup_ui(self):
@@ -172,17 +104,8 @@ class Module2Widget(qt.QWidget):
         title_label.setStyleSheet(StyleManager.get_label_style("large"))
         layout.addWidget(title_label)
         
-        # 添加描述
-        description_label = qt.QLabel(
-            "本模块提供一键全自动分析功能，自动完成主动脉根部分割和测量，\n"
-            "整个过程无需人工干预，实现完全自动化的TAVI术前分析。"
-        )
-        description_label.setAlignment(qt.Qt.AlignCenter)
-        description_label.setStyleSheet(StyleManager.get_label_style("muted"))
-        layout.addWidget(description_label)
-        
-        # 添加期像选择组件
-        layout.addWidget(self.phase_selection)
+        # 去除冗长描述，保持页面简洁
+    # 期像切换组件已移除
 
     def _create_auto_analysis_section(self, layout):
         """创建全自动分析区域"""
@@ -190,24 +113,7 @@ class Module2Widget(qt.QWidget):
         analysis_group = LayoutManager.create_section_frame("全自动分析 (Auto Analysis)")
         analysis_layout = qt.QVBoxLayout(analysis_group)
         
-        # 添加期像相关的分析提示
-        phase_hint_label = qt.QLabel(
-            "💡 分析提示：全自动分析将默认同时处理舒张末期与收缩末期，\n"
-            "包括主动脉根部分割、测量分析等，整个过程无需人工干预。"
-        )
-        phase_hint_label.setStyleSheet("""
-            QLabel {
-                background-color: #d1ecf1;
-                color: #0c5460;
-                border: 1px solid #bee5eb;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
-                margin: 4px 0px;
-            }
-        """)
-        phase_hint_label.setWordWrap(True)
-        analysis_layout.addWidget(phase_hint_label)
+        # 移除冗长提示，直接提供操作按钮
         
         # 一键分析按钮 - 主要操作
         self.auto_analysis_button = LayoutManager.create_button_with_style(
@@ -220,8 +126,8 @@ class Module2Widget(qt.QWidget):
         self.auto_analysis_button.clicked.connect(self._on_start_auto_analysis)
         analysis_layout.addWidget(self.auto_analysis_button)
         
-        # 分析状态显示
-        self.analysis_status_label = qt.QLabel("准备开始全自动分析...")
+        # 分析状态显示（初始隐藏，触发后再显示）
+        self.analysis_status_label = qt.QLabel("")
         self.analysis_status_label.setAlignment(qt.Qt.AlignCenter)
         self.analysis_status_label.setStyleSheet("""
             QLabel {
@@ -235,6 +141,7 @@ class Module2Widget(qt.QWidget):
             }
         """)
         self.analysis_status_label.setWordWrap(True)
+        self.analysis_status_label.setVisible(False)
         analysis_layout.addWidget(self.analysis_status_label)
         
         # 停止分析按钮 - 危险操作，初始隐藏
@@ -317,37 +224,33 @@ class Module2Widget(qt.QWidget):
         6. 下载并导入分析结果
         """
         logging.info("用户点击了'开始全自动分析'按钮")
-        
         try:
             # 更新UI状态
-            self._update_analysis_status("🔍 正在检查分析条件和服务器连接（多期像）...", "info")
+            self._update_analysis_status("🔍 正在检查分析条件和服务器连接...", "processing")
             self._disable_analysis_button()
-            
+
             # 调用逻辑层开始自动分析
             result = self.logic.start_auto_analysis()
-            
+
             if result:
-                self._update_analysis_status("📤 分析已启动，正在导出并上传两期像数据...", "processing")
+                self._update_analysis_status("📤 上传中...", "processing")
                 self._show_stop_button()
-                
+
                 # 启动状态监控定时器
                 self._start_analysis_monitoring()
-                
+
                 logging.info("全自动分析流程已启动")
-                
             else:
-                self._update_analysis_status("❌ 分析启动失败，请检查数据和网络连接", "error")
+                self._update_analysis_status("❌ 启动失败，请检查数据与网络", "error")
                 self._enable_analysis_button()
                 logging.error("全自动分析流程启动失败")
-                
+
         except Exception as e:
             logging.error(f"开始全自动分析失败: {e}")
             self._update_analysis_status(f"❌ 发生错误: {str(e)}", "error")
             self._enable_analysis_button()
 
-    # 过去的强制舒张末期函数不再需要，保留以兼容但不使用
-    def _ensure_diastolic_phase(self) -> bool:
-        return True
+    # 已移除过期的期像强制切换函数
 
     def _on_stop_analysis(self):
         """
@@ -403,52 +306,41 @@ class Module2Widget(qt.QWidget):
         try:
             # 获取分析状态
             status = self.logic.get_analysis_status()
-            
+
             if not status:
                 # 状态获取失败，停止监控
                 self._stop_analysis_monitoring()
                 self._update_analysis_status("❌ 无法获取分析状态，请检查网络连接", "error")
                 self._enable_analysis_button()
                 return
-            
+
             analysis_status = status.get('status', 'unknown')
             progress = status.get('progress', 0)
             message = status.get('message', '')
-            
+
             # 更新进度显示
             if analysis_status == 'uploading':
-                self._update_analysis_status("📤 正在上传数据到分析服务器...", "processing")
+                self._update_analysis_status("📤 上传中...", "processing")
                 if hasattr(self, 'progress_bar'):
-                    self.progress_bar.setValue(progress)
+                    self.progress_bar.setValue(int(progress))
             elif analysis_status == 'processing':
-                if progress < 100:
-                    # 启动阶段或远程处理阶段
-                    if progress < 70:
-                        self._update_analysis_status(f"⚙️ {message}", "processing")
-                    else:
-                        self._update_analysis_status(f"🔄 正在进行自动分析... ({min(progress-60, 40)}%)", "processing")
-                else:
-                    self._update_analysis_status("🔄 正在进行自动分析...", "processing")
-                
+                self._update_analysis_status("⚙️ 分析中...", "processing")
                 if hasattr(self, 'progress_bar'):
-                    # 启动完成后，进度条显示远程分析进度
-                    if progress >= 100:
-                        # 启动完成，远程分析进行中，显示伪进度
-                        current_time = time.time()
-                        if not hasattr(self, 'remote_analysis_start_time'):
-                            self.remote_analysis_start_time = current_time
-                        
-                        # 根据时间计算伪进度（假设分析需要2-5分钟）
-                        elapsed = current_time - self.remote_analysis_start_time
-                        fake_progress = min(20 + elapsed / 300 * 60, 85)  # 20%-85%之间
-                        self.progress_bar.setValue(int(fake_progress))
-                    else:
-                        self.progress_bar.setValue(progress)
-                        
+                    # 若无明确进度，则不超过95
+                    try:
+                        current_value = int(self.progress_bar.value())
+                    except Exception:
+                        current_value = 0
+                    target = int(progress) if progress else min(current_value + 1, 95)
+                    self.progress_bar.setValue(min(max(current_value, target), 95))
             elif analysis_status == 'downloading':
-                self._update_analysis_status("📥 正在下载分析结果...", "processing")
+                self._update_analysis_status("📥 下载结果中...", "processing")
                 if hasattr(self, 'progress_bar'):
-                    self.progress_bar.setValue(85)
+                    try:
+                        current_value = int(self.progress_bar.value())
+                    except Exception:
+                        current_value = 90
+                    self.progress_bar.setValue(max(current_value, 95))
             elif analysis_status == 'completed':
                 # 分析完成
                 self._on_analysis_completed()
@@ -456,11 +348,11 @@ class Module2Widget(qt.QWidget):
                 # 分析失败
                 error_msg = status.get('error', '未知错误')
                 self._on_analysis_failed(error_msg)
-            
-            # 如果有额外消息，显示它
+
+            # 如果有额外消息，记录它
             if message and analysis_status in ['uploading', 'processing']:
                 logging.info(f"分析状态更新: {message}")
-                
+
         except Exception as e:
             logging.error(f"检查分析进度失败: {e}")
             self._stop_analysis_monitoring()
@@ -474,53 +366,36 @@ class Module2Widget(qt.QWidget):
         当远程分析完成时，下载结果并导入到Slicer中
         """
         logging.info("全自动分析已完成")
-        
         try:
             # 停止监控
             self._stop_analysis_monitoring()
-            
+
             # 更新状态
             self._update_analysis_status("🎉 分析完成！正在导入结果...", "success")
             if hasattr(self, 'progress_bar'):
-                self.progress_bar.setValue(90)
-            
+                self.progress_bar.setValue(98)
+
             # 调用逻辑层导入结果
             import_result = self.logic.import_analysis_results()
-            
+
             if import_result:
-                phases = import_result.get('phases', {})
-                seg_count = import_result.get('total_segmentations', 0)
-                curves_count = import_result.get('total_curves', 0)
-                # 汇总每期像
-                details = []
-                for phase, info in phases.items():
-                    name = "舒张末期" if phase == 'diastole' else "收缩末期"
-                    seg_ok = info.get('segmentation_imported', False)
-                    meas_path = info.get('measurement_path')
-                    details.append(f"• {name}: 分割{'已导入' if seg_ok else '未导入'}; 测量文件: {'有' if meas_path else '无'}")
-                success_msg = (
-                    f"✅ 全自动分析完成！\n"
-                    f"• 导入分割: {seg_count} 个期像\n"
-                    f"• 创建曲线: {curves_count} 条（基于舒张末期）\n"
-                    + "\n".join(details)
-                )
-                self._update_analysis_status(success_msg, "success")
-                
+                # 简洁提示
+                self._update_analysis_status("✅ 分析完成，结果已导入", "success")
+
                 # 更新进度条
                 if hasattr(self, 'progress_bar'):
                     self.progress_bar.setValue(100)
-                
-                # 重新启用分析按钮
+
+                # 完成后恢复按钮与隐藏停止
                 self._enable_analysis_button()
                 self._hide_stop_button()
-                
+
                 logging.info("全自动分析结果导入成功")
-                
             else:
                 self._update_analysis_status("❌ 分析完成但结果导入失败", "error")
                 self._enable_analysis_button()
                 self._hide_stop_button()
-                
+
         except Exception as e:
             logging.error(f"处理分析完成事件失败: {e}")
             self._update_analysis_status(f"❌ 处理分析结果时发生错误: {str(e)}", "error")
@@ -530,27 +405,22 @@ class Module2Widget(qt.QWidget):
     def _on_analysis_failed(self, error_message: str):
         """
         分析失败的处理
-        
+
         Args:
             error_message: 错误信息
         """
         logging.error(f"全自动分析失败: {error_message}")
-        
+
         try:
             # 停止监控
             self._stop_analysis_monitoring()
-            
+
             # 显示失败信息
             self._update_analysis_status(f"❌ 分析失败: {error_message}", "error")
-            
-            # 重新启用分析按钮
+
+            # 重新启用分析按钮并隐藏停止按钮
             self._enable_analysis_button()
             self._hide_stop_button()
-            
-            # 重置进度条
-            if hasattr(self, 'progress_bar'):
-                self.progress_bar.setValue(0)
-                
         except Exception as e:
             logging.error(f"处理分析失败事件失败: {e}")
 
@@ -564,7 +434,7 @@ class Module2Widget(qt.QWidget):
         """
         if hasattr(self, 'analysis_status_label'):
             self.analysis_status_label.setText(message)
-            
+            self.analysis_status_label.setVisible(True)
             # 根据状态类型设置不同的样式
             if status_type == "error":
                 style = """
@@ -626,7 +496,7 @@ class Module2Widget(qt.QWidget):
                         margin: 4px 0px;
                     }
                 """
-            
+
             self.analysis_status_label.setStyleSheet(style)
             logging.debug(f"分析状态更新: {message}")
 
@@ -670,8 +540,6 @@ class Module2Widget(qt.QWidget):
         self.session = session
         if self.logic:
             self.logic.session = session
-        if hasattr(self, 'phase_selection'):
-            self.phase_selection.set_session(session)
 
     def on_deactivated(self):
         """模块停用时调用"""
