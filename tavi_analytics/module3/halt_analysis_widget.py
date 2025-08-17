@@ -163,13 +163,13 @@ class LeafletGradeRow(qt.QWidget):
     def _setup_ui(self):
         """设置瓣叶分级行界面"""
         layout = qt.QHBoxLayout(self)
-        layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(15)
+        layout.setContentsMargins(6, 3, 6, 3)  # 减小边距
+        layout.setSpacing(8)  # 减小间距
         
-        # 瓣叶名称标签
+        # 瓣叶名称标签 - 更紧凑
         name_label = qt.QLabel(f"{self.leaflet_name}:")
-        name_label.setStyleSheet("font-weight: bold; color: #333; font-size: 14px;")
-        name_label.setMinimumWidth(40)
+        name_label.setStyleSheet("font-weight: bold; color: #333; font-size: 12px;")  # 减小字体
+        name_label.setMinimumWidth(30)  # 减小宽度
         layout.addWidget(name_label)
         
         # 分级按钮组
@@ -183,20 +183,22 @@ class LeafletGradeRow(qt.QWidget):
             button = qt.QRadioButton(grade)
             button.setStyleSheet(f"""
                 QRadioButton {{
-                    font-size: 13px;
-                    padding: 6px 12px;
-                    margin: 2px;
+                    font-size: 11px;
+                    padding: 4px 8px;
+                    margin: 1px;
                     background-color: {colors[i]};
-                    border: 2px solid transparent;
-                    border-radius: 6px;
+                    border: 1px solid transparent;
+                    border-radius: 4px;
+                    min-width: 50px;
+                    max-width: 50px;
                 }}
                 QRadioButton:checked {{
                     background-color: {colors[i]};
-                    border: 2px solid #3498db;
+                    border: 2px solid #007bff;
                     font-weight: bold;
                 }}
                 QRadioButton:hover {{
-                    border: 1px solid #bdc3c7;
+                    border: 1px solid #adb5bd;
                 }}
             """)
             
@@ -259,41 +261,64 @@ class HaltAnalysisWidget(qt.QWidget):
     def _setup_ui(self):
         """设置HALT分析主界面"""
         main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(12)
         
-        # 主标题
-        title = qt.QLabel("瓣叶低密度增厚（HALT）评估")
+        # 主标题 - 更简洁的样式
+        title = qt.QLabel("HALT 瓣叶低密度增厚评估")
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet("""
             QLabel {
-                font-size: 18px;
+                font-size: 16px;
                 font-weight: bold;
                 color: #2c3e50;
-                margin-bottom: 10px;
+                background-color: #f8f9fa;
+                padding: 8px 16px;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                margin-bottom: 5px;
             }
         """)
         main_layout.addWidget(title)
         
+        # 创建滚动区域容纳主要内容
+        scroll_area = qt.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(qt.QFrame.NoFrame)
+        scroll_area.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
+        
+        # 滚动区域内容容器
+        scroll_content = qt.QWidget()
+        content_layout = qt.QVBoxLayout(scroll_content)
+        content_layout.setContentsMargins(8, 8, 8, 8)
+        content_layout.setSpacing(10)
+        
         # 0. 分析控制区域（开始HALT分析）
-        self._create_analysis_control_section(main_layout)
+        self._create_analysis_control_section(content_layout)
         
         # 1. 整体HALT状态选择
-        self._create_overall_status_section(main_layout)
+        self._create_overall_status_section(content_layout)
         
         # 2. 测量期相选择（条件显示）
-        self._create_phase_section(main_layout)
+        self._create_phase_section(content_layout)
         
         # 3. 瓣叶分级表格（条件显示）
-        self._create_grading_section(main_layout)
+        self._create_grading_section(content_layout)
         
         # 4. 统计信息（条件显示）
-        self._create_summary_section(main_layout)
+        self._create_summary_section(content_layout)
         
         # 5. 视图标记（简化版）
-        self._create_view_marking_section(main_layout)
+        self._create_view_marking_section(content_layout)
         
-        # 6. 操作按钮
+        # 添加弹性空间
+        content_layout.addStretch()
+        
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area, 1)  # 占据大部分空间
+        
+        # 6. 操作按钮 - 固定在底部
         self._create_action_buttons_section(main_layout)
         
         # 初始状态更新
@@ -308,32 +333,34 @@ class HaltAnalysisWidget(qt.QWidget):
         self.control_frame = qt.QFrame()
         self.control_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
+                background-color: #e8f4f8;
+                border: 1px solid #bee5eb;
                 border-radius: 6px;
-                padding: 10px;
+                padding: 8px;
             }
         """)
         
         control_layout = qt.QHBoxLayout(self.control_frame)
-        control_layout.setSpacing(10)
+        control_layout.setSpacing(8)
+        control_layout.setContentsMargins(8, 8, 8, 8)
         
         # 简化的说明
-        instruction_label = qt.QLabel("💡 自动准备分析环境：")
-        instruction_label.setStyleSheet("font-size: 12px; color: #6c757d;")
+        instruction_label = qt.QLabel("💡 准备分析环境")
+        instruction_label.setStyleSheet("font-size: 11px; color: #495057; font-weight: 500;")
         control_layout.addWidget(instruction_label)
         
         # 开始分析按钮（紧凑版）
-        self.start_analysis_btn = qt.QPushButton("🚀 开始分析")
+        self.start_analysis_btn = qt.QPushButton("开始分析")
         self.start_analysis_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
-                font-size: 13px;
+                padding: 6px 12px;
+                font-size: 12px;
                 font-weight: bold;
                 background-color: #28a745;
                 color: white;
                 border: none;
                 border-radius: 4px;
+                min-width: 70px;
             }
             QPushButton:hover {
                 background-color: #218838;
@@ -349,12 +376,13 @@ class HaltAnalysisWidget(qt.QWidget):
         self.skip_analysis_btn = qt.QPushButton("跳过")
         self.skip_analysis_btn.setStyleSheet("""
             QPushButton {
-                padding: 6px 12px;
-                font-size: 12px;
+                padding: 6px 10px;
+                font-size: 11px;
                 background-color: #6c757d;
                 color: white;
                 border: none;
                 border-radius: 4px;
+                min-width: 50px;
             }
             QPushButton:hover {
                 background-color: #5a6268;
@@ -365,7 +393,7 @@ class HaltAnalysisWidget(qt.QWidget):
         
         # 状态显示（内联）
         self.analysis_status_label = qt.QLabel("等待开始")
-        self.analysis_status_label.setStyleSheet("font-size: 11px; color: #868e96; font-style: italic;")
+        self.analysis_status_label.setStyleSheet("font-size: 10px; color: #868e96; font-style: italic;")
         control_layout.addWidget(self.analysis_status_label)
         
         control_layout.addStretch()
@@ -377,48 +405,54 @@ class HaltAnalysisWidget(qt.QWidget):
         status_frame = qt.QFrame()
         status_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
+                background-color: #ffffff;
                 border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 15px;
+                border-radius: 6px;
+                padding: 12px;
             }
         """)
         
         status_layout = qt.QVBoxLayout(status_frame)
+        status_layout.setSpacing(8)
         
         # 标题
-        status_title = qt.QLabel("1. 瓣叶低密度增厚（HALT）：")
-        status_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        status_title = qt.QLabel("1. HALT状态")
+        status_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #343a40; margin-bottom: 5px;")
         status_layout.addWidget(status_title)
         
-        # 选项按钮
+        # 选项按钮 - 紧凑布局
         buttons_layout = qt.QHBoxLayout()
-        buttons_layout.setSpacing(20)
+        buttons_layout.setSpacing(8)
         
         self.overall_status_group = qt.QButtonGroup()
         
-        # 样式定义
-        button_styles = {
-            "无": "background-color: #d4edda; border: 2px solid #c3e6cb;",
-            "有": "background-color: #f8d7da; border: 2px solid #f5c6cb;",
-            "难以判定": "background-color: #fff3cd; border: 2px solid #ffeaa7;"
-        }
+        # 样式定义 - 更简洁的设计
+        button_configs = [
+            ("无", "#d4f6d4", "#28a745"),
+            ("有", "#fdeaea", "#dc3545"),
+            ("难以判定", "#fff8dc", "#ffc107")
+        ]
         
         self.status_buttons = {}
-        for i, status in enumerate(["无", "有", "难以判定"]):
+        for i, (status, bg_color, border_color) in enumerate(button_configs):
             button = qt.QRadioButton(status)
             button.setStyleSheet(f"""
                 QRadioButton {{
-                    font-size: 16px;
-                    font-weight: bold;
-                    padding: 12px 20px;
-                    margin: 5px;
-                    {button_styles[status]}
-                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    padding: 8px 16px;
+                    margin: 2px;
+                    background-color: {bg_color};
+                    border: 2px solid {bg_color};
+                    border-radius: 6px;
                 }}
                 QRadioButton:checked {{
-                    border: 3px solid #007bff;
-                    background-color: #e3f2fd;
+                    border: 2px solid {border_color};
+                    font-weight: bold;
+                    background-color: white;
+                }}
+                QRadioButton:hover {{
+                    border: 2px solid {border_color};
                 }}
             """)
             
@@ -442,22 +476,24 @@ class HaltAnalysisWidget(qt.QWidget):
         self.phase_frame = qt.QFrame()
         self.phase_frame.setStyleSheet("""
             QFrame {
-                background-color: #e8f4f8;
-                border: 1px solid #bee5eb;
-                border-radius: 8px;
-                padding: 15px;
+                background-color: #f0f8ff;
+                border: 1px solid #b8daff;
+                border-radius: 6px;
+                padding: 10px;
             }
         """)
         
         phase_layout = qt.QVBoxLayout(self.phase_frame)
+        phase_layout.setSpacing(6)
         
         # 标题
-        phase_title = qt.QLabel("2. 测量期相：")
-        phase_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        phase_title = qt.QLabel("2. 测量期相")
+        phase_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
         phase_layout.addWidget(phase_title)
         
-        # 期相选择
+        # 期相选择 - 紧凑布局
         phase_buttons_layout = qt.QHBoxLayout()
+        phase_buttons_layout.setSpacing(8)
         
         self.phase_group = qt.QButtonGroup()
         
@@ -466,17 +502,21 @@ class HaltAnalysisWidget(qt.QWidget):
             button = qt.QRadioButton(phase)
             button.setStyleSheet("""
                 QRadioButton {
-                    font-size: 14px;
-                    padding: 8px 16px;
-                    margin: 5px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    margin: 2px;
                     background-color: white;
-                    border: 2px solid #6c757d;
-                    border-radius: 6px;
+                    border: 1px solid #ced4da;
+                    border-radius: 4px;
                 }
                 QRadioButton:checked {
                     border: 2px solid #007bff;
                     background-color: #e3f2fd;
                     font-weight: bold;
+                }
+                QRadioButton:hover {
+                    border: 1px solid #007bff;
                 }
             """)
             
@@ -500,27 +540,29 @@ class HaltAnalysisWidget(qt.QWidget):
         self.grading_frame = qt.QFrame()
         self.grading_frame.setStyleSheet("""
             QFrame {
-                background-color: #fff;
+                background-color: #ffffff;
                 border: 2px solid #007bff;
-                border-radius: 8px;
-                padding: 15px;
+                border-radius: 6px;
+                padding: 12px;
             }
         """)
         
         grading_layout = qt.QVBoxLayout(self.grading_frame)
+        grading_layout.setSpacing(8)
         
         # 标题和快速操作
         header_layout = qt.QHBoxLayout()
+        header_layout.setSpacing(8)
         
-        grading_title = qt.QLabel("3. HALT分级：")
-        grading_title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        grading_title = qt.QLabel("3. HALT分级")
+        grading_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #343a40;")
         header_layout.addWidget(grading_title)
         
         header_layout.addStretch()
         
-        # 快速设置按钮
-        quick_label = qt.QLabel("快速设置所有瓣叶：")
-        quick_label.setStyleSheet("font-size: 12px; color: #6c757d;")
+        # 快速设置提示和按钮 - 更紧凑
+        quick_label = qt.QLabel("快速设置:")
+        quick_label.setStyleSheet("font-size: 10px; color: #6c757d; margin-right: 3px;")
         header_layout.addWidget(quick_label)
         
         quick_grades = ["0", "≤25%", "25-50%", "50%-75%", ">75%"]
@@ -528,15 +570,18 @@ class HaltAnalysisWidget(qt.QWidget):
             quick_btn = qt.QPushButton(grade)
             quick_btn.setStyleSheet("""
                 QPushButton {
-                    font-size: 11px;
-                    padding: 4px 8px;
-                    margin: 1px;
-                    border: 1px solid #6c757d;
-                    border-radius: 4px;
+                    font-size: 9px;
+                    padding: 2px 6px;
+                    margin: 0px 1px;
+                    border: 1px solid #ced4da;
+                    border-radius: 3px;
                     background-color: #f8f9fa;
+                    min-width: 35px;
+                    max-width: 35px;
                 }
                 QPushButton:hover {
                     background-color: #e9ecef;
+                    border-color: #007bff;
                 }
             """)
             quick_btn.clicked.connect(lambda checked, g=grade: self._set_all_grades(g))
@@ -544,7 +589,7 @@ class HaltAnalysisWidget(qt.QWidget):
         
         grading_layout.addLayout(header_layout)
         
-        # 分级表格
+        # 分级表格 - 更紧凑的布局
         self.leaflet_grade_rows = {}
         for leaflet in ["LC", "RC", "NC"]:
             row = LeafletGradeRow(leaflet)
@@ -559,64 +604,67 @@ class HaltAnalysisWidget(qt.QWidget):
         self.summary_frame = qt.QFrame()
         self.summary_frame.setStyleSheet("""
             QFrame {
-                background-color: #f1f3f4;
-                border: 1px solid #dadce0;
-                border-radius: 8px;
-                padding: 15px;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 8px 12px;
             }
         """)
         
         summary_layout = qt.QHBoxLayout(self.summary_frame)
+        summary_layout.setContentsMargins(8, 4, 8, 4)
+        summary_layout.setSpacing(16)
         
         # 受累瓣叶个数
-        self.affected_count_label = qt.QLabel("受累瓣叶个数：0")
-        self.affected_count_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
+        self.affected_count_label = qt.QLabel("受累瓣叶: 0个")
+        self.affected_count_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #28a745;")
         summary_layout.addWidget(self.affected_count_label)
         
         summary_layout.addStretch()
         
         # 最高分级
-        self.max_grade_label = qt.QLabel("最高分级：0")
-        self.max_grade_label.setStyleSheet("font-size: 14px; color: #34495e;")
+        self.max_grade_label = qt.QLabel("最高分级: 0")
+        self.max_grade_label.setStyleSheet("font-size: 12px; color: #495057; font-weight: 500;")
         summary_layout.addWidget(self.max_grade_label)
         
         parent_layout.addWidget(self.summary_frame)
     
     def _create_view_marking_section(self, parent_layout):
-        """创建视图标记与管理区域（完整版）"""
+        """创建视图标记与管理区域（简化版）"""
         self.view_frame = qt.QFrame()
         self.view_frame.setStyleSheet("""
             QFrame {
-                background-color: #e8f5e8;
+                background-color: #f8fff8;
                 border: 1px solid #c3e6cb;
-                border-radius: 8px;
-                padding: 15px;
+                border-radius: 6px;
+                padding: 10px;
             }
         """)
         
         view_layout = qt.QVBoxLayout(self.view_frame)
-        view_layout.setSpacing(12)
+        view_layout.setSpacing(8)
         
-        # 标题和操作区域
+        # 标题和操作区域 - 紧凑布局
         header_layout = qt.QHBoxLayout()
+        header_layout.setSpacing(8)
         
-        view_title = qt.QLabel("关键视图管理")
-        view_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #2c3e50;")
+        view_title = qt.QLabel("关键视图")
+        view_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
         header_layout.addWidget(view_title)
         
         header_layout.addStretch()
         
-        # 标记当前视图按钮
-        self.mark_btn = qt.QPushButton("📌 标记当前视图 (Ctrl+M)")
+        # 标记当前视图按钮 - 更紧凑
+        self.mark_btn = qt.QPushButton("📌 标记 (Ctrl+M)")
         self.mark_btn.setStyleSheet("""
             QPushButton {
-                padding: 8px 16px;
+                padding: 6px 10px;
                 background-color: #28a745;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 13px;
+                border-radius: 4px;
+                font-weight: 500;
+                font-size: 11px;
             }
             QPushButton:hover {
                 background-color: #218838;
@@ -632,32 +680,33 @@ class HaltAnalysisWidget(qt.QWidget):
         
         view_layout.addLayout(header_layout)
         
-        # 已标记视图列表
+        # 已标记视图列表 - 紧凑版本
         self._create_marked_views_list(view_layout)
         
         parent_layout.addWidget(self.view_frame)
     
     def _create_marked_views_list(self, parent_layout):
         """创建已标记视图列表"""
-        # 列表标题
+        # 列表标题 - 紧凑版
         list_header = qt.QHBoxLayout()
+        list_header.setSpacing(8)
         
-        list_title = qt.QLabel("已标记的视图：")
-        list_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #495057;")
+        list_title = qt.QLabel("已标记:")
+        list_title.setStyleSheet("font-size: 12px; font-weight: 500; color: #495057;")
         list_header.addWidget(list_title)
         
         list_header.addStretch()
         
-        # 清除所有按钮
-        self.clear_all_btn = qt.QPushButton("🗑️ 清除所有")
+        # 清除所有按钮 - 更小
+        self.clear_all_btn = qt.QPushButton("🗑️ 清除")
         self.clear_all_btn.setStyleSheet("""
             QPushButton {
-                padding: 4px 8px;
+                padding: 2px 6px;
                 background-color: #dc3545;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                font-size: 11px;
+                border-radius: 3px;
+                font-size: 9px;
             }
             QPushButton:hover {
                 background-color: #c82333;
@@ -669,9 +718,9 @@ class HaltAnalysisWidget(qt.QWidget):
         
         parent_layout.addLayout(list_header)
         
-        # 滚动区域用于视图列表
+        # 滚动区域用于视图列表 - 更紧凑
         scroll_area = qt.QScrollArea()
-        scroll_area.setMaximumHeight(120)
+        scroll_area.setMaximumHeight(80)  # 减小高度
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameStyle(qt.QFrame.NoFrame)
         scroll_area.setStyleSheet("""
@@ -684,18 +733,18 @@ class HaltAnalysisWidget(qt.QWidget):
         # 视图列表容器
         self.views_container = qt.QWidget()
         self.views_layout = qt.QVBoxLayout(self.views_container)
-        self.views_layout.setSpacing(4)
+        self.views_layout.setSpacing(2)  # 减小间距
         self.views_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 空状态提示
-        self.empty_hint = qt.QLabel("暂无标记的视图")
+        # 空状态提示 - 更小
+        self.empty_hint = qt.QLabel("暂无标记")
         self.empty_hint.setAlignment(qt.Qt.AlignCenter)
         self.empty_hint.setStyleSheet("""
             QLabel {
                 color: #6c757d;
                 font-style: italic;
-                font-size: 12px;
-                padding: 20px;
+                font-size: 10px;
+                padding: 15px;
             }
         """)
         self.views_layout.addWidget(self.empty_hint)
@@ -707,18 +756,21 @@ class HaltAnalysisWidget(qt.QWidget):
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
         actions_layout = qt.QHBoxLayout()
+        actions_layout.setSpacing(8)
+        actions_layout.setContentsMargins(4, 8, 4, 4)
         
-        # 重置按钮
+        # 重置按钮 - 更紧凑
         reset_btn = qt.QPushButton("重置")
         reset_btn.setStyleSheet("""
             QPushButton {
-                padding: 10px 20px;
-                font-size: 14px;
+                padding: 8px 16px;
+                font-size: 12px;
                 background-color: #6c757d;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-weight: bold;
+                border-radius: 4px;
+                font-weight: 500;
+                min-width: 60px;
             }
             QPushButton:hover {
                 background-color: #5a6268;
@@ -726,17 +778,18 @@ class HaltAnalysisWidget(qt.QWidget):
         """)
         reset_btn.clicked.connect(self._reset_analysis)
         
-        # 导出结果按钮
+        # 导出结果按钮 - 更紧凑
         export_btn = qt.QPushButton("导出结果")
         export_btn.setStyleSheet("""
             QPushButton {
-                padding: 10px 20px;
-                font-size: 14px;
+                padding: 8px 16px;
+                font-size: 12px;
                 background-color: #007bff;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                font-weight: bold;
+                border-radius: 4px;
+                font-weight: 500;
+                min-width: 80px;
             }
             QPushButton:hover {
                 background-color: #0056b3;
@@ -1090,8 +1143,8 @@ class HaltAnalysisWidget(qt.QWidget):
     def _update_summary(self):
         """更新统计信息"""
         if self.overall_halt_status != "有":
-            self.affected_count_label.setText("受累瓣叶个数：0")
-            self.max_grade_label.setText("最高分级：0")
+            self.affected_count_label.setText("受累瓣叶: 0个")
+            self.max_grade_label.setText("最高分级: 0")
             return
         
         # 计算受累瓣叶个数（分级不为"0"的瓣叶）
@@ -1106,8 +1159,8 @@ class HaltAnalysisWidget(qt.QWidget):
                 break
         
         # 更新标签
-        self.affected_count_label.setText(f"受累瓣叶个数：{affected_count}")
-        self.max_grade_label.setText(f"最高分级：{max_grade}")
+        self.affected_count_label.setText(f"受累瓣叶: {affected_count}个")
+        self.max_grade_label.setText(f"最高分级: {max_grade}")
         
         # 更新颜色
         if affected_count == 0:
@@ -1117,7 +1170,7 @@ class HaltAnalysisWidget(qt.QWidget):
         else:
             color = "#dc3545"  # 红色
         
-        self.affected_count_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+        self.affected_count_label.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {color};")
     
     def _show_mark_view_dialog(self):
         """显示标记视图对话框"""
@@ -1264,9 +1317,9 @@ class HaltAnalysisWidget(qt.QWidget):
             QFrame {
                 background-color: white;
                 border: 1px solid #dee2e6;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 2px 0;
+                border-radius: 4px;
+                padding: 4px;
+                margin: 1px 0;
             }
             QFrame:hover {
                 border-color: #007bff;
@@ -1275,61 +1328,44 @@ class HaltAnalysisWidget(qt.QWidget):
         """)
         
         item_layout = qt.QHBoxLayout(item_frame)
-        item_layout.setContentsMargins(8, 6, 8, 6)
-        item_layout.setSpacing(10)
+        item_layout.setContentsMargins(6, 3, 6, 3)
+        item_layout.setSpacing(6)
         
-        # 视图图标
+        # 视图图标 - 更小
         icon_label = qt.QLabel("👁️")
-        icon_label.setStyleSheet("font-size: 16px;")
+        icon_label.setStyleSheet("font-size: 12px;")
         item_layout.addWidget(icon_label)
         
-        # 视图信息
-        info_layout = qt.QVBoxLayout()
-        info_layout.setSpacing(2)
-        
+        # 视图信息 - 紧凑显示
         name_label = qt.QLabel(view_name)
         name_label.setStyleSheet("""
             QLabel {
-                font-size: 13px;
+                font-size: 11px;
                 font-weight: bold;
                 color: #212529;
             }
         """)
-        info_layout.addWidget(name_label)
-        
-        # 获取时间戳信息
-        view_data = self.view_marking_manager.marked_views.get(view_name, {})
-        timestamp = view_data.get('timestamp', '')
-        if timestamp:
-            time_label = qt.QLabel(f"标记时间: {timestamp}")
-            time_label.setStyleSheet("""
-                QLabel {
-                    font-size: 11px;
-                    color: #6c757d;
-                }
-            """)
-            info_layout.addWidget(time_label)
-        
-        item_layout.addLayout(info_layout)
+        item_layout.addWidget(name_label)
         item_layout.addStretch()
         
-        # 操作按钮
+        # 操作按钮 - 更小
         # 恢复按钮
-        restore_btn = qt.QPushButton("🔄 恢复")
+        restore_btn = qt.QPushButton("🔄")
         restore_btn.setToolTip(f"恢复到视图: {view_name}")
         restore_btn.setStyleSheet("""
             QPushButton {
-                padding: 4px 12px;
+                padding: 2px 4px;
                 background-color: #007bff;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                font-size: 11px;
+                border-radius: 3px;
+                font-size: 9px;
                 font-weight: bold;
+                min-width: 20px;
+                max-width: 20px;
             }
             QPushButton:hover {
                 background-color: #0056b3;
-                transform: scale(1.05);
             }
         """)
         restore_btn.clicked.connect(lambda: self._restore_view(view_name))
@@ -1340,12 +1376,14 @@ class HaltAnalysisWidget(qt.QWidget):
         delete_btn.setToolTip("删除此视图标记")
         delete_btn.setStyleSheet("""
             QPushButton {
-                padding: 4px 6px;
+                padding: 2px 4px;
                 background-color: #dc3545;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                font-size: 11px;
+                border-radius: 3px;
+                font-size: 9px;
+                min-width: 20px;
+                max-width: 20px;
             }
             QPushButton:hover {
                 background-color: #c82333;
