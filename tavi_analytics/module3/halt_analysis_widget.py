@@ -163,21 +163,22 @@ class LeafletGradeRow(qt.QWidget):
     def _setup_ui(self):
         """设置瓣叶分级行界面"""
         layout = qt.QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)  # 减小边距
-        layout.setSpacing(8)  # 减小间距
+        layout.setContentsMargins(4, 2, 4, 2)  # 更小边距
+        layout.setSpacing(4)  # 更小间距
         
-        # 瓣叶名称标签 - 更紧凑
-        name_label = qt.QLabel(f"{self.leaflet_name}:")
+        # 瓣叶名称标签 - 极简版本
+        name_label = qt.QLabel(f"{self.leaflet_name}")
         name_label.setStyleSheet("""
             QLabel {
                 font-weight: bold; 
                 color: #2c3e50; 
-                font-size: 12px;
+                font-size: 11px;
                 background-color: #f8f9fa;
                 border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 4px 8px;
-                min-width: 32px;
+                border-radius: 3px;
+                padding: 3px 6px;
+                min-width: 28px;
+                max-width: 28px;
                 text-align: center;
             }
         """)
@@ -200,20 +201,20 @@ class LeafletGradeRow(qt.QWidget):
         for i, (grade_value, bg_color, border_color) in enumerate(grade_configs):
             button = qt.QRadioButton(grade_value)
             
-            # 设置按钮样式 - 更紧凑
+            # 设置按钮样式 - 更加紧凑
             button.setStyleSheet(f"""
                 QRadioButton {{
                     background-color: {bg_color};
-                    border: 2px solid {bg_color};
-                    border-radius: 6px;
-                    padding: 4px 2px;
-                    font-size: 10px;
+                    border: 1px solid {bg_color};
+                    border-radius: 4px;
+                    padding: 2px 1px;
+                    font-size: 9px;
                     font-weight: 500;
                     text-align: center;
-                    min-width: 50px;
-                    max-width: 50px;
-                    min-height: 28px;
-                    max-height: 28px;
+                    min-width: 40px;
+                    max-width: 40px;
+                    min-height: 22px;
+                    max-height: 22px;
                     color: #2c3e50;
                 }}
                 QRadioButton:checked {{
@@ -223,7 +224,7 @@ class LeafletGradeRow(qt.QWidget):
                     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
                 }}
                 QRadioButton:hover {{
-                    border: 2px solid {border_color};
+                    border: 1px solid {border_color};
                     box-shadow: 0 0px 1px rgba(0,0,0,0.08);
                 }}
                 QRadioButton::indicator {{
@@ -505,62 +506,50 @@ class HaltAnalysisWidget(qt.QWidget):
                 background-color: #ffffff;
                 border: 2px solid #007bff;
                 border-radius: 6px;
-                padding: 12px;
+                padding: 8px;
                 margin: 2px;
             }
         """)
         
         grading_layout = qt.QVBoxLayout(self.grading_frame)
-        grading_layout.setSpacing(8)  # 减小间距
+        grading_layout.setSpacing(4)  # 更小间距
         
-        # 标题 - 更紧凑
+        # 紧凑的标题和说明 - 合并到一行
+        header_layout = qt.QHBoxLayout()
+        header_layout.setSpacing(8)
+        
         grading_title = qt.QLabel("2. HALT分级")
         grading_title.setStyleSheet("""
             QLabel {
-                font-size: 14px; 
+                font-size: 12px; 
                 font-weight: bold; 
                 color: #2c3e50; 
-                margin-bottom: 5px;
-                padding: 4px 0px;
-                border-bottom: 1px solid #e9ecef;
+                padding: 2px 0px;
             }
         """)
-        grading_layout.addWidget(grading_title)
+        header_layout.addWidget(grading_title)
         
-        # 添加分级说明 - 更小字体
-        info_label = qt.QLabel("请为每个瓣叶选择相应的HALT分级：")
-        info_label.setStyleSheet("""
+        # 内联说明和图例
+        info_legend = qt.QLabel("(选择分级: 0 → ≤25% → 25-50% → 50%-75% → >75%)")
+        info_legend.setStyleSheet("""
             QLabel {
-                font-size: 11px;
+                font-size: 9px;
                 color: #6c757d;
-                margin-bottom: 8px;
                 font-style: italic;
             }
         """)
-        grading_layout.addWidget(info_label)
+        header_layout.addWidget(info_legend)
+        header_layout.addStretch()
         
-        # 分级表格 - 改进布局
+        grading_layout.addLayout(header_layout)
+        
+        # 分级表格 - 更紧凑布局
         self.leaflet_grade_rows = {}
         for leaflet in ["LC", "RC", "NC"]:
             row = LeafletGradeRow(leaflet)
             row.gradeChanged.connect(self._on_leaflet_grade_changed)
             self.leaflet_grade_rows[leaflet] = row
             grading_layout.addWidget(row)
-        
-        # 添加分级说明 - 更紧凑
-        legend_label = qt.QLabel("💡 分级：0 → ≤25% → 25-50% → 50%-75% → >75%")
-        legend_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                color: #6c757d;
-                background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 3px;
-                padding: 4px 6px;
-                margin-top: 6px;
-            }
-        """)
-        grading_layout.addWidget(legend_label)
         
         parent_layout.addWidget(self.grading_frame)
     
