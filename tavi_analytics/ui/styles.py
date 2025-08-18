@@ -355,6 +355,31 @@ class StyleManager:
                     border-radius: {BorderRadius.SM.value};
                 }}
             """,
+            # 状态相关标签
+            "success": f"""
+                QLabel {{
+                    color: #15803d;
+                    font-size: {FontSize.SM.value};
+                    font-weight: {FontWeight.MEDIUM.value};
+                    line-height: 1.5;
+                }}
+            """,
+            "warning": f"""
+                QLabel {{
+                    color: #d97706;
+                    font-size: {FontSize.SM.value};
+                    font-weight: {FontWeight.MEDIUM.value};
+                    line-height: 1.5;
+                }}
+            """,
+            "error": f"""
+                QLabel {{
+                    color: #dc2626;
+                    font-size: {FontSize.SM.value};
+                    font-weight: {FontWeight.MEDIUM.value};
+                    line-height: 1.5;
+                }}
+            """,
             # 特殊用途标签
             "card_title": f"""
                 QLabel {{

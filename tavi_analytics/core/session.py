@@ -727,6 +727,58 @@ class TAVRStudySession:
         
         self.logger.info("会话重置完成")
 
+    def clear_sequence_data(self):
+        """
+        清除序列相关数据，但保留患者信息
+        
+        用于重新导入数据时，清除4D CT序列和时相标记，
+        但保留患者基本信息。
+        """
+        self.logger.info("清除序列数据，保留患者信息")
+        
+        # 清除节点引用
+        self.volume_sequence_node_id = None
+        self.sequence_browser_node_id = None
+        
+        # 重置时相标记
+        self.marked_phases = {
+            'end_diastole': {
+                'frame_index': None, 
+                'phase_percent': None, 
+                'series_description': None
+            },
+            'end_systole': {
+                'frame_index': None, 
+                'phase_percent': None, 
+                'series_description': None
+            }
+        }
+        
+        # 重置几何数据
+        self.segmentation_node_id = None
+        self.landmark_node_ids = {}
+        self.reconstructed_planes = {}
+        
+        # 重置平面数据管理器
+        try:
+            self.contour_data_manager.clear()
+        except Exception:
+            pass
+
+        # 重置分期结构
+        self.phase_segmentation_node_ids = {
+            CardiacPhase.END_DIASTOLE.value: None,
+            CardiacPhase.END_SYSTOLE.value: None,
+        }
+        try:
+            self.phase_contour_repo.clear()
+        except Exception:
+            self.phase_contour_repo = PhaseContourRepository.create_default()
+        # 兼容默认指向舒张末期
+        self.contour_data_manager = self.phase_contour_repo.diastole
+        self.contour_manager = self.contour_data_manager
+        
+        self.logger.info("序列数据清除完成")
 
     def get_session_info(self) -> Dict[str, Any]:
         """

@@ -182,62 +182,65 @@ class Module1Widget(qt.QWidget):
         import_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, import_group)
         
         # 说明文本
-        instruction_label = qt.QLabel(
+        self.instruction_label = qt.QLabel(
             "请点击下方按钮导入4D心脏CT数据并配置患者信息。"
             "支持从DICOM浏览器加载或从现有场景数据创建序列。"
         )
-        instruction_label.setWordWrap(True)
+        self.instruction_label.setWordWrap(True)
         # 使用新的shadcn/ui样式系统
         styles = ComponentStyleFactory.get_module1_styles()
-        instruction_label.setStyleSheet(styles["instruction_label"])
-        import_layout.addWidget(instruction_label)
+        self.instruction_label.setStyleSheet(styles["instruction_label"])
+        import_layout.addWidget(self.instruction_label)
         
-        # 数据导入按钮 - 使用统一的按钮创建方法
+        # 数据导入按钮容器（用于支持下拉菜单）
+        button_container = qt.QWidget()
+        button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP, button_container)
+        
+        # 主数据导入按钮 - 使用统一的按钮创建方法
         self.load_data_button = LayoutManager.create_button_with_style(
             text="数据导入与配置", 
             button_type="primary", 
             size="default", 
             min_height=40
         )
-        import_layout.addWidget(self.load_data_button)
+        button_layout.addWidget(self.load_data_button)
+        
+        # 数据管理下拉按钮（当有数据时显示）
+        self.data_management_button = LayoutManager.create_button_with_style(
+            text="⋮", 
+            button_type="secondary", 
+            size="default", 
+            min_height=40
+        )
+        self.data_management_button.setMaximumWidth(50)
+        self.data_management_button.setVisible(False)  # 初始隐藏
+        self.data_management_button.setToolTip("数据管理选项")
+        button_layout.addWidget(self.data_management_button)
+        
+        # 创建数据管理菜单
+        self.data_management_menu = qt.QMenu(self.data_management_button)
+        self.reimport_action = self.data_management_menu.addAction("🔄 重新导入数据")
+        self.data_management_menu.addSeparator()
+        self.clear_data_action = self.data_management_menu.addAction("🗑️ 清除所有数据")
+        self.refresh_status_action = self.data_management_menu.addAction("🔍 刷新状态")
+        
+        self.data_management_button.setMenu(self.data_management_menu)
+        
+        import_layout.addWidget(button_container)
         
         parent_layout.addWidget(import_group, 0)  # 固定大小
         
     def _create_action_buttons_section(self, parent_layout):
-        """创建操作按钮区域"""
-        actions_group = LayoutManager.create_section_frame("操作", LayoutType.BUTTON_GROUP)
+        """创建操作按钮区域 - 聚焦主要流程"""
+        actions_group = LayoutManager.create_section_frame("分析流程", LayoutType.BUTTON_GROUP)
         actions_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, actions_group)
         
-        # 按钮布局
-        button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
-        
-        # 重新检测按钮（原“刷新状态”） - 次要样式，兜底自检入口
-        self.refresh_button = LayoutManager.create_button_with_style(
-            text="重新检测", 
-            button_type="secondary", 
-            size="default", 
-            min_height=35
-        )
-        self.refresh_button.setToolTip("手动触发一次完整状态自检并刷新界面（当自动刷新不生效时使用）")
-        button_layout.addWidget(self.refresh_button)
-        
-        # 重置数据按钮 - 使用统一的按钮创建方法
-        self.reset_button = LayoutManager.create_button_with_style(
-            text="重置数据", 
-            button_type="destructive", 
-            size="default", 
-            min_height=35
-        )
-        button_layout.addWidget(self.reset_button)
-        
-        actions_layout.addLayout(button_layout)
-        
-        # 主CTA：开始全自动分析（一键式工作流）
+        # 主CTA：开始全自动分析（突出显示）
         self.next_module_button = LayoutManager.create_button_with_style(
             text="开始全自动分析", 
             button_type="primary", 
             size="default", 
-            min_height=40
+            min_height=45
         )
         self.next_module_button.setEnabled(False)
         actions_layout.addWidget(self.next_module_button)
@@ -247,15 +250,31 @@ class Module1Widget(qt.QWidget):
         self.next_progress_label.setStyleSheet(StyleManager.get_label_style("muted"))
         actions_layout.addWidget(self.next_progress_label)
         
+        # 分隔线
+        separator = qt.QFrame()
+        separator.setFrameShape(qt.QFrame.HLine)
+        separator.setFrameShadow(qt.QFrame.Sunken)
+        separator.setStyleSheet("color: #e0e0e0; margin: 10px 0;")
+        actions_layout.addWidget(separator)
+        
+        # 状态信息标签
+        self.status_info_label = qt.QLabel("准备就绪后即可开始分析")
+        self.status_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
+        self.status_info_label.setAlignment(qt.Qt.AlignCenter)
+        actions_layout.addWidget(self.status_info_label)
+        
         parent_layout.addWidget(actions_group, 0)  # 固定大小
         
     def _setup_connections(self):
         """设置信号连接"""
-        # 按钮连接
+        # 主按钮连接
         self.load_data_button.clicked.connect(self._on_load_data_clicked)
-        self.refresh_button.clicked.connect(self._on_refresh_clicked)
-        self.reset_button.clicked.connect(self._on_reset_clicked)
         self.next_module_button.clicked.connect(self._on_next_module_clicked)
+        
+        # 数据管理菜单连接
+        self.reimport_action.triggered.connect(self._on_reimport_data_clicked)
+        self.clear_data_action.triggered.connect(self._on_clear_data_clicked)
+        self.refresh_status_action.triggered.connect(self._on_refresh_status_clicked)
         
     def _init_auto_refresh(self):
         """初始化MRML场景与关键节点的自动刷新监听"""
@@ -396,11 +415,90 @@ class Module1Widget(qt.QWidget):
         except Exception as e:
             logging.error(f"处理数据加载完成时发生错误: {str(e)}")
             
-    def _on_refresh_clicked(self):
-        """处理重新检测按钮点击（兜底自检）"""
+    def _on_reimport_data_clicked(self):
+        """处理重新导入数据菜单项点击"""
         try:
-            logging.info("执行模块一重新检测：重绑观察者、刷新状态与子组件")
-            self.refresh_button.setEnabled(False)
+            # 询问用户是否保留患者信息
+            reply = qt.QMessageBox.question(
+                self, "重新导入数据", 
+                "重新导入数据时，是否保留当前的患者信息？\n\n"
+                "选择'是'将保留患者基本信息，只重新导入4D CT序列。\n"
+                "选择'否'将完全重新开始配置。",
+                qt.QMessageBox.Yes | qt.QMessageBox.No | qt.QMessageBox.Cancel,
+                qt.QMessageBox.Yes
+            )
+            
+            if reply == qt.QMessageBox.Cancel:
+                return
+                
+            # 保存当前患者信息（如果用户选择保留）
+            saved_patient_data = None
+            if reply == qt.QMessageBox.Yes:
+                saved_patient_data = self.session.patient_data.__dict__.copy()
+                
+            # 清除序列相关数据
+            self.session.clear_sequence_data()
+            
+            # 停用心动周期管理
+            self.cardiac_cycle_widget.deactivate()
+            
+            # 恢复患者信息（如果需要）
+            if saved_patient_data:
+                for key, value in saved_patient_data.items():
+                    setattr(self.session.patient_data, key, value)
+            
+            # 更新界面状态
+            self._update_interface_state()
+            
+            # 自动打开数据导入对话框
+            self._on_load_data_clicked()
+            
+            logging.info("重新导入数据流程启动")
+                
+        except Exception as e:
+            logging.error(f"重新导入数据时发生错误: {str(e)}")
+            
+    def _on_clear_data_clicked(self):
+        """处理清除所有数据菜单项点击"""
+        try:
+            # 确认对话框
+            reply = qt.QMessageBox.question(
+                self, "确认清除数据", 
+                "确定要清除所有数据吗？\n\n这将删除：\n"
+                "• 当前导入的4D CT序列\n"
+                "• 患者信息和瓣膜配置\n"
+                "• 心脏时相标记\n\n此操作无法撤销。",
+                qt.QMessageBox.Yes | qt.QMessageBox.No,
+                qt.QMessageBox.No
+            )
+            
+            if reply == qt.QMessageBox.Yes:
+                logging.info("清除模块一所有数据")
+                
+                # 重置会话
+                self.session.reset()
+                
+                # 停用心动周期管理
+                self.cardiac_cycle_widget.deactivate()
+                
+                # 更新界面状态
+                self._update_interface_state()
+                
+                # 显示成功提示
+                qt.QMessageBox.information(
+                    self, "清除完成", 
+                    "所有数据已清除，可以重新开始导入数据。"
+                )
+                
+                logging.info("模块一数据清除完成")
+                
+        except Exception as e:
+            logging.error(f"清除数据时发生错误: {str(e)}")
+            
+    def _on_refresh_status_clicked(self):
+        """处理刷新状态菜单项点击（兜底自检）"""
+        try:
+            logging.info("执行模块一状态刷新：重绑观察者、刷新状态与子组件")
             qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
 
             # 重新绑定场景与浏览器观察者，确保自动刷新可用
@@ -420,42 +518,23 @@ class Module1Widget(qt.QWidget):
             # 更新界面状态（含步骤清单、CTA）
             self._update_interface_state()
             
+            # 显示成功提示
+            qt.QMessageBox.information(
+                self, "刷新完成", 
+                "界面状态已刷新。"
+            )
+            
         except Exception as e:
-            logging.error(f"重新检测时发生错误: {str(e)}")
+            logging.error(f"刷新状态时发生错误: {str(e)}")
+            qt.QMessageBox.warning(
+                self, "刷新失败", 
+                f"刷新状态时发生错误：{str(e)}"
+            )
         finally:
             try:
                 qt.QApplication.restoreOverrideCursor()
             except Exception:
                 pass
-            self.refresh_button.setEnabled(True)
-            
-    def _on_reset_clicked(self):
-        """处理重置按钮点击"""
-        try:
-            # 确认对话框
-            reply = qt.QMessageBox.question(
-                self, "确认重置", 
-                "确定要重置所有数据吗？这将清除当前的配置和标记。",
-                qt.QMessageBox.Yes | qt.QMessageBox.No,
-                qt.QMessageBox.No
-            )
-            
-            if reply == qt.QMessageBox.Yes:
-                logging.info("重置模块一数据")
-                
-                # 重置会话
-                self.session.reset()
-                
-                # 停用心动周期管理
-                self.cardiac_cycle_widget.deactivate()
-                
-                # 更新界面状态
-                self._update_interface_state()
-                
-                logging.info("模块一数据重置完成")
-                
-        except Exception as e:
-            logging.error(f"重置数据时发生错误: {str(e)}")
             
     def _on_next_module_clicked(self):
         """处理开始全自动分析按钮点击"""
@@ -565,10 +644,16 @@ class Module1Widget(qt.QWidget):
         return status
 
     def _update_interface_state(self):
-        """更新界面状态"""
+        """更新界面状态 - 智能适应数据状态"""
         try:
             # 统一由状态组件内部更新状态与进度
             self.status_display_widget.update_status()
+            
+            # 检查数据状态
+            has_data = self.session.is_ready()
+            
+            # 更新数据导入区域
+            self._update_data_import_section(has_data)
 
             # CTA可用性
             ready_for_next = self._check_ready_for_next_module()
@@ -579,13 +664,76 @@ class Module1Widget(qt.QWidget):
             if ready_for_next:
                 self._update_button_style(self.next_module_button, "primary", "default")
                 self.next_module_button.setToolTip("启动全自动分析流程")
+                self.status_info_label.setText("✅ 准备就绪，可以开始分析")
+                self.status_info_label.setStyleSheet(StyleManager.get_label_style("success"))
             else:
                 self._update_button_style(self.next_module_button, "secondary", "default")
                 missing_items = self._get_missing_requirements()
                 self.next_module_button.setToolTip("需要完成：\n" + "\n".join(missing_items))
+                if has_data:
+                    self.status_info_label.setText("⏳ 请完成心脏时相标记")
+                    self.status_info_label.setStyleSheet(StyleManager.get_label_style("warning"))
+                else:
+                    self.status_info_label.setText("📂 请先导入4D心脏CT数据")
+                    self.status_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
                 
         except Exception as e:
             logging.error(f"更新界面状态时发生错误: {str(e)}")
+            
+    def _update_data_import_section(self, has_data: bool):
+        """根据数据状态更新数据导入区域"""
+        try:
+            if has_data:
+                # 有数据：显示为重新导入模式
+                self.load_data_button.setText("重新导入数据")
+                self._update_button_style(self.load_data_button, "secondary", "default")
+                self.load_data_button.setToolTip("重新导入4D心脏CT数据")
+                
+                # 显示数据管理按钮
+                self.data_management_button.setVisible(True)
+                
+                # 更新说明文本
+                sequence_node = self.session.get_volume_sequence_node()
+                if sequence_node:
+                    num_frames = sequence_node.GetNumberOfDataNodes()
+                    node_name = sequence_node.GetName()
+                    self.instruction_label.setText(
+                        f"✅ 已导入序列：{node_name} ({num_frames} 帧)\n"
+                        "如需更换数据，请点击下方按钮重新导入。"
+                    )
+                    self.instruction_label.setStyleSheet(
+                        "QLabel { color: #2d5a3d; background-color: #e8f5e8; "
+                        "padding: 12px; border: 1px solid #4CAF50; border-radius: 6px; "
+                        "font-size: 13px; line-height: 1.4; }"
+                    )
+                else:
+                    self.instruction_label.setText(
+                        "⚠️ 数据状态异常，建议重新导入数据。"
+                    )
+                    self.instruction_label.setStyleSheet(
+                        "QLabel { color: #8a6d3b; background-color: #fcf8e3; "
+                        "padding: 12px; border: 1px solid #faebcc; border-radius: 6px; "
+                        "font-size: 13px; line-height: 1.4; }"
+                    )
+            else:
+                # 无数据：显示为初始导入模式
+                self.load_data_button.setText("数据导入与配置")
+                self._update_button_style(self.load_data_button, "primary", "default")
+                self.load_data_button.setToolTip("导入4D心脏CT数据并配置患者信息")
+                
+                # 隐藏数据管理按钮
+                self.data_management_button.setVisible(False)
+                
+                # 恢复原始说明文本
+                self.instruction_label.setText(
+                    "请点击下方按钮导入4D心脏CT数据并配置患者信息。"
+                    "支持从DICOM浏览器加载或从现有场景数据创建序列。"
+                )
+                styles = ComponentStyleFactory.get_module1_styles()
+                self.instruction_label.setStyleSheet(styles["instruction_label"])
+                
+        except Exception as e:
+            logging.error(f"更新数据导入区域时发生错误: {str(e)}")
             
     def _check_ready_for_next_module(self) -> bool:
         """检查是否准备好进入下一模块
