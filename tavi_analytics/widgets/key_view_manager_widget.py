@@ -337,10 +337,52 @@ class KeyViewManagerWidget(qt.QWidget):
         layout = qt.QVBoxLayout(dialog)
         layout.setSpacing(15)
         
+        # 获取当前期像信息
+        current_phase_info = None
+        if self.session:
+            try:
+                current_phase_info = self.session.get_current_phase_info()
+            except Exception as e:
+                logging.warning(f"获取当前期像信息失败: {e}")
+        
         # 说明文本
-        info_label = qt.QLabel(f"为当前MPR视图位置添加一个{self.analysis_type}分析的标记名称：")
+        info_text = f"为当前MPR视图位置添加一个{self.analysis_type}分析的标记名称："
+        info_label = qt.QLabel(info_text)
         info_label.setStyleSheet("font-size: 13px; color: #495057;")
         layout.addWidget(info_label)
+        
+        # 当前期像状态显示
+        if current_phase_info and current_phase_info.get('phase'):
+            phase_icon = current_phase_info.get('icon', '❓')
+            phase_display = current_phase_info.get('display_name', '未知期像')
+            
+            phase_info_label = qt.QLabel(f"当前期像：{phase_icon} {phase_display}")
+            phase_info_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #007bff;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    background-color: #e3f2fd;
+                    border: 1px solid #bbdefb;
+                    border-radius: 4px;
+                }
+            """)
+            layout.addWidget(phase_info_label)
+        else:
+            phase_info_label = qt.QLabel("当前期像：❓ 未知期像（将不记录期像信息）")
+            phase_info_label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #f57c00;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    background-color: #fff3e0;
+                    border: 1px solid #ffcc02;
+                    border-radius: 4px;
+                }
+            """)
+            layout.addWidget(phase_info_label)
         
         # 输入框
         name_input = qt.QLineEdit()
@@ -357,10 +399,16 @@ class KeyViewManagerWidget(qt.QWidget):
             }
         """)
         
-        # 生成默认名称
+        # 生成默认名称（包含期像信息）
         import datetime
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        default_name = f"{self.analysis_type}视图_{timestamp}"
+        
+        if current_phase_info and current_phase_info.get('phase'):
+            phase_display = current_phase_info.get('display_name', '未知期像')
+            default_name = f"{self.analysis_type}视图_{phase_display}_{timestamp}"
+        else:
+            default_name = f"{self.analysis_type}视图_{timestamp}"
+        
         name_input.setText(default_name)
         name_input.selectAll()
         
@@ -476,11 +524,13 @@ class KeyViewManagerWidget(qt.QWidget):
             
             # 为每个标记的视图创建条目
             for view_name, description in marked_views.items():
-                view_item = self._create_view_item(view_name, description)
+                # 获取视图详细信息（包含期像数据）
+                view_details = self.view_service.get_view_details(view_name)
+                view_item = self._create_view_item(view_name, description, view_details)
                 # 插入到stretch之前
                 self.views_layout.insertWidget(self.views_layout.count() - 1, view_item)
     
-    def _create_view_item(self, view_name: str, description: str) -> qt.QWidget:
+    def _create_view_item(self, view_name: str, description: str, view_details: Optional[Dict[str, Any]] = None) -> qt.QWidget:
         """创建单个视图条目"""
         item_frame = qt.QFrame()
         item_frame.setStyleSheet("""
@@ -499,23 +549,58 @@ class KeyViewManagerWidget(qt.QWidget):
         
         item_layout = qt.QHBoxLayout(item_frame)
         item_layout.setContentsMargins(6, 3, 6, 3)
-        item_layout.setSpacing(6)
+        item_layout.setSpacing(4 if self.compact_mode else 6)
         
-        # 视图图标
-        icon_label = qt.QLabel("👁️")
-        icon_label.setStyleSheet("font-size: 10px;" if self.compact_mode else "font-size: 12px;")
-        item_layout.addWidget(icon_label)
+        # 期像图标（如果有期像信息）
+        phase_icon = '❓'  # 默认未知期像
+        phase_display = '未知期像'
+        tooltip_text = f"视图: {view_name}"
         
-        # 视图信息
+        if view_details:
+            phase = view_details.get('phase')
+            phase_display = view_details.get('phase_display', '未知期像')
+            phase_icon = view_details.get('phase_icon', '❓')
+            
+            if phase:
+                tooltip_text = f"视图: {view_name}\n期像: {phase_display}"
+            else:
+                tooltip_text = f"视图: {view_name}\n期像: 未知期像（旧版本数据）"
+        
+        phase_icon_label = qt.QLabel(phase_icon)
+        phase_icon_label.setStyleSheet("font-size: 10px;" if self.compact_mode else "font-size: 12px;")
+        phase_icon_label.setToolTip(tooltip_text)
+        item_layout.addWidget(phase_icon_label)
+        
+        # 视图信息容器
+        info_container = qt.QWidget()
+        info_layout = qt.QVBoxLayout(info_container)
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(1)
+        
+        # 视图名称
         name_label = qt.QLabel(view_name)
         name_label.setStyleSheet(f"""
             QLabel {{
-                font-size: {'10px' if self.compact_mode else '11px'};
+                font-size: {'9px' if self.compact_mode else '10px'};
                 font-weight: bold;
                 color: #212529;
             }}
         """)
-        item_layout.addWidget(name_label)
+        info_layout.addWidget(name_label)
+        
+        # 期像信息（仅在非紧凑模式下显示）
+        if not self.compact_mode and view_details and view_details.get('phase'):
+            phase_label = qt.QLabel(phase_display)
+            phase_label.setStyleSheet("""
+                QLabel {
+                    font-size: 8px;
+                    color: #6c757d;
+                    font-style: italic;
+                }
+            """)
+            info_layout.addWidget(phase_label)
+        
+        item_layout.addWidget(info_container)
         item_layout.addStretch()
         
         # 操作按钮
@@ -571,7 +656,8 @@ class KeyViewManagerWidget(qt.QWidget):
         original_text = None  # 初始化变量
         try:
             # 先检查视图数据是否存在
-            if not self.view_service.get_view_details(view_name):
+            view_details = self.view_service.get_view_details(view_name)
+            if not view_details:
                 qt.QMessageBox.warning(
                     self,
                     "视图不存在",
@@ -580,31 +666,26 @@ class KeyViewManagerWidget(qt.QWidget):
                 self._refresh_marked_views_list()
                 return
             
+            # 获取期像信息用于反馈显示
+            view_phase = view_details.get('phase')
+            phase_display = view_details.get('phase_display', '未知期像')
+            has_phase_info = view_phase is not None
+            
             # 提供视觉反馈
-            original_text = self.mark_btn.text  # 修复：使用属性而不是方法
-            self.mark_btn.setText("🔄 正在恢复...")
+            original_text = self.mark_btn.text
             self.mark_btn.setEnabled(False)
-            qt.QApplication.processEvents()
             
-            # 调用服务恢复视图
-            success = self.view_service.restore_view(view_name)
-            
-            if success:
-                self.viewRestored.emit(view_name)
-                self.statusUpdated.emit(f"已恢复视图: {view_name}")
+            # 阶段1：如果有期像信息，显示期像恢复状态
+            if has_phase_info:
+                self.mark_btn.setText(f"🔄 正在恢复期像...")
+                self.statusUpdated.emit(f"正在恢复期像: {phase_display}")
+                qt.QApplication.processEvents()
                 
-                # 调用回调函数
-                for callback in self.restore_callbacks:
-                    try:
-                        callback(view_name)
-                    except Exception as e:
-                        logging.error(f"执行恢复回调失败: {e}")
-                
-                # 成功恢复后稍作延迟
-                qt.QTimer.singleShot(500, lambda: self._on_view_restore_success(original_text))
-                logging.info(f"成功恢复视图: {view_name}")
+                # 短暂延迟以显示期像恢复状态
+                qt.QTimer.singleShot(300, lambda: self._continue_restore_mpr_position(view_name, original_text, has_phase_info))
             else:
-                self._on_view_restore_failed(view_name, original_text)
+                # 直接进入MPR恢复阶段
+                self._continue_restore_mpr_position(view_name, original_text, has_phase_info)
                 
         except Exception as e:
             logging.error(f"恢复视图失败: {e}")
@@ -613,9 +694,51 @@ class KeyViewManagerWidget(qt.QWidget):
                 original_text = "📌 标记 (Ctrl+M)" if not self.compact_mode else "📌"
             self._on_view_restore_error(str(e), original_text)
     
-    def _on_view_restore_success(self, original_text: str):
+    def _continue_restore_mpr_position(self, view_name: str, original_text: str, has_phase_info: bool):
+        """继续恢复MPR位置的阶段"""
+        try:
+            # 阶段2：显示MPR位置恢复状态
+            self.mark_btn.setText("🔄 正在定位视图...")
+            self.statusUpdated.emit("正在定位MPR视图位置...")
+            qt.QApplication.processEvents()
+            
+            # 调用服务恢复视图（包含期像恢复和MPR定位）
+            success = self.view_service.restore_view(view_name)
+            
+            if success:
+                self.viewRestored.emit(view_name)
+                
+                # 调用回调函数
+                for callback in self.restore_callbacks:
+                    try:
+                        callback(view_name)
+                    except Exception as e:
+                        logging.error(f"执行恢复回调失败: {e}")
+                
+                # 根据是否有期像信息生成不同的成功消息
+                if has_phase_info:
+                    view_details = self.view_service.get_view_details(view_name)
+                    phase_display = view_details.get('phase_display', '未知期像') if view_details else '未知期像'
+                    self.statusUpdated.emit(f"已恢复视图: {view_name} ({phase_display})")
+                else:
+                    self.statusUpdated.emit(f"已恢复视图: {view_name} (仅MPR位置)")
+                
+                # 成功恢复后稍作延迟
+                qt.QTimer.singleShot(500, lambda: self._on_view_restore_success(original_text, has_phase_info))
+                logging.info(f"成功恢复视图: {view_name}")
+            else:
+                self._on_view_restore_failed(view_name, original_text)
+                
+        except Exception as e:
+            logging.error(f"MPR位置恢复失败: {e}")
+            self._on_view_restore_error(str(e), original_text)
+    
+    def _on_view_restore_success(self, original_text: str, has_phase_info: bool = False):
         """视图恢复成功的回调"""
-        self.mark_btn.setText("✅ 已恢复")
+        if has_phase_info:
+            self.mark_btn.setText("✅ 完整恢复")
+        else:
+            self.mark_btn.setText("✅ 已恢复")
         self.mark_btn.setEnabled(True)
         # 2秒后恢复原始文本
         qt.QTimer.singleShot(2000, lambda: self.mark_btn.setText(original_text))
@@ -718,17 +841,52 @@ class KeyViewManagerWidget(qt.QWidget):
     
     def _show_statistics(self):
         """显示统计信息"""
-        stats = self.view_service.get_statistics()
+        # 获取基础统计和期像统计
+        basic_stats = self.view_service.get_statistics()
+        phase_stats = self.view_service.get_phase_statistics()
         
-        stats_text = f"分析类型：{stats['analysis_type']}\n"
-        stats_text += f"视图总数：{stats['total_count']}\n"
+        stats_text = f"分析类型：{basic_stats['analysis_type']}\n"
+        stats_text += f"视图总数：{basic_stats['total_count']}\n"
         
-        if stats['total_count'] > 0:
-            stats_text += f"最早标记：{stats['oldest_mark']}\n"
-            stats_text += f"最新标记：{stats['newest_mark']}\n"
-            stats_text += f"\n视图列表：\n"
-            for i, name in enumerate(stats['view_names'], 1):
-                stats_text += f"  {i}. {name}\n"
+        if basic_stats['total_count'] > 0:
+            stats_text += f"最早标记：{basic_stats['oldest_mark']}\n"
+            stats_text += f"最新标记：{basic_stats['newest_mark']}\n"
+            
+            # 期像分布统计
+            stats_text += "\n📊 期像分布：\n"
+            phase_distribution = phase_stats['phase_distribution']
+            
+            for phase_key, phase_info in phase_distribution.items():
+                icon = phase_info['icon']
+                display_name = phase_info['display_name']
+                count = phase_info['count']
+                
+                if count > 0:
+                    stats_text += f"  {icon} {display_name}：{count} 个视图\n"
+            
+            # 分期像详细列表
+            stats_text += "\n📋 详细列表：\n"
+            
+            # 舒张末期视图
+            diastole_views = phase_distribution['diastole']['views']
+            if diastole_views:
+                stats_text += f"  🫀 舒张末期 ({len(diastole_views)} 个)：\n"
+                for i, name in enumerate(diastole_views, 1):
+                    stats_text += f"    {i}. {name}\n"
+            
+            # 收缩末期视图
+            systole_views = phase_distribution['systole']['views']
+            if systole_views:
+                stats_text += f"  ❤️ 收缩末期 ({len(systole_views)} 个)：\n"
+                for i, name in enumerate(systole_views, 1):
+                    stats_text += f"    {i}. {name}\n"
+                    
+            # 未知期像视图
+            unknown_views = phase_distribution['unknown']['views']
+            if unknown_views:
+                stats_text += f"  ❓ 未知期像 ({len(unknown_views)} 个)：\n"
+                for i, name in enumerate(unknown_views, 1):
+                    stats_text += f"    {i}. {name}\n"
         else:
             stats_text += "\n当前没有已标记的视图。"
         

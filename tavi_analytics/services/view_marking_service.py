@@ -140,14 +140,35 @@ class ViewMarkingService:
             
             center_point, normal_vector = plane_params
             
-            # 生成默认描述
-            if not description:
-                description = f"{self.analysis_type}分析关键视图 - {view_name}"
+            # 获取当前期像信息
+            current_phase = None
+            phase_display = None
+            phase_icon = '❓'  # 默认未知期像图标
             
-            # 保存视图状态
+            if self.session:
+                try:
+                    phase_info = self.session.get_current_phase_info()
+                    current_phase = phase_info.get('phase')
+                    phase_display = phase_info.get('display_name')
+                    phase_icon = phase_info.get('icon', '❓')
+                    logging.debug(f"获取当前期像信息: {current_phase} ({phase_display})")
+                except Exception as e:
+                    logging.warning(f"获取期像信息失败: {e}")
+            
+            # 生成默认描述（包含期像信息）
+            if not description:
+                if phase_display:
+                    description = f"{self.analysis_type}分析关键视图 - {view_name} ({phase_display})"
+                else:
+                    description = f"{self.analysis_type}分析关键视图 - {view_name}"
+            
+            # 保存视图状态（包含期像信息）
             self.marked_views[view_name] = {
                 'center_point': center_point.tolist(),
                 'normal_vector': normal_vector.tolist(),
+                'phase': current_phase,
+                'phase_display': phase_display,
+                'phase_icon': phase_icon,
                 'timestamp': qt.QDateTime.currentDateTime().toString(),
                 'description': description,
                 'analysis_type': self.analysis_type
@@ -183,15 +204,52 @@ class ViewMarkingService:
             center_point = np.array(view_data['center_point'])
             normal_vector = np.array(view_data['normal_vector'])
             
-            # 恢复MPR视图
-            success = self.plane_manager.position_to_plane(center_point, normal_vector)
+            # 获取期像信息（向后兼容：旧数据可能没有期像信息）
+            view_phase = view_data.get('phase')
+            phase_display = view_data.get('phase_display', '未知期像')
             
-            if success:
-                logging.info(f"已恢复视图: {view_name} ({self.analysis_type})")
+            phase_restored = True  # 期像恢复标志
+            mpr_restored = False   # MPR恢复标志
+            
+            # 步骤1：如果有期像信息，先恢复期像
+            if view_phase and self.session:
+                try:
+                    logging.info(f"正在恢复期像: {phase_display} ({view_phase})")
+                    phase_restored = self.session.switch_to_phase(view_phase, "ViewRestoration")
+                    if not phase_restored:
+                        logging.warning(f"期像恢复失败，将继续恢复MPR位置: {view_name}")
+                except Exception as e:
+                    logging.warning(f"期像恢复异常，将继续恢复MPR位置: {e}")
+                    phase_restored = False
+            elif view_phase:
+                logging.info(f"视图包含期像信息 ({phase_display})，但未设置session，跳过期像恢复")
             else:
-                logging.error(f"恢复视图失败: {view_name}")
+                logging.debug(f"视图无期像信息，跳过期像恢复（向后兼容）: {view_name}")
             
-            return success
+            # 步骤2：恢复MPR视图位置
+            try:
+                logging.debug(f"正在恢复MPR位置: {view_name}")
+                mpr_restored = self.plane_manager.position_to_plane(center_point, normal_vector)
+                if not mpr_restored:
+                    logging.error(f"MPR位置恢复失败: {view_name}")
+            except Exception as e:
+                logging.error(f"MPR位置恢复异常: {e}")
+                mpr_restored = False
+            
+            # 评估整体恢复结果
+            overall_success = mpr_restored  # MPR恢复是核心要求
+            
+            if overall_success:
+                if view_phase and phase_restored:
+                    logging.info(f"已完整恢复视图: {view_name} (期像: {phase_display}, MPR: 成功)")
+                elif view_phase and not phase_restored:
+                    logging.info(f"已部分恢复视图: {view_name} (期像: 失败, MPR: 成功)")
+                else:
+                    logging.info(f"已恢复视图: {view_name} (仅MPR位置)")
+            else:
+                logging.error(f"视图恢复失败: {view_name}")
+            
+            return overall_success
             
         except Exception as e:
             logging.error(f"恢复视图失败: {e}")
@@ -394,6 +452,97 @@ class ViewMarkingService:
             'newest_mark': max(timestamps) if timestamps else None,
             'view_names': list(self.marked_views.keys())
         }
+    
+    def get_views_by_phase(self) -> Dict[str, Dict[str, str]]:
+        """
+        按期像分组获取视图
+        
+        Returns:
+            Dict[str, Dict[str, str]]: 按期像分组的视图字典
+                格式：{'diastole': {'view1': 'desc1'}, 'systole': {'view2': 'desc2'}, 'unknown': {'view3': 'desc3'}}
+        """
+        phase_groups = {
+            'diastole': {},
+            'systole': {},
+            'unknown': {}
+        }
+        
+        for view_name, view_data in self.marked_views.items():
+            phase = view_data.get('phase', 'unknown')
+            if phase not in ['diastole', 'systole']:
+                phase = 'unknown'
+            
+            phase_groups[phase][view_name] = view_data.get('description', view_name)
+        
+        return phase_groups
+    
+    def get_phase_statistics(self) -> Dict[str, Any]:
+        """
+        获取各期像的视图统计信息
+        
+        Returns:
+            Dict[str, Any]: 期像统计信息
+        """
+        phase_groups = self.get_views_by_phase()
+        
+        return {
+            'total_count': len(self.marked_views),
+            'diastole_count': len(phase_groups['diastole']),
+            'systole_count': len(phase_groups['systole']),
+            'unknown_count': len(phase_groups['unknown']),
+            'phase_distribution': {
+                'diastole': {
+                    'count': len(phase_groups['diastole']),
+                    'display_name': '舒张末期',
+                    'icon': '🫀',
+                    'views': list(phase_groups['diastole'].keys())
+                },
+                'systole': {
+                    'count': len(phase_groups['systole']),
+                    'display_name': '收缩末期', 
+                    'icon': '❤️',
+                    'views': list(phase_groups['systole'].keys())
+                },
+                'unknown': {
+                    'count': len(phase_groups['unknown']),
+                    'display_name': '未知期像',
+                    'icon': '❓',
+                    'views': list(phase_groups['unknown'].keys())
+                }
+            }
+        }
+    
+    def get_phase_display_icon(self, phase: Optional[str]) -> str:
+        """
+        获取期像显示图标
+        
+        Args:
+            phase: 期像类型
+            
+        Returns:
+            str: 期像图标
+        """
+        icons = {
+            'diastole': '🫀',  # 舒张末期
+            'systole': '❤️',   # 收缩末期
+        }
+        return icons.get(phase, '❓')  # 未知期像
+    
+    def has_phase_info(self, view_name: str) -> bool:
+        """
+        检查指定视图是否包含期像信息
+        
+        Args:
+            view_name: 视图名称
+            
+        Returns:
+            bool: 包含期像信息返回True
+        """
+        if view_name not in self.marked_views:
+            return False
+        
+        view_data = self.marked_views[view_name]
+        return view_data.get('phase') is not None
     
     def set_session(self, session: TAVRStudySession):
         """设置会话对象"""

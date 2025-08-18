@@ -991,3 +991,76 @@ class TAVRStudySession:
         except Exception as e:
             self.logger.error(f"切换到收缩末期失败: {e}")
             return False
+    
+    def get_phase_display_name(self, phase: Optional[str]) -> Optional[str]:
+        """
+        获取期像显示名称
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+            
+        Returns:
+            str: 期像显示名称，无效期像返回None
+        """
+        phase_names = {
+            'diastole': '舒张末期',
+            'systole': '收缩末期'
+        }
+        return phase_names.get(phase)
+    
+    def switch_to_phase(self, phase: str, source_component: str = "ViewRestoration") -> bool:
+        """
+        统一的期像切换API
+        
+        根据指定的期像类型调用相应的切换方法
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+            source_component: 触发切换的组件名称
+            
+        Returns:
+            bool: 切换成功返回True
+        """
+        if phase == 'diastole':
+            return self.switch_to_diastole(source_component)
+        elif phase == 'systole':
+            return self.switch_to_systole(source_component)
+        else:
+            self.logger.warning(f"无效的期像类型: {phase}")
+            return False
+    
+    def get_current_phase_info(self) -> Dict[str, Any]:
+        """
+        获取当前期像的完整信息
+        
+        包括期像类型、显示名称等信息
+        
+        Returns:
+            dict: 期像信息字典
+                - phase: 期像类型 ('diastole'/'systole' 或 None)
+                - display_name: 期像显示名称
+                - icon: 期像图标
+        """
+        try:
+            current_phase = self.get_current_phase()
+            display_name = self.get_phase_display_name(current_phase)
+            
+            # 期像图标映射
+            phase_icons = {
+                'diastole': '🫀',  # 舒张末期 - 心脏图标
+                'systole': '❤️',   # 收缩末期 - 红心图标
+            }
+            icon = phase_icons.get(current_phase, '❓')  # 未知期像 - 问号图标
+            
+            return {
+                'phase': current_phase,
+                'display_name': display_name,
+                'icon': icon
+            }
+        except Exception as e:
+            self.logger.error(f"获取期像信息失败: {e}")
+            return {
+                'phase': None,
+                'display_name': None,
+                'icon': '❓'
+            }
