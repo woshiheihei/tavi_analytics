@@ -651,38 +651,7 @@ class HaltAnalysisWidget(qt.QWidget):
         parent_layout.addWidget(self.view_frame)
     
     def _create_marked_views_list(self, parent_layout):
-        """创建已标记视图列表"""
-        # 列表标题 - 紧凑版
-        list_header = qt.QHBoxLayout()
-        list_header.setSpacing(8)
-        
-        list_title = qt.QLabel("已标记:")
-        list_title.setStyleSheet("font-size: 12px; font-weight: 500; color: #495057;")
-        list_header.addWidget(list_title)
-        
-        list_header.addStretch()
-        
-        # 清除所有按钮 - 更小
-        self.clear_all_btn = qt.QPushButton("🗑️ 清除")
-        self.clear_all_btn.setStyleSheet("""
-            QPushButton {
-                padding: 2px 6px;
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 9px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        self.clear_all_btn.clicked.connect(self._clear_all_views)
-        self.clear_all_btn.setVisible(False)  # 初始隐藏
-        list_header.addWidget(self.clear_all_btn)
-        
-        parent_layout.addLayout(list_header)
-        
+        """创建已标记视图列表（简化版）"""
         # 滚动区域用于视图列表 - 更紧凑
         scroll_area = qt.QScrollArea()
         scroll_area.setMaximumHeight(80)  # 减小高度
@@ -1244,11 +1213,9 @@ class HaltAnalysisWidget(qt.QWidget):
         if not marked_views:
             # 显示空状态
             self.empty_hint.setVisible(True)
-            self.clear_all_btn.setVisible(False)
         else:
             # 隐藏空状态提示
             self.empty_hint.setVisible(False)
-            self.clear_all_btn.setVisible(True)
             
             # 为每个标记的视图创建条目
             for view_name, description in marked_views.items():
@@ -1427,19 +1394,6 @@ class HaltAnalysisWidget(qt.QWidget):
                 self._refresh_marked_views_list()
                 logging.info(f"已删除视图标记: {view_name}")
     
-    def _clear_all_views(self):
-        """清除所有视图标记"""
-        reply = qt.QMessageBox.question(
-            self,
-            "确认清除",
-            "确定要清除所有视图标记吗？\n\n此操作无法撤销。",
-            qt.QMessageBox.Yes | qt.QMessageBox.No
-        )
-        
-        if reply == qt.QMessageBox.Yes:
-            self.view_marking_manager.marked_views.clear()
-            self._refresh_marked_views_list()
-            logging.info("已清除所有视图标记")
     
     def _reset_analysis(self):
         """重置分析"""
@@ -1463,8 +1417,6 @@ class HaltAnalysisWidget(qt.QWidget):
                 row.set_grade("0")
                 self.leaflet_grades[leaflet_name] = "0"
             
-            # 清除视图标记
-            self.view_marking_manager.marked_views.clear()
             
             # 重置分析控制区域
             if hasattr(self, 'control_frame'):
