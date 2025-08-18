@@ -163,8 +163,8 @@ class LeafletGradeRow(qt.QWidget):
     def _setup_ui(self):
         """设置瓣叶分级行界面"""
         layout = qt.QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 4, 2)  # 更小边距
-        layout.setSpacing(4)  # 更小间距
+        layout.setContentsMargins(8, 4, 8, 4)  # 增加水平边距，保持垂直紧凑
+        layout.setSpacing(8)  # 增加组件间距
         
         # 瓣叶名称标签 - 极简版本
         name_label = qt.QLabel(f"{self.leaflet_name}")
@@ -176,9 +176,8 @@ class LeafletGradeRow(qt.QWidget):
                 background-color: #f8f9fa;
                 border: 1px solid #dee2e6;
                 border-radius: 3px;
-                padding: 3px 6px;
-                min-width: 28px;
-                max-width: 28px;
+                padding: 4px 8px;
+                min-width: 32px;
                 text-align: center;
             }
         """)
@@ -201,20 +200,18 @@ class LeafletGradeRow(qt.QWidget):
         for i, (grade_value, bg_color, border_color) in enumerate(grade_configs):
             button = qt.QRadioButton(grade_value)
             
-            # 设置按钮样式 - 更加紧凑
+            # 设置按钮样式 - 动态弹性布局
             button.setStyleSheet(f"""
                 QRadioButton {{
                     background-color: {bg_color};
                     border: 1px solid {bg_color};
                     border-radius: 4px;
-                    padding: 2px 1px;
+                    padding: 4px 6px;
                     font-size: 9px;
                     font-weight: 500;
                     text-align: center;
-                    min-width: 40px;
-                    max-width: 40px;
-                    min-height: 22px;
-                    max-height: 22px;
+                    min-width: 48px;
+                    min-height: 26px;
                     color: #2c3e50;
                 }}
                 QRadioButton:checked {{
