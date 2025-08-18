@@ -18,6 +18,8 @@ try:
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
+    from ..widgets.phase_selection_widget import PhaseSelectionWidget  # 新增：期像选择组件
+    from ..services.contour_positioning_service import get_contour_position_service  # 新增：轮廓定位服务
     from .paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 except ImportError:
     import os
@@ -33,6 +35,8 @@ except ImportError:
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
+    from widgets.phase_selection_widget import PhaseSelectionWidget  # 新增：期像选择组件
+    from services.contour_positioning_service import get_contour_position_service  # 新增：轮廓定位服务
     from paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 
 
@@ -310,6 +314,17 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         super().__init__("SFD", session, parent)
         self.logic = logic or SfdAnalysisLogic()
         self.logic.set_session(session)
+        
+        # 服务组件
+        self.contour_service = get_contour_position_service()
+        
+        # 期像选择组件 - 复用已有的期像切换逻辑
+        self.phase_widget = PhaseSelectionWidget(session, parent=self)
+        self.phase_widget.setVisible(False)  # 隐藏，仅用于逻辑复用
+        
+        # 分析状态
+        self.analysis_started = False
+        
         self._setup_ui()
     
     def _setup_ui(self):
@@ -334,6 +349,9 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
             }
         """)
         main_layout.addWidget(title)
+        
+        # 分析控制区域（开始SFD分析）
+        self._create_analysis_control_section(main_layout)
         
         # 占位符内容区域
         content_frame = qt.QFrame()
@@ -475,6 +493,210 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         qt.QMessageBox.information(self, "SFD分析状态", status_text)
     
+    def _create_analysis_control_section(self, parent_layout):
+        """创建分析控制区域"""
+        self.control_frame = qt.QFrame()
+        self.control_frame.setStyleSheet("""
+            QFrame {
+                background-color: #e8f4f8;
+                border: 1px solid #bee5eb;
+                border-radius: 4px;
+                padding: 6px;
+            }
+        """)
+        
+        control_layout = qt.QHBoxLayout(self.control_frame)
+        control_layout.setSpacing(6)
+        control_layout.setContentsMargins(6, 6, 6, 6)
+        
+        # 说明
+        instruction_label = qt.QLabel("💡 准备分析环境")
+        instruction_label.setStyleSheet("font-size: 10px; color: #495057; font-weight: 500;")
+        control_layout.addWidget(instruction_label)
+        
+        # 开始分析按钮
+        self.start_analysis_btn = qt.QPushButton("开始分析")
+        self.start_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 11px;
+                font-weight: bold;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
+        self.start_analysis_btn.clicked.connect(self._on_start_analysis)
+        control_layout.addWidget(self.start_analysis_btn)
+        
+        # 跳过按钮
+        self.skip_analysis_btn = qt.QPushButton("跳过")
+        self.skip_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 6px;
+                font-size: 10px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        self.skip_analysis_btn.clicked.connect(self._on_skip_analysis)
+        control_layout.addWidget(self.skip_analysis_btn)
+        
+        # 状态显示
+        self.analysis_status_label = qt.QLabel("等待开始")
+        self.analysis_status_label.setStyleSheet("font-size: 9px; color: #868e96; font-style: italic;")
+        control_layout.addWidget(self.analysis_status_label)
+        
+        control_layout.addStretch()
+        parent_layout.addWidget(self.control_frame)
+    
+    def _on_start_analysis(self):
+        """开始SFD分析"""
+        try:
+            logging.info("用户开始SFD分析")
+            
+            # 更新状态
+            self.analysis_status_label.setText("准备中...")
+            self.start_analysis_btn.setEnabled(False)
+            self.skip_analysis_btn.setEnabled(False)
+            qt.QApplication.processEvents()
+            
+            # 1. 切换到收缩末期
+            self.analysis_status_label.setText("切换期相...")
+            qt.QApplication.processEvents()
+            
+            # 检查是否有收缩末期标记
+            end_systole_info = self.session.get_marked_phase('end_systole')
+            if not end_systole_info or end_systole_info.get('frame_index') is None:
+                qt.QMessageBox.warning(
+                    self,
+                    "警告",
+                    "未找到收缩末期标记！\n\n"
+                    "请先在模块一中标记收缩末期时相。"
+                )
+                self._reset_analysis_buttons()
+                return
+            
+            # 切换到收缩末期
+            success = self._switch_to_end_systole()
+            if not success:
+                qt.QMessageBox.warning(
+                    self,
+                    "错误",
+                    "切换到收缩末期失败！请检查模块一中的期像标记。"
+                )
+                self._reset_analysis_buttons()
+                return
+            
+            # 2. MPR定位到瓦氏窦平面
+            self.analysis_status_label.setText("定位平面...")
+            qt.QApplication.processEvents()
+            
+            success = self._position_to_sinus_valsalva()
+            if not success:
+                qt.QMessageBox.information(
+                    self,
+                    "提示",
+                    "自动定位失败，请手动调整MPR视图到合适位置。\n分析可以继续进行。"
+                )
+            
+            # 3. 完成准备
+            self._complete_analysis_preparation()
+            
+            logging.info("SFD分析环境准备完成")
+            
+        except Exception as e:
+            logging.error(f"开始SFD分析失败: {e}")
+            qt.QMessageBox.critical(
+                self,
+                "错误", 
+                f"分析启动失败：\n{e}"
+            )
+            self._reset_analysis_buttons()
+    
+    def _on_skip_analysis(self):
+        """跳过自动分析，直接进入评估"""
+        reply = qt.QMessageBox.question(
+            self,
+            "跳过自动分析",
+            "跳过自动分析，直接开始评估？",
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        
+        if reply == qt.QMessageBox.Yes:
+            self._complete_analysis_preparation()
+            logging.info("SFD用户选择跳过自动分析")
+    
+    def _complete_analysis_preparation(self):
+        """完成分析准备"""
+        self.analysis_started = True
+        self.analysis_status_label.setText("已就绪")
+        
+        # 隐藏分析控制区域
+        self.control_frame.setVisible(False)
+        
+        logging.info("SFD分析准备完成")
+    
+    def _reset_analysis_buttons(self):
+        """重置分析按钮状态"""
+        self.start_analysis_btn.setEnabled(True)
+        self.skip_analysis_btn.setEnabled(True)
+        self.analysis_status_label.setText("等待开始")
+    
+    def _switch_to_end_systole(self) -> bool:
+        """切换到收缩末期 - 复用PhaseSelectionWidget的逻辑"""
+        try:
+            # 使用PhaseSelectionWidget的自动切换逻辑
+            success = self.phase_widget._switch_to_end_systole()
+            
+            if success:
+                # 同步更新轮廓服务的期像设置
+                self.contour_service.set_current_phase('end_systole')
+                
+                # 设置当前期像并触发显示管理
+                self.phase_widget.set_current_phase('systole')
+                
+                logging.info("成功切换到收缩末期（复用PhaseSelectionWidget逻辑）")
+                return True
+            else:
+                logging.error("使用PhaseSelectionWidget切换到收缩末期失败")
+                return False
+            
+        except Exception as e:
+            logging.error(f"切换到收缩末期失败: {e}")
+            return False
+    
+    def _position_to_sinus_valsalva(self) -> bool:
+        """MPR定位到瓦氏窦平面"""
+        try:
+            # 尝试使用轮廓定位服务
+            success = self.contour_service.switch_to_contour('sinus_of_valsalva', phase='end_systole')
+            
+            if success:
+                logging.info("成功定位到瓦氏窦平面")
+                return True
+            else:
+                logging.warning("定位到瓦氏窦平面失败，但分析可以继续")
+                return False
+            
+        except Exception as e:
+            logging.error(f"定位到瓦氏窦平面失败: {e}")
+            return False
+    
     def _create_key_view_section(self, parent_layout):
         """创建关键视图管理区域"""
         # 创建关键视图管理器组件
@@ -517,6 +739,11 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
     
     def cleanup(self):
         """清理资源"""
+        # 清理phase_widget
+        if hasattr(self, 'phase_widget'):
+            self.phase_widget.cleanup()
+        
+        # 清理关键视图管理器
         if hasattr(self, 'key_view_manager'):
             self.key_view_manager.cleanup()
         super().cleanup()
@@ -534,6 +761,17 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
     
     def reset_analysis(self):
         """重置SFD分析"""
+        # 重置分析状态
+        self.analysis_started = False
+        
+        # 重置分析控制区域
+        if hasattr(self, 'control_frame'):
+            self.control_frame.setVisible(True)
+            self.start_analysis_btn.setEnabled(True)
+            self.skip_analysis_btn.setEnabled(True)
+            self.analysis_status_label.setText("等待开始")
+        
+        # 重置逻辑状态
         self.logic.reset_analysis()
         self.none_radio.setChecked(True)
         self._emit_status_changed()
@@ -547,6 +785,17 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         super().__init__("PFD", session, parent)
         self.logic = logic or PfdAnalysisLogic()
         self.logic.set_session(session)
+        
+        # 服务组件
+        self.contour_service = get_contour_position_service()
+        
+        # 期像选择组件 - 复用已有的期像切换逻辑
+        self.phase_widget = PhaseSelectionWidget(session, parent=self)
+        self.phase_widget.setVisible(False)  # 隐藏，仅用于逻辑复用
+        
+        # 分析状态
+        self.analysis_started = False
+        
         self._setup_ui()
     
     def _setup_ui(self):
@@ -571,6 +820,9 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
             }
         """)
         main_layout.addWidget(title)
+        
+        # 分析控制区域（开始PFD分析）
+        self._create_analysis_control_section(main_layout)
         
         # 占位符内容区域
         content_frame = qt.QFrame()
@@ -742,6 +994,210 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         qt.QMessageBox.information(self, "PFD分析状态", status_text)
     
+    def _create_analysis_control_section(self, parent_layout):
+        """创建分析控制区域"""
+        self.control_frame = qt.QFrame()
+        self.control_frame.setStyleSheet("""
+            QFrame {
+                background-color: #e8f4f8;
+                border: 1px solid #bee5eb;
+                border-radius: 4px;
+                padding: 6px;
+            }
+        """)
+        
+        control_layout = qt.QHBoxLayout(self.control_frame)
+        control_layout.setSpacing(6)
+        control_layout.setContentsMargins(6, 6, 6, 6)
+        
+        # 说明
+        instruction_label = qt.QLabel("💡 准备分析环境")
+        instruction_label.setStyleSheet("font-size: 10px; color: #495057; font-weight: 500;")
+        control_layout.addWidget(instruction_label)
+        
+        # 开始分析按钮
+        self.start_analysis_btn = qt.QPushButton("开始分析")
+        self.start_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+                font-size: 11px;
+                font-weight: bold;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
+        self.start_analysis_btn.clicked.connect(self._on_start_analysis)
+        control_layout.addWidget(self.start_analysis_btn)
+        
+        # 跳过按钮
+        self.skip_analysis_btn = qt.QPushButton("跳过")
+        self.skip_analysis_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 6px;
+                font-size: 10px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        self.skip_analysis_btn.clicked.connect(self._on_skip_analysis)
+        control_layout.addWidget(self.skip_analysis_btn)
+        
+        # 状态显示
+        self.analysis_status_label = qt.QLabel("等待开始")
+        self.analysis_status_label.setStyleSheet("font-size: 9px; color: #868e96; font-style: italic;")
+        control_layout.addWidget(self.analysis_status_label)
+        
+        control_layout.addStretch()
+        parent_layout.addWidget(self.control_frame)
+    
+    def _on_start_analysis(self):
+        """开始PFD分析"""
+        try:
+            logging.info("用户开始PFD分析")
+            
+            # 更新状态
+            self.analysis_status_label.setText("准备中...")
+            self.start_analysis_btn.setEnabled(False)
+            self.skip_analysis_btn.setEnabled(False)
+            qt.QApplication.processEvents()
+            
+            # 1. 切换到收缩末期
+            self.analysis_status_label.setText("切换期相...")
+            qt.QApplication.processEvents()
+            
+            # 检查是否有收缩末期标记
+            end_systole_info = self.session.get_marked_phase('end_systole')
+            if not end_systole_info or end_systole_info.get('frame_index') is None:
+                qt.QMessageBox.warning(
+                    self,
+                    "警告",
+                    "未找到收缩末期标记！\n\n"
+                    "请先在模块一中标记收缩末期时相。"
+                )
+                self._reset_analysis_buttons()
+                return
+            
+            # 切换到收缩末期
+            success = self._switch_to_end_systole()
+            if not success:
+                qt.QMessageBox.warning(
+                    self,
+                    "错误",
+                    "切换到收缩末期失败！请检查模块一中的期像标记。"
+                )
+                self._reset_analysis_buttons()
+                return
+            
+            # 2. MPR定位到瓦氏窦平面
+            self.analysis_status_label.setText("定位平面...")
+            qt.QApplication.processEvents()
+            
+            success = self._position_to_sinus_valsalva()
+            if not success:
+                qt.QMessageBox.information(
+                    self,
+                    "提示",
+                    "自动定位失败，请手动调整MPR视图到合适位置。\n分析可以继续进行。"
+                )
+            
+            # 3. 完成准备
+            self._complete_analysis_preparation()
+            
+            logging.info("PFD分析环境准备完成")
+            
+        except Exception as e:
+            logging.error(f"开始PFD分析失败: {e}")
+            qt.QMessageBox.critical(
+                self,
+                "错误", 
+                f"分析启动失败：\n{e}"
+            )
+            self._reset_analysis_buttons()
+    
+    def _on_skip_analysis(self):
+        """跳过自动分析，直接进入评估"""
+        reply = qt.QMessageBox.question(
+            self,
+            "跳过自动分析",
+            "跳过自动分析，直接开始评估？",
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        
+        if reply == qt.QMessageBox.Yes:
+            self._complete_analysis_preparation()
+            logging.info("PFD用户选择跳过自动分析")
+    
+    def _complete_analysis_preparation(self):
+        """完成分析准备"""
+        self.analysis_started = True
+        self.analysis_status_label.setText("已就绪")
+        
+        # 隐藏分析控制区域
+        self.control_frame.setVisible(False)
+        
+        logging.info("PFD分析准备完成")
+    
+    def _reset_analysis_buttons(self):
+        """重置分析按钮状态"""
+        self.start_analysis_btn.setEnabled(True)
+        self.skip_analysis_btn.setEnabled(True)
+        self.analysis_status_label.setText("等待开始")
+    
+    def _switch_to_end_systole(self) -> bool:
+        """切换到收缩末期 - 复用PhaseSelectionWidget的逻辑"""
+        try:
+            # 使用PhaseSelectionWidget的自动切换逻辑
+            success = self.phase_widget._switch_to_end_systole()
+            
+            if success:
+                # 同步更新轮廓服务的期像设置
+                self.contour_service.set_current_phase('end_systole')
+                
+                # 设置当前期像并触发显示管理
+                self.phase_widget.set_current_phase('systole')
+                
+                logging.info("成功切换到收缩末期（复用PhaseSelectionWidget逻辑）")
+                return True
+            else:
+                logging.error("使用PhaseSelectionWidget切换到收缩末期失败")
+                return False
+            
+        except Exception as e:
+            logging.error(f"切换到收缩末期失败: {e}")
+            return False
+    
+    def _position_to_sinus_valsalva(self) -> bool:
+        """MPR定位到瓦氏窦平面"""
+        try:
+            # 尝试使用轮廓定位服务
+            success = self.contour_service.switch_to_contour('sinus_of_valsalva', phase='end_systole')
+            
+            if success:
+                logging.info("成功定位到瓦氏窦平面")
+                return True
+            else:
+                logging.warning("定位到瓦氏窦平面失败，但分析可以继续")
+                return False
+            
+        except Exception as e:
+            logging.error(f"定位到瓦氏窦平面失败: {e}")
+            return False
+    
     def _create_key_view_section(self, parent_layout):
         """创建关键视图管理区域"""
         # 创建关键视图管理器组件
@@ -784,6 +1240,11 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
     
     def cleanup(self):
         """清理资源"""
+        # 清理phase_widget
+        if hasattr(self, 'phase_widget'):
+            self.phase_widget.cleanup()
+        
+        # 清理关键视图管理器
         if hasattr(self, 'key_view_manager'):
             self.key_view_manager.cleanup()
         super().cleanup()
@@ -801,6 +1262,17 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
     
     def reset_analysis(self):
         """重置PFD分析"""
+        # 重置分析状态
+        self.analysis_started = False
+        
+        # 重置分析控制区域
+        if hasattr(self, 'control_frame'):
+            self.control_frame.setVisible(True)
+            self.start_analysis_btn.setEnabled(True)
+            self.skip_analysis_btn.setEnabled(True)
+            self.analysis_status_label.setText("等待开始")
+        
+        # 重置逻辑状态
         self.logic.reset_analysis()
         self.none_radio.setChecked(True)
         self.thickness_spinbox.setValue(0.0)

@@ -805,6 +805,20 @@ class HaltAnalysisWidget(qt.QWidget):
         except Exception as e:
             logging.error(f"在3D视图中显示axial切片失败: {e}")
     
+    def _update_analysis_control_visibility(self):
+        """根据分析状态更新分析控制区域的可见性"""
+        # 如果分析已经开始，隐藏控制区域
+        if hasattr(self, 'control_frame'):
+            self.control_frame.setVisible(not self.analysis_started)
+    
+    
+    
+    
+    
+    
+    
+    
+    
     def _refresh_3d_view(self):
         """刷新3D视图"""
         try:
@@ -832,30 +846,6 @@ class HaltAnalysisWidget(qt.QWidget):
         except Exception as e:
             logging.error(f"刷新3D视图时出错: {e}")
     
-    def _restore_default_slice_visibility(self):
-        """恢复默认的切片显示状态"""
-        try:
-            import slicer
-            
-            # 获取所有切片节点
-            slice_nodes = {
-                'Red': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeRed"),
-                'Green': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeGreen"), 
-                'Yellow': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeYellow")
-            }
-            
-            # 恢复所有切片的默认显示状态（通常是可见的）
-            for name, node in slice_nodes.items():
-                if node:
-                    node.SetSliceVisible(True)
-            
-            # 刷新3D视图
-            self._refresh_3d_view()
-            
-            logging.info("已恢复默认切片显示状态")
-            
-        except Exception as e:
-            logging.error(f"恢复默认切片显示状态失败: {e}")
     
     def _on_leaflet_grade_changed(self, leaflet_name: str, grade: str):
         """瓣叶分级改变时的回调"""
@@ -879,11 +869,6 @@ class HaltAnalysisWidget(qt.QWidget):
                 self.leaflet_grades[leaflet_name] = "0"
             self._update_summary()
     
-    def _update_analysis_control_visibility(self):
-        """根据分析状态更新分析控制区域的可见性"""
-        # 如果分析已经开始，隐藏控制区域
-        if hasattr(self, 'control_frame'):
-            self.control_frame.setVisible(not self.analysis_started)
     
     def _update_summary(self):
         """更新统计信息"""
@@ -1099,3 +1084,28 @@ class HaltAnalysisWidget(qt.QWidget):
             self.key_view_manager.cleanup()
         
         logging.info("HALT分析界面清理资源")
+    
+    def _restore_default_slice_visibility(self):
+        """恢复默认的切片显示状态"""
+        try:
+            import slicer
+            
+            # 获取所有切片节点
+            slice_nodes = {
+                'Red': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeRed"),
+                'Green': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeGreen"), 
+                'Yellow': slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeYellow")
+            }
+            
+            # 恢复所有切片的默认显示状态（通常是可见的）
+            for name, node in slice_nodes.items():
+                if node:
+                    node.SetSliceVisible(True)
+            
+            # 刷新3D视图
+            self._refresh_3d_view()
+            
+            logging.info("已恢复默认切片显示状态")
+            
+        except Exception as e:
+            logging.error(f"恢复默认切片显示状态失败: {e}")
