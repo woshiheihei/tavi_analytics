@@ -17,9 +17,8 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from ..widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
-    from ..widgets.phase_selection_widget import PhaseSelectionWidget  # 新增：期像选择组件
-    from ..services.contour_positioning_service import get_contour_position_service  # 新增：轮廓定位服务
+    from ..widgets.key_view_manager_widget import KeyViewManagerWidget  # 导入关键视图组件
+    from ..services.contour_positioning_service import get_contour_position_service  # 轮廓定位服务
     from .paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 except ImportError:
     import os
@@ -34,9 +33,8 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
-    from widgets.phase_selection_widget import PhaseSelectionWidget  # 新增：期像选择组件
-    from services.contour_positioning_service import get_contour_position_service  # 新增：轮廓定位服务
+    from widgets.key_view_manager_widget import KeyViewManagerWidget  # 导入关键视图组件
+    from services.contour_positioning_service import get_contour_position_service  # 轮廓定位服务
     from paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 
 
@@ -317,10 +315,6 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         # 服务组件
         self.contour_service = get_contour_position_service()
-        
-        # 期像选择组件 - 复用已有的期像切换逻辑
-        self.phase_widget = PhaseSelectionWidget(session, parent=self)
-        self.phase_widget.setVisible(False)  # 隐藏，仅用于逻辑复用
         
         # 分析状态
         self.analysis_started = False
@@ -658,22 +652,19 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         self.analysis_status_label.setText("等待开始")
     
     def _switch_to_end_systole(self) -> bool:
-        """切换到收缩末期 - 复用PhaseSelectionWidget的逻辑"""
+        """切换到收缩末期 - 使用集中化期像管理服务"""
         try:
-            # 使用PhaseSelectionWidget的自动切换逻辑
-            success = self.phase_widget._switch_to_end_systole()
+            # 使用session的期像管理服务进行切换
+            success = self.session.switch_to_systole("SFD_Analysis")
             
             if success:
                 # 同步更新轮廓服务的期像设置
                 self.contour_service.set_current_phase('end_systole')
                 
-                # 设置当前期像并触发显示管理
-                self.phase_widget.set_current_phase('systole')
-                
-                logging.info("成功切换到收缩末期（复用PhaseSelectionWidget逻辑）")
+                logging.info("成功切换到收缩末期（使用期像管理服务）")
                 return True
             else:
-                logging.error("使用PhaseSelectionWidget切换到收缩末期失败")
+                logging.error("使用期像管理服务切换到收缩末期失败")
                 return False
             
         except Exception as e:
@@ -739,10 +730,6 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
     
     def cleanup(self):
         """清理资源"""
-        # 清理phase_widget
-        if hasattr(self, 'phase_widget'):
-            self.phase_widget.cleanup()
-        
         # 清理关键视图管理器
         if hasattr(self, 'key_view_manager'):
             self.key_view_manager.cleanup()
@@ -788,10 +775,6 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         # 服务组件
         self.contour_service = get_contour_position_service()
-        
-        # 期像选择组件 - 复用已有的期像切换逻辑
-        self.phase_widget = PhaseSelectionWidget(session, parent=self)
-        self.phase_widget.setVisible(False)  # 隐藏，仅用于逻辑复用
         
         # 分析状态
         self.analysis_started = False
@@ -1159,22 +1142,19 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         self.analysis_status_label.setText("等待开始")
     
     def _switch_to_end_systole(self) -> bool:
-        """切换到收缩末期 - 复用PhaseSelectionWidget的逻辑"""
+        """切换到收缩末期 - 使用集中化期像管理服务"""
         try:
-            # 使用PhaseSelectionWidget的自动切换逻辑
-            success = self.phase_widget._switch_to_end_systole()
+            # 使用session的期像管理服务进行切换
+            success = self.session.switch_to_systole("PFD_Analysis")
             
             if success:
                 # 同步更新轮廓服务的期像设置
                 self.contour_service.set_current_phase('end_systole')
                 
-                # 设置当前期像并触发显示管理
-                self.phase_widget.set_current_phase('systole')
-                
-                logging.info("成功切换到收缩末期（复用PhaseSelectionWidget逻辑）")
+                logging.info("成功切换到收缩末期（使用期像管理服务）")
                 return True
             else:
-                logging.error("使用PhaseSelectionWidget切换到收缩末期失败")
+                logging.error("使用期像管理服务切换到收缩末期失败")
                 return False
             
         except Exception as e:
@@ -1240,10 +1220,6 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
     
     def cleanup(self):
         """清理资源"""
-        # 清理phase_widget
-        if hasattr(self, 'phase_widget'):
-            self.phase_widget.cleanup()
-        
         # 清理关键视图管理器
         if hasattr(self, 'key_view_manager'):
             self.key_view_manager.cleanup()

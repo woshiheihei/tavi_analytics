@@ -21,6 +21,7 @@ from typing import Optional, Dict, Any, Union
 
 import slicer
 from slicer import vtkMRMLSequenceNode, vtkMRMLSequenceBrowserNode
+import qt
 
 # 导入数据模型
 try:
@@ -125,6 +126,9 @@ class TAVRStudySession:
             
             # 兼容性属性 - 指向同一个管理器
             self.contour_manager = self.contour_data_manager
+            
+            # 期像管理服务（延迟加载，避免循环导入）
+            self._phase_management_service = None
             
             # 标记已初始化
             self._initialized = True
@@ -895,3 +899,95 @@ class TAVRStudySession:
     def get_phase_planes_summary(self) -> Dict[str, Any]:
         """兼容方法：调用新的轮廓方法"""
         return self.get_phase_contours_summary()
+
+    # ====== 期像管理服务集成 ======
+    def get_phase_management_service(self):
+        """
+        获取期像管理服务实例
+        
+        Returns:
+            PhaseManagementService: 期像管理服务实例
+        """
+        if self._phase_management_service is None:
+            # 延迟导入避免循环依赖
+            try:
+                from ..services.phase_management_service import get_phase_management_service
+                self._phase_management_service = get_phase_management_service(self)
+                self.logger.info("期像管理服务已初始化")
+            except ImportError:
+                from services.phase_management_service import get_phase_management_service
+                self._phase_management_service = get_phase_management_service(self)
+                self.logger.info("期像管理服务已初始化")
+        return self._phase_management_service
+    
+    def set_current_phase(self, phase: str, source_component: str = "session") -> bool:
+        """
+        设置当前期像并触发全局同步
+        
+        通过期像管理服务设置期像，所有注册的期像选择组件都会收到同步通知
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+            source_component: 触发期像切换的组件名称
+            
+        Returns:
+            bool: 设置成功返回True
+        """
+        try:
+            phase_service = self.get_phase_management_service()
+            return phase_service.set_current_phase(phase, source_component)
+        except Exception as e:
+            self.logger.error(f"通过session设置期像失败: {e}")
+            return False
+    
+    def get_current_phase(self) -> Optional[str]:
+        """
+        获取当前期像
+        
+        Returns:
+            str: 当前期像 ('diastole' 或 'systole')，未设置时返回None
+        """
+        try:
+            phase_service = self.get_phase_management_service()
+            return phase_service.get_current_phase()
+        except Exception as e:
+            self.logger.error(f"获取当前期像失败: {e}")
+            return None
+    
+    def switch_to_diastole(self, source_component: str = "session") -> bool:
+        """
+        切换到舒张末期
+        
+        通过期像管理服务切换到舒张末期，包括序列浏览器帧切换和UI同步
+        
+        Args:
+            source_component: 触发切换的组件名称
+            
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            phase_service = self.get_phase_management_service()
+            return phase_service.switch_to_diastole(source_component)
+        except Exception as e:
+            self.logger.error(f"切换到舒张末期失败: {e}")
+            return False
+    
+    def switch_to_systole(self, source_component: str = "session") -> bool:
+        """
+        切换到收缩末期
+        
+        通过期像管理服务切换到收缩末期，包括序列浏览器帧切换和UI同步
+        
+        Args:
+            source_component: 触发切换的组件名称
+            
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            phase_service = self.get_phase_management_service()
+            return phase_service.switch_to_systole(source_component)
+        except Exception as e:
+            self.logger.error(f"切换到收缩末期失败: {e}")
+            return False

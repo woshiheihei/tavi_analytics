@@ -69,8 +69,15 @@ class PhaseSelectionWidget(qt.QWidget):
         # 设置组件属性
         self.setObjectName("PhaseSelectionWidget")
         
+        # 期像管理服务集成
+        self._phase_service = None
+        self._is_syncing_from_external = False  # 防止无限循环的标志
+        
         # 创建界面
         self._setup_ui()
+        
+        # 连接到期像管理服务
+        self._connect_to_phase_service()
         
         logging.info("PhaseSelectionWidget 初始化完成")
     
@@ -608,21 +615,28 @@ class PhaseSelectionWidget(qt.QWidget):
         logging.info("用户要求切换到舒张末期")
         
         try:
-            if self._auto_switch_to_end_diastole():
-                # 更新按钮状态和当前期像
-                self.set_current_phase('diastole')
-                self._update_status("已切换到舒张末期")
-                
-                # 发送期像改变信号
-                self.phaseChanged.emit('diastole')
-                
-                logging.info("手动切换到舒张末期成功")
+            # 使用期像管理服务进行切换，这样会自动同步所有相关组件
+            if self._phase_service:
+                success = self._phase_service.switch_to_diastole("PhaseSelectionWidget")
+                if success:
+                    logging.info("通过期像管理服务切换到舒张末期成功")
+                    # 不需要手动更新UI，期像管理服务会通过回调自动同步
+                else:
+                    self._update_status("切换到舒张末期失败，请检查模块一中的期像标记")
+                    logging.warning("通过期像管理服务切换到舒张末期失败")
             else:
-                self._update_status("切换到舒张末期失败，请检查模块一中的期像标记")
-                logging.warning("手动切换到舒张末期失败")
+                # 回退到原来的逻辑（用于兼容性）
+                if self._auto_switch_to_end_diastole():
+                    self.set_current_phase('diastole')
+                    self._update_status("已切换到舒张末期")
+                    self.phaseChanged.emit('diastole')
+                    logging.info("手动切换到舒张末期成功")
+                else:
+                    self._update_status("切换到舒张末期失败，请检查模块一中的期像标记")
+                    logging.warning("手动切换到舒张末期失败")
                 
         except Exception as e:
-            logging.error(f"手动切换到舒张末期失败: {e}")
+            logging.error(f"切换到舒张末期失败: {e}")
             self._update_status("切换失败，请检查期像标记")
     
     def _on_switch_to_systole(self):
@@ -630,21 +644,28 @@ class PhaseSelectionWidget(qt.QWidget):
         logging.info("用户要求切换到收缩末期")
         
         try:
-            if self._switch_to_end_systole():
-                # 更新按钮状态和当前期像
-                self.set_current_phase('systole')
-                self._update_status("已切换到收缩末期")
-                
-                # 发送期像改变信号
-                self.phaseChanged.emit('systole')
-                
-                logging.info("手动切换到收缩末期成功")
+            # 使用期像管理服务进行切换，这样会自动同步所有相关组件
+            if self._phase_service:
+                success = self._phase_service.switch_to_systole("PhaseSelectionWidget")
+                if success:
+                    logging.info("通过期像管理服务切换到收缩末期成功")
+                    # 不需要手动更新UI，期像管理服务会通过回调自动同步
+                else:
+                    self._update_status("切换到收缩末期失败，请检查模块一中的期像标记")
+                    logging.warning("通过期像管理服务切换到收缩末期失败")
             else:
-                self._update_status("切换到收缩末期失败，请检查模块一中的期像标记")
-                logging.warning("手动切换到收缩末期失败")
+                # 回退到原来的逻辑（用于兼容性）
+                if self._switch_to_end_systole():
+                    self.set_current_phase('systole')
+                    self._update_status("已切换到收缩末期")
+                    self.phaseChanged.emit('systole')
+                    logging.info("手动切换到收缩末期成功")
+                else:
+                    self._update_status("切换到收缩末期失败，请检查模块一中的期像标记")
+                    logging.warning("手动切换到收缩末期失败")
                 
         except Exception as e:
-            logging.error(f"手动切换到收缩末期失败: {e}")
+            logging.error(f"切换到收缩末期失败: {e}")
             self._update_status("切换失败，请检查期像标记")
     
     def _update_phase_button_states(self, active_phase: str):
@@ -766,6 +787,118 @@ class PhaseSelectionWidget(qt.QWidget):
             logging.error(f"查找正确分割节点时出错: {e}")
             return None
     
+    # ====== 期像管理服务集成 ======
+    def _connect_to_phase_service(self):
+        """连接到期像管理服务"""
+        try:
+            self._phase_service = self.session.get_phase_management_service()
+            
+            # 注册同步回调
+            self._phase_service.register_phase_sync_callback(self._on_external_phase_changed)
+            
+            # 连接状态更新信号
+            self._phase_service.phaseStatusUpdated.connect(self._update_status)
+            
+            logging.info("PhaseSelectionWidget 已连接到期像管理服务")
+            
+            # 同步当前期像状态
+            current_phase = self._phase_service.get_current_phase()
+            if current_phase:
+                self._sync_phase_ui(current_phase)
+                
+        except Exception as e:
+            logging.error(f"连接期像管理服务失败: {e}")
+    
+    def _on_external_phase_changed(self, new_phase: str):
+        """
+        外部期像变更的回调函数
+        
+        当其他组件通过期像管理服务切换期像时，此方法会被调用
+        
+        Args:
+            new_phase: 新的期像 ('diastole' 或 'systole')
+        """
+        if self._is_syncing_from_external:
+            return  # 防止无限循环
+        
+        self._is_syncing_from_external = True
+        try:
+            logging.info(f"PhaseSelectionWidget 接收到外部期像变更: {new_phase}")
+            self._sync_phase_ui(new_phase)
+        finally:
+            self._is_syncing_from_external = False
+    
+    def _sync_phase_ui(self, phase: str):
+        """
+        同步期像UI状态
+        
+        更新按钮状态和当前期像，但不触发期像切换操作
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+        """
+        if phase not in ['diastole', 'systole']:
+            logging.warning(f"无效的期像类型: {phase}")
+            return
+        
+        try:
+            # 更新内部状态
+            old_phase = self.current_phase
+            self.current_phase = phase
+            
+            # 更新按钮状态
+            self._update_phase_button_states(active_phase=phase)
+            
+            # 管理节点可视化
+            self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
+            
+            # 如果不是从外部同步，发出期像改变信号
+            if not self._is_syncing_from_external:
+                self.phaseChanged.emit(phase)
+            
+            logging.info(f"PhaseSelectionWidget UI已同步到期像: {phase}")
+            
+        except Exception as e:
+            logging.error(f"同步期像UI失败: {e}")
+    
+    def sync_phase_from_external(self, phase: str):
+        """
+        从外部同步期像状态
+        
+        公共API，供其他组件直接调用以同步期像状态
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+        """
+        if self._is_syncing_from_external:
+            return  # 防止重复同步
+        
+        self._is_syncing_from_external = True
+        try:
+            logging.info(f"PhaseSelectionWidget 外部同步期像: {phase}")
+            self._sync_phase_ui(phase)
+        finally:
+            self._is_syncing_from_external = False
+    
+    def _disconnect_from_phase_service(self):
+        """断开与期像管理服务的连接"""
+        try:
+            if self._phase_service:
+                # 取消注册同步回调
+                self._phase_service.unregister_phase_sync_callback(self._on_external_phase_changed)
+                
+                # 断开信号连接
+                try:
+                    self._phase_service.phaseStatusUpdated.disconnect(self._update_status)
+                except:
+                    pass  # 信号可能已经断开
+                
+                logging.info("PhaseSelectionWidget 已断开期像管理服务连接")
+        except Exception as e:
+            logging.error(f"断开期像管理服务连接失败: {e}")
+    
     def cleanup(self):
         """清理资源"""
+        # 断开期像管理服务连接
+        self._disconnect_from_phase_service()
         logging.info("期像选择组件清理完成")
