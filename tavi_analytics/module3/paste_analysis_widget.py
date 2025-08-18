@@ -17,6 +17,7 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ..widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
     from .paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 except ImportError:
     import os
@@ -31,6 +32,7 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from widgets.key_view_manager_widget import KeyViewManagerWidget  # 新增：导入关键视图组件
     from paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 
 
@@ -166,6 +168,9 @@ class RelmAnalysisWidget(BaseAnalysisWidget):
         
         main_layout.addWidget(content_frame)
         
+        # 关键视图管理 - 新增
+        self._create_key_view_section(main_layout)
+        
         # 操作按钮
         self._create_action_buttons(main_layout)
     
@@ -233,9 +238,62 @@ class RelmAnalysisWidget(BaseAnalysisWidget):
         
         qt.QMessageBox.information(self, "RELM分析状态", status_text)
     
+    def _create_key_view_section(self, parent_layout):
+        """创建关键视图管理区域"""
+        # 创建关键视图管理器组件
+        self.key_view_manager = KeyViewManagerWidget(
+            analysis_type="RELM",
+            session=self.session,
+            compact_mode=True,  # 使用紧凑模式
+            parent=self
+        )
+        
+        # 连接信号
+        self.key_view_manager.viewMarked.connect(self._on_view_marked)
+        self.key_view_manager.viewRestored.connect(self._on_view_restored)
+        self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
+        self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
+        
+        parent_layout.addWidget(self.key_view_manager)
+    
+    def _on_view_marked(self, view_name: str):
+        """视图被标记时的回调"""
+        logging.info(f"RELM分析 - 视图已标记: {view_name}")
+    
+    def _on_view_restored(self, view_name: str):
+        """视图被恢复时的回调"""
+        logging.info(f"RELM分析 - 视图已恢复: {view_name}")
+    
+    def _on_view_deleted(self, view_name: str):
+        """视图被删除时的回调"""
+        logging.info(f"RELM分析 - 视图已删除: {view_name}")
+    
+    def _on_view_status_updated(self, status: str):
+        """关键视图状态更新时的回调"""
+        logging.debug(f"RELM分析 - 关键视图状态: {status}")
+    
+    def set_session(self, session: TAVRStudySession):
+        """设置会话对象"""
+        super().set_session(session)
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.set_session(session)
+    
+    def cleanup(self):
+        """清理资源"""
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.cleanup()
+        super().cleanup()
+    
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取RELM分析结果"""
-        return self.logic.get_analysis_results()
+        results = self.logic.get_analysis_results()
+        
+        # 添加关键视图统计
+        if hasattr(self, 'key_view_manager'):
+            results['key_views_count'] = self.key_view_manager.get_marked_views_count()
+            results['key_view_names'] = self.key_view_manager.get_marked_view_names()
+        
+        return results
     
     def reset_analysis(self):
         """重置RELM分析"""
@@ -344,6 +402,9 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         main_layout.addWidget(content_frame)
         
+        # 关键视图管理 - 新增
+        self._create_key_view_section(main_layout)
+        
         # 操作按钮
         self._create_action_buttons(main_layout)
     
@@ -414,9 +475,62 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         qt.QMessageBox.information(self, "SFD分析状态", status_text)
     
+    def _create_key_view_section(self, parent_layout):
+        """创建关键视图管理区域"""
+        # 创建关键视图管理器组件
+        self.key_view_manager = KeyViewManagerWidget(
+            analysis_type="SFD",
+            session=self.session,
+            compact_mode=True,  # 使用紧凑模式
+            parent=self
+        )
+        
+        # 连接信号
+        self.key_view_manager.viewMarked.connect(self._on_view_marked)
+        self.key_view_manager.viewRestored.connect(self._on_view_restored)
+        self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
+        self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
+        
+        parent_layout.addWidget(self.key_view_manager)
+    
+    def _on_view_marked(self, view_name: str):
+        """视图被标记时的回调"""
+        logging.info(f"SFD分析 - 视图已标记: {view_name}")
+    
+    def _on_view_restored(self, view_name: str):
+        """视图被恢复时的回调"""
+        logging.info(f"SFD分析 - 视图已恢复: {view_name}")
+    
+    def _on_view_deleted(self, view_name: str):
+        """视图被删除时的回调"""
+        logging.info(f"SFD分析 - 视图已删除: {view_name}")
+    
+    def _on_view_status_updated(self, status: str):
+        """关键视图状态更新时的回调"""
+        logging.debug(f"SFD分析 - 关键视图状态: {status}")
+    
+    def set_session(self, session: TAVRStudySession):
+        """设置会话对象"""
+        super().set_session(session)
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.set_session(session)
+    
+    def cleanup(self):
+        """清理资源"""
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.cleanup()
+        super().cleanup()
+    
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取SFD分析结果"""
-        return self.logic.get_analysis_results()
+        results = self.logic.get_analysis_results()
+        
+        # 添加关键视图统计
+        if hasattr(self, 'key_view_manager'):
+            results['key_views_count'] = self.key_view_manager.get_marked_views_count()
+            results['key_view_names'] = self.key_view_manager.get_marked_view_names()
+        
+        return results
     
     def reset_analysis(self):
         """重置SFD分析"""
@@ -542,6 +656,9 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         main_layout.addWidget(content_frame)
         
+        # 关键视图管理 - 新增
+        self._create_key_view_section(main_layout)
+        
         # 操作按钮
         self._create_action_buttons(main_layout)
     
@@ -625,9 +742,62 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         qt.QMessageBox.information(self, "PFD分析状态", status_text)
     
+    def _create_key_view_section(self, parent_layout):
+        """创建关键视图管理区域"""
+        # 创建关键视图管理器组件
+        self.key_view_manager = KeyViewManagerWidget(
+            analysis_type="PFD",
+            session=self.session,
+            compact_mode=True,  # 使用紧凑模式
+            parent=self
+        )
+        
+        # 连接信号
+        self.key_view_manager.viewMarked.connect(self._on_view_marked)
+        self.key_view_manager.viewRestored.connect(self._on_view_restored)
+        self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
+        self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
+        
+        parent_layout.addWidget(self.key_view_manager)
+    
+    def _on_view_marked(self, view_name: str):
+        """视图被标记时的回调"""
+        logging.info(f"PFD分析 - 视图已标记: {view_name}")
+    
+    def _on_view_restored(self, view_name: str):
+        """视图被恢复时的回调"""
+        logging.info(f"PFD分析 - 视图已恢复: {view_name}")
+    
+    def _on_view_deleted(self, view_name: str):
+        """视图被删除时的回调"""
+        logging.info(f"PFD分析 - 视图已删除: {view_name}")
+    
+    def _on_view_status_updated(self, status: str):
+        """关键视图状态更新时的回调"""
+        logging.debug(f"PFD分析 - 关键视图状态: {status}")
+    
+    def set_session(self, session: TAVRStudySession):
+        """设置会话对象"""
+        super().set_session(session)
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.set_session(session)
+    
+    def cleanup(self):
+        """清理资源"""
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.cleanup()
+        super().cleanup()
+    
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取PFD分析结果"""
-        return self.logic.get_analysis_results()
+        results = self.logic.get_analysis_results()
+        
+        # 添加关键视图统计
+        if hasattr(self, 'key_view_manager'):
+            results['key_views_count'] = self.key_view_manager.get_marked_views_count()
+            results['key_view_names'] = self.key_view_manager.get_marked_view_names()
+        
+        return results
     
     def reset_analysis(self):
         """重置PFD分析"""

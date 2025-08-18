@@ -4,11 +4,17 @@ HALT分析界面组件
 瓣叶功能评估中的HALT (低密度瓣叶增厚) 分析的专门用户界面实现，包含：
 - 引导式分析流程（自动切换到舒张末期 + MPR定位到支架底部）
 - 三个瓣叶的HALT状态记录表单
-- 关键视图标记功能
+- 关键视图标记功能（使用公共组件）
 - 测量工具集成
+
+重构更新：
+- 移除内部的ViewMarkingManager，改用公共的ViewMarkingService
+- 使用通用的KeyViewManagerWidget组件
+- 保持所有原有功能的兼容性
 
 作者：TAVR Research Team
 创建时间：2025年8月
+重构时间：2025年8月
 """
 
 import logging
@@ -23,7 +29,9 @@ try:
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
+    from ..widgets.key_view_manager_widget import KeyViewManagerWidget  # 使用公共组件
     from ..services.contour_positioning_service import get_contour_position_service
+    from ..services.view_marking_service import get_view_marking_service  # 使用公共服务
     from ..utils.mpr_positioning.plane_position_manager import get_plane_position_manager
 except ImportError:
     current_dir = os.path.dirname(__file__)
@@ -37,115 +45,10 @@ except ImportError:
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.phase_selection_widget import PhaseSelectionWidget
+    from widgets.key_view_manager_widget import KeyViewManagerWidget
     from services.contour_positioning_service import get_contour_position_service
+    from services.view_marking_service import get_view_marking_service
     from utils.mpr_positioning.plane_position_manager import get_plane_position_manager
-
-
-class ViewMarkingManager:
-    """视图标记管理器 - 保存和恢复MPR视图状态"""
-    
-    def __init__(self):
-        self.marked_views: Dict[str, Dict[str, Any]] = {}
-        self.plane_manager = get_plane_position_manager()
-    
-    def mark_current_view(self, view_name: str) -> bool:
-        """
-        标记当前MPR视图状态
-        
-        Args:
-            view_name: 视图标记名称
-            
-        Returns:
-            bool: 标记成功返回True
-        """
-        try:
-            # 获取当前MPR平面参数
-            plane_params = self.plane_manager.get_current_plane_parameters()
-            if not plane_params:
-                logging.error("无法获取当前MPR平面参数")
-                return False
-            
-            center_point, normal_vector = plane_params
-            
-            # 保存视图状态
-            self.marked_views[view_name] = {
-                'center_point': center_point.tolist(),
-                'normal_vector': normal_vector.tolist(),
-                'timestamp': qt.QDateTime.currentDateTime().toString(),
-                'description': f"HALT分析关键视图 - {view_name}"
-            }
-            
-            logging.info(f"已标记视图: {view_name}")
-            return True
-            
-        except Exception as e:
-            logging.error(f"标记视图失败: {e}")
-            return False
-    
-    def restore_view(self, view_name: str) -> bool:
-        """
-        恢复指定的视图标记
-        
-        Args:
-            view_name: 视图标记名称
-            
-        Returns:
-            bool: 恢复成功返回True
-        """
-        try:
-            if view_name not in self.marked_views:
-                logging.error(f"未找到视图标记: {view_name}")
-                return False
-            
-            view_data = self.marked_views[view_name]
-            import numpy as np
-            center_point = np.array(view_data['center_point'])
-            normal_vector = np.array(view_data['normal_vector'])
-            
-            # 恢复MPR视图
-            success = self.plane_manager.position_to_plane(center_point, normal_vector)
-            
-            if success:
-                logging.info(f"已恢复视图: {view_name}")
-            else:
-                logging.error(f"恢复视图失败: {view_name}")
-            
-            return success
-            
-        except Exception as e:
-            logging.error(f"恢复视图失败: {e}")
-            return False
-    
-    def get_marked_views(self) -> Dict[str, str]:
-        """
-        获取所有已标记的视图
-        
-        Returns:
-            Dict[str, str]: 视图名称到描述的映射
-        """
-        return {name: data['description'] for name, data in self.marked_views.items()}
-    
-    def clear_view_mark(self, view_name: str) -> bool:
-        """
-        清除指定的视图标记
-        
-        Args:
-            view_name: 视图标记名称
-            
-        Returns:
-            bool: 清除成功返回True
-        """
-        try:
-            if view_name in self.marked_views:
-                del self.marked_views[view_name]
-                logging.info(f"已清除视图标记: {view_name}")
-                return True
-            else:
-                logging.warning(f"视图标记不存在: {view_name}")
-                return False
-        except Exception as e:
-            logging.error(f"清除视图标记失败: {e}")
-            return False
 
 
 class LeafletGradeRow(qt.QWidget):
@@ -259,7 +162,7 @@ class LeafletGradeRow(qt.QWidget):
 
 
 class HaltAnalysisWidget(qt.QWidget):
-    """HALT分析主界面 - 重新设计为更符合医生需求的表单"""
+    """HALT分析主界面 - 使用公共关键视图组件"""
     
     # 信号：状态改变
     statusChanged = qt.Signal(dict)  # 发出完整的HALT分析状态
@@ -270,7 +173,7 @@ class HaltAnalysisWidget(qt.QWidget):
         
         # 服务组件
         self.contour_service = get_contour_position_service()
-        self.view_marking_manager = ViewMarkingManager()
+        self.view_marking_service = get_view_marking_service("HALT", session)  # 使用公共服务
         
         # 期像选择组件 - 复用已有的期像切换逻辑
         self.phase_widget = PhaseSelectionWidget(session, parent=self)
@@ -283,7 +186,7 @@ class HaltAnalysisWidget(qt.QWidget):
         
         self.setObjectName("HaltAnalysisWidget")
         self._setup_ui()
-        logging.info("HaltAnalysisWidget 初始化完成")
+        logging.info("HaltAnalysisWidget 初始化完成（重构版本）")
     
     def _setup_ui(self):
         """设置HALT分析主界面"""
@@ -333,8 +236,8 @@ class HaltAnalysisWidget(qt.QWidget):
         # 3. 统计信息（条件显示）
         self._create_summary_section(content_layout)
         
-        # 4. 视图标记（简化版）
-        self._create_view_marking_section(content_layout)
+        # 4. 关键视图管理 - 使用公共组件
+        self._create_key_view_section(content_layout)
         
         # 添加弹性空间
         content_layout.addStretch()
@@ -348,9 +251,6 @@ class HaltAnalysisWidget(qt.QWidget):
         # 初始状态更新
         self._update_visibility()
         self._update_analysis_control_visibility()
-        
-        # 初始化视图列表
-        self._refresh_marked_views_list()
     
     def _create_analysis_control_section(self, parent_layout):
         """创建分析控制区域（简化版）"""
@@ -580,98 +480,23 @@ class HaltAnalysisWidget(qt.QWidget):
         
         parent_layout.addWidget(self.summary_frame)
     
-    def _create_view_marking_section(self, parent_layout):
-        """创建视图标记与管理区域（简化版）"""
-        self.view_frame = qt.QFrame()
-        self.view_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8fff8;
-                border: 1px solid #c3e6cb;
-                border-radius: 6px;
-                padding: 10px;
-            }
-        """)
+    def _create_key_view_section(self, parent_layout):
+        """创建关键视图管理区域 - 使用公共组件"""
+        # 创建关键视图管理器组件
+        self.key_view_manager = KeyViewManagerWidget(
+            analysis_type="HALT",
+            session=self.session,
+            compact_mode=True,  # 使用紧凑模式
+            parent=self
+        )
         
-        view_layout = qt.QVBoxLayout(self.view_frame)
-        view_layout.setSpacing(8)
+        # 连接信号
+        self.key_view_manager.viewMarked.connect(self._on_view_marked)
+        self.key_view_manager.viewRestored.connect(self._on_view_restored)
+        self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
+        self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
         
-        # 标题和操作区域 - 紧凑布局
-        header_layout = qt.QHBoxLayout()
-        header_layout.setSpacing(8)
-        
-        view_title = qt.QLabel("关键视图")
-        view_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
-        header_layout.addWidget(view_title)
-        
-        header_layout.addStretch()
-        
-        # 标记当前视图按钮 - 更紧凑
-        self.mark_btn = qt.QPushButton("📌 标记 (Ctrl+M)")
-        self.mark_btn.setStyleSheet("""
-            QPushButton {
-                padding: 6px 10px;
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-weight: 500;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
-        self.mark_btn.clicked.connect(self._show_mark_view_dialog)
-        
-        # 添加快捷键
-        mark_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+M"), self)
-        mark_shortcut.activated.connect(self._show_mark_view_dialog)
-        
-        header_layout.addWidget(self.mark_btn)
-        
-        view_layout.addLayout(header_layout)
-        
-        # 已标记视图列表 - 紧凑版本
-        self._create_marked_views_list(view_layout)
-        
-        parent_layout.addWidget(self.view_frame)
-    
-    def _create_marked_views_list(self, parent_layout):
-        """创建已标记视图列表（简化版）"""
-        # 滚动区域用于视图列表 - 更紧凑
-        scroll_area = qt.QScrollArea()
-        scroll_area.setMaximumHeight(80)  # 减小高度
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameStyle(qt.QFrame.NoFrame)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: transparent;
-                border: none;
-            }
-        """)
-        
-        # 视图列表容器
-        self.views_container = qt.QWidget()
-        self.views_layout = qt.QVBoxLayout(self.views_container)
-        self.views_layout.setSpacing(2)  # 减小间距
-        self.views_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 空状态提示 - 更小
-        self.empty_hint = qt.QLabel("暂无标记")
-        self.empty_hint.setAlignment(qt.Qt.AlignCenter)
-        self.empty_hint.setStyleSheet("""
-            QLabel {
-                color: #6c757d;
-                font-style: italic;
-                font-size: 10px;
-                padding: 15px;
-            }
-        """)
-        self.views_layout.addWidget(self.empty_hint)
-        
-        self.views_layout.addStretch()
-        scroll_area.setWidget(self.views_container)
-        parent_layout.addWidget(scroll_area)
+        parent_layout.addWidget(self.key_view_manager)
     
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
@@ -722,6 +547,25 @@ class HaltAnalysisWidget(qt.QWidget):
         actions_layout.addWidget(export_btn)
         
         parent_layout.addLayout(actions_layout)
+    
+    # 关键视图相关的回调函数
+    def _on_view_marked(self, view_name: str):
+        """视图被标记时的回调"""
+        logging.info(f"HALT分析 - 视图已标记: {view_name}")
+    
+    def _on_view_restored(self, view_name: str):
+        """视图被恢复时的回调"""
+        logging.info(f"HALT分析 - 视图已恢复: {view_name}")
+        # 恢复视图后可能需要刷新3D视图
+        self._refresh_3d_view()
+    
+    def _on_view_deleted(self, view_name: str):
+        """视图被删除时的回调"""
+        logging.info(f"HALT分析 - 视图已删除: {view_name}")
+    
+    def _on_view_status_updated(self, status: str):
+        """关键视图状态更新时的回调"""
+        logging.debug(f"HALT分析 - 关键视图状态: {status}")
     
     def _on_overall_status_changed(self, button):
         """整体HALT状态改变时的回调"""
@@ -1073,314 +917,6 @@ class HaltAnalysisWidget(qt.QWidget):
         
         self.affected_count_label.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {color};")
     
-    def _show_mark_view_dialog(self):
-        """显示标记视图对话框"""
-        dialog = qt.QDialog(self)
-        dialog.setWindowTitle("标记当前视图")
-        dialog.setModal(True)
-        dialog.resize(350, 150)
-        
-        layout = qt.QVBoxLayout(dialog)
-        layout.setSpacing(15)
-        
-        # 说明文本
-        info_label = qt.QLabel("为当前MPR视图位置添加一个有意义的标记名称：")
-        info_label.setStyleSheet("font-size: 13px; color: #495057;")
-        layout.addWidget(info_label)
-        
-        # 输入框
-        name_input = qt.QLineEdit()
-        name_input.setPlaceholderText("例如：支架底部平面、瓣叶最佳显示...")
-        name_input.setStyleSheet("""
-            QLineEdit {
-                padding: 8px 12px;
-                border: 2px solid #ced4da;
-                border-radius: 6px;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border-color: #007bff;
-            }
-        """)
-        
-        # 生成默认名称
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        default_name = f"HALT视图_{timestamp}"
-        name_input.setText(default_name)
-        name_input.selectAll()
-        
-        layout.addWidget(name_input)
-        
-        # 按钮区域
-        buttons_layout = qt.QHBoxLayout()
-        
-        cancel_btn = qt.QPushButton("取消")
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                padding: 8px 20px;
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        cancel_btn.clicked.connect(dialog.reject)
-        
-        confirm_btn = qt.QPushButton("标记")
-        confirm_btn.setStyleSheet("""
-            QPushButton {
-                padding: 8px 20px;
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 13px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
-        confirm_btn.setDefault(True)
-        
-        def on_confirm():
-            view_name = name_input.text.strip()
-            if not view_name:
-                qt.QMessageBox.warning(dialog, "警告", "请输入视图名称！")
-                return
-            
-            success = self.view_marking_manager.mark_current_view(view_name)
-            if success:
-                self._refresh_marked_views_list()
-                dialog.accept()
-                
-                # 显示成功提示
-                qt.QMessageBox.information(
-                    self,
-                    "标记成功",
-                    f"视图已标记为：{view_name}"
-                )
-            else:
-                qt.QMessageBox.warning(
-                    dialog,
-                    "标记失败", 
-                    "标记当前视图失败，请检查MPR视图状态。"
-                )
-        
-        confirm_btn.clicked.connect(on_confirm)
-        name_input.returnPressed.connect(on_confirm)
-        
-        buttons_layout.addWidget(cancel_btn)
-        buttons_layout.addStretch()
-        buttons_layout.addWidget(confirm_btn)
-        
-        layout.addLayout(buttons_layout)
-        
-        # 聚焦输入框
-        name_input.setFocus()
-        
-        dialog.exec_()
-    
-    def _refresh_marked_views_list(self):
-        """刷新已标记视图列表"""
-        # 清除现有的视图项
-        for i in reversed(range(self.views_layout.count())):
-            child = self.views_layout.itemAt(i).widget()
-            if child and child != self.empty_hint:
-                child.setParent(None)
-        
-        marked_views = self.view_marking_manager.get_marked_views()
-        
-        if not marked_views:
-            # 显示空状态
-            self.empty_hint.setVisible(True)
-        else:
-            # 隐藏空状态提示
-            self.empty_hint.setVisible(False)
-            
-            # 为每个标记的视图创建条目
-            for view_name, description in marked_views.items():
-                view_item = self._create_view_item(view_name, description)
-                # 插入到stretch之前
-                self.views_layout.insertWidget(self.views_layout.count() - 1, view_item)
-    
-    def _create_view_item(self, view_name: str, description: str):
-        """创建单个视图条目"""
-        item_frame = qt.QFrame()
-        item_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 4px;
-                margin: 1px 0;
-            }
-            QFrame:hover {
-                border-color: #007bff;
-                background-color: #f8f9fa;
-            }
-        """)
-        
-        item_layout = qt.QHBoxLayout(item_frame)
-        item_layout.setContentsMargins(6, 3, 6, 3)
-        item_layout.setSpacing(6)
-        
-        # 视图图标 - 更小
-        icon_label = qt.QLabel("👁️")
-        icon_label.setStyleSheet("font-size: 12px;")
-        item_layout.addWidget(icon_label)
-        
-        # 视图信息 - 紧凑显示
-        name_label = qt.QLabel(view_name)
-        name_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                font-weight: bold;
-                color: #212529;
-            }
-        """)
-        item_layout.addWidget(name_label)
-        item_layout.addStretch()
-        
-        # 操作按钮 - 更小
-        # 恢复按钮
-        restore_btn = qt.QPushButton("🔄")
-        restore_btn.setToolTip(f"恢复到视图: {view_name}")
-        restore_btn.setStyleSheet("""
-            QPushButton {
-                padding: 2px 4px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 9px;
-                font-weight: bold;
-                min-width: 20px;
-                max-width: 20px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-        """)
-        restore_btn.clicked.connect(lambda: self._restore_view(view_name))
-        item_layout.addWidget(restore_btn)
-        
-        # 删除按钮
-        delete_btn = qt.QPushButton("🗑️")
-        delete_btn.setToolTip("删除此视图标记")
-        delete_btn.setStyleSheet("""
-            QPushButton {
-                padding: 2px 4px;
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-size: 9px;
-                min-width: 20px;
-                max-width: 20px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        delete_btn.clicked.connect(lambda: self._delete_view(view_name))
-        item_layout.addWidget(delete_btn)
-        
-        return item_frame
-    
-    def _restore_view(self, view_name: str):
-        """恢复指定视图 - 参考快速定位功能的稳定性"""
-        try:
-            # 先检查视图数据是否存在
-            if view_name not in self.view_marking_manager.marked_views:
-                qt.QMessageBox.warning(
-                    self,
-                    "视图不存在",
-                    f"视图标记 '{view_name}' 已不存在，可能已被删除。"
-                )
-                self._refresh_marked_views_list()  # 刷新列表
-                return
-            
-            # 提供视觉反馈
-            self.mark_btn.setText("🔄 正在恢复...")
-            self.mark_btn.setEnabled(False)
-            qt.QApplication.processEvents()
-            
-            # 调用视图管理器恢复视图
-            success = self.view_marking_manager.restore_view(view_name)
-            
-            if success:
-                # 成功恢复后稍作延迟，让用户看到变化
-                qt.QTimer.singleShot(500, self._on_view_restore_success)
-                logging.info(f"成功恢复视图: {view_name}")
-                
-                # 可选：刷新视图以确保显示正确
-                self._refresh_3d_view()
-                
-            else:
-                self._on_view_restore_failed(view_name)
-                
-        except Exception as e:
-            logging.error(f"恢复视图失败: {e}")
-            self._on_view_restore_error(str(e))
-    
-    def _on_view_restore_success(self):
-        """视图恢复成功的回调"""
-        self.mark_btn.setText("✅ 视图已恢复")
-        self.mark_btn.setEnabled(True)
-        # 2秒后恢复原始文本
-        qt.QTimer.singleShot(2000, lambda: self.mark_btn.setText("📌 标记当前视图"))
-    
-    def _on_view_restore_failed(self, view_name: str):
-        """视图恢复失败的回调"""
-        self.mark_btn.setText("❌ 恢复失败")
-        self.mark_btn.setEnabled(True)
-        qt.QTimer.singleShot(2000, lambda: self.mark_btn.setText("📌 标记当前视图"))
-        
-        qt.QMessageBox.warning(
-            self,
-            "恢复失败",
-            f"无法恢复视图 '{view_name}'。\n\n"
-            "可能的原因：\n"
-            "• 视图数据已损坏\n"
-            "• MPR系统状态异常\n"
-            "• 几何参数超出有效范围"
-        )
-    
-    def _on_view_restore_error(self, error_msg: str):
-        """视图恢复异常的回调"""
-        self.mark_btn.setText("❌ 恢复失败")
-        self.mark_btn.setEnabled(True)
-        qt.QTimer.singleShot(2000, lambda: self.mark_btn.setText("📌 标记当前视图"))
-        
-        qt.QMessageBox.critical(
-            self,
-            "恢复错误",
-            f"恢复视图时发生严重错误：\n\n{error_msg}\n\n"
-            "请检查系统状态后重试。"
-        )
-    
-    def _delete_view(self, view_name: str):
-        """删除指定视图标记"""
-        reply = qt.QMessageBox.question(
-            self,
-            "确认删除",
-            f"确定要删除视图标记 '{view_name}' 吗？",
-            qt.QMessageBox.Yes | qt.QMessageBox.No
-        )
-        
-        if reply == qt.QMessageBox.Yes:
-            success = self.view_marking_manager.clear_view_mark(view_name)
-            if success:
-                self._refresh_marked_views_list()
-                logging.info(f"已删除视图标记: {view_name}")
-    
-    
     def _reset_analysis(self):
         """重置分析"""
         reply = qt.QMessageBox.question(
@@ -1402,7 +938,6 @@ class HaltAnalysisWidget(qt.QWidget):
             for leaflet_name, row in self.leaflet_grade_rows.items():
                 row.set_grade("0")
                 self.leaflet_grades[leaflet_name] = "0"
-            
             
             # 重置分析控制区域
             if hasattr(self, 'control_frame'):
@@ -1489,13 +1024,11 @@ class HaltAnalysisWidget(qt.QWidget):
             report.append("")
             report.append(f"最高分级：{results['max_grade']}")
         
-        # 视图标记
-        marked_views = results.get('marked_views', {})
-        if marked_views:
+        # 关键视图标记
+        view_count = results.get('key_views_count', 0)
+        if view_count > 0:
             report.append("")
-            report.append(f"关键视图标记：{len(marked_views)}个")
-            for view_name in marked_views.keys():
-                report.append(f"  - {view_name}")
+            report.append(f"关键视图标记：{view_count}个")
         
         return "\n".join(report)
     
@@ -1516,13 +1049,18 @@ class HaltAnalysisWidget(qt.QWidget):
                 max_grade = grade
                 break
         
+        # 获取关键视图统计
+        key_views_count = self.key_view_manager.get_marked_views_count()
+        key_view_names = self.key_view_manager.get_marked_view_names()
+        
         return {
             'analysis_type': 'HALT',
             'overall_status': self.overall_halt_status,
             'leaflet_grades': dict(self.leaflet_grades),
             'affected_leaflets_count': affected_count,
             'max_grade': max_grade,
-            'marked_views': self.view_marking_manager.marked_views,
+            'key_views_count': key_views_count,
+            'key_view_names': key_view_names,
             'analysis_timestamp': qt.QDateTime.currentDateTime().toString(),
             'session_info': {
                 'study_name': getattr(self.session, 'study_name', 'Unknown'),
@@ -1533,6 +1071,8 @@ class HaltAnalysisWidget(qt.QWidget):
     def set_session(self, session: TAVRStudySession):
         """设置会话对象"""
         self.session = session
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.set_session(session)
     
     def on_activated(self):
         """模块激活时调用"""
@@ -1553,5 +1093,9 @@ class HaltAnalysisWidget(qt.QWidget):
         # 清理phase_widget
         if hasattr(self, 'phase_widget'):
             self.phase_widget.cleanup()
+        
+        # 清理关键视图管理器
+        if hasattr(self, 'key_view_manager'):
+            self.key_view_manager.cleanup()
         
         logging.info("HALT分析界面清理资源")
