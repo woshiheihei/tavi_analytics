@@ -332,6 +332,9 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_activated()
         
+        # 3D窗口居中显示
+        self._center_3d_view()
+        
         # 自动检查平面状态（仅输出到日志和控制台）
         qt.QTimer.singleShot(500, self._on_refresh_plane_status)  # 延迟500ms执行，确保UI完全加载
 
@@ -339,6 +342,26 @@ class Module3Widget(qt.QWidget):
         logging.info("模块三已停用")
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_deactivated()
+
+    def _center_3d_view(self):
+        """
+        3D窗口居中显示功能
+        """
+        try:
+            import slicer
+            
+            # 获取3D视图控制器并执行居中操作
+            threeDWidget = slicer.app.layoutManager().threeDWidget(0)
+            threeDView = threeDWidget.threeDView()
+            threeDView.resetFocalPoint()
+            
+            logging.info("✅ 3D窗口已居中显示")
+            print("🎯 3D窗口已居中显示")
+            
+        except Exception as e:
+            error_message = f"3D窗口居中时出错: {e}"
+            logging.error(error_message)
+            print(f"❌ {error_message}")
 
     def _enable_mpr_crosshairs(self):
         """
