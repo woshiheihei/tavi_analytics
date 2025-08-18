@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__slicer__execute_python_code"
+      "mcp__slicer__execute_python_code",
+      "mcp__slicer__list_nodes"
     ],
     "deny": [],
     "ask": []

@@ -61,11 +61,29 @@ class Module2Widget(qt.QWidget):
         
         logging.info("Module2Widget 初始化完成")
 
-    def on_activated(self):
+    def on_activated(self, auto_start_analysis: bool = False):
         """
         模块激活时的回调方法
+        
+        Args:
+            auto_start_analysis: 是否自动启动分析
         """
-    logging.info("模块二已激活")
+        logging.info("模块二已激活")
+        
+        # 如果需要自动启动分析
+        if auto_start_analysis:
+            self._prepare_auto_start_analysis()
+
+    def _prepare_auto_start_analysis(self):
+        """准备自动启动分析"""
+        try:
+            logging.info("准备自动启动全自动分析")
+            # 更新状态提示用户即将开始
+            self._update_analysis_status("🚀 正在自动启动分析...", "info")
+            # 延迟500ms启动，给用户看到状态更新
+            qt.QTimer.singleShot(500, self._on_start_auto_analysis)
+        except Exception as e:
+            logging.error(f"准备自动启动分析失败: {e}")
 
     # 已移除期像切换组件相关回调与状态恢复逻辑
 
@@ -115,7 +133,7 @@ class Module2Widget(qt.QWidget):
         
         # 移除冗长提示，直接提供操作按钮
         
-        # 一键分析按钮 - 主要操作
+        # 一键分析按钮 - 主要操作（支持自动启动时的状态显示）
         self.auto_analysis_button = LayoutManager.create_button_with_style(
             text="🚀 开始全自动分析",
             button_type="primary",

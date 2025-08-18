@@ -433,13 +433,14 @@ TAVR Analytics 帮助
                 self.switch_to_module(module_name)
     # <--- END: 方法修改完成
     
-    def switch_to_module(self, module_name: str, force: bool = False):
+    def switch_to_module(self, module_name: str, force: bool = False, auto_start_analysis: bool = False):
         """
         切换到指定模块
         
         Args:
             module_name: 模块名称
             force: 是否强制切换（不显示确认对话框）
+            auto_start_analysis: 是否自动启动分析（针对module2）
         """
         try:
             logging.info(f"切换到模块: {module_name}")
@@ -493,6 +494,10 @@ TAVR Analytics 帮助
             # 发送用户友好的通知
             self._show_success_notification(f"已切换到: {display_name}")
             
+            # 如果是module2且需要自动启动分析
+            if auto_start_analysis and module_name == "module2":
+                self._auto_start_analysis_in_module2(module_widget)
+            
             logging.info(f"成功切换到模块: {module_name}")
             
         except Exception as e:
@@ -502,6 +507,26 @@ TAVR Analytics 帮助
             self._show_error_message("切换失败", f"切换到模块 {module_name} 时发生错误: {str(e)}")
             import traceback
             traceback.print_exc()
+    
+    def _auto_start_analysis_in_module2(self, module_widget):
+        """在module2中自动启动分析"""
+        try:
+            # 延迟200ms启动，确保界面完全加载
+            qt.QTimer.singleShot(200, lambda: self._trigger_module2_analysis(module_widget))
+            logging.info("已安排module2自动启动分析")
+        except Exception as e:
+            logging.error(f"安排自动启动分析失败: {e}")
+    
+    def _trigger_module2_analysis(self, module_widget):
+        """触发module2的分析"""
+        try:
+            if hasattr(module_widget, '_on_start_auto_analysis'):
+                logging.info("自动触发module2全自动分析")
+                module_widget._on_start_auto_analysis()
+            else:
+                logging.warning("module2组件没有_on_start_auto_analysis方法")
+        except Exception as e:
+            logging.error(f"自动启动module2分析失败: {e}")
     
     def _should_confirm_switch(self) -> bool:
         """检查是否需要确认切换"""

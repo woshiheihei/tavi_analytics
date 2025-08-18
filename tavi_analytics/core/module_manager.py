@@ -521,8 +521,13 @@ class ModuleManager(VTKObservationMixin):
                 self._logger.error(error_msg)
                 module_info.set_state(ModuleState.ERROR, error_msg)
     
-    def activate_module(self, module_name: str) -> bool:
-        """激活模块"""
+    def activate_module(self, module_name: str, auto_start_analysis: bool = False) -> bool:
+        """激活模块
+        
+        Args:
+            module_name: 模块名称
+            auto_start_analysis: 是否自动启动分析（传递给模块）
+        """
         if module_name not in self._modules:
             self._logger.error(f"模块 {module_name} 未注册")
             return False
@@ -544,9 +549,14 @@ class ModuleManager(VTKObservationMixin):
             module_info.set_state(ModuleState.ACTIVE)
             module_info.increment_activation()
             
-            # 调用模块回调
+            # 调用模块回调，传递自动启动参数
             if module_info.module_instance:
-                module_info.module_instance.on_module_activated()
+                try:
+                    # 尝试传递auto_start_analysis参数
+                    module_info.module_instance.on_module_activated(auto_start_analysis=auto_start_analysis)
+                except TypeError:
+                    # 如果模块不支持该参数，回退到原始调用
+                    module_info.module_instance.on_module_activated()
             
             self._logger.info(f"模块 {module_name} 已激活")
             

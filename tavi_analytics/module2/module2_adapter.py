@@ -76,12 +76,16 @@ class Module2Adapter(ModuleInterface):
         # 可以在这里发布自定义事件
         self.publish_event(ModuleEvent.DATA_UPDATED, data={"status": "ready"})
     
-    def on_module_activated(self):
-        """模块激活回调"""
+    def on_module_activated(self, auto_start_analysis: bool = False):
+        """模块激活回调
+        
+        Args:
+            auto_start_analysis: 是否自动启动分析
+        """
         print(f"模块 {self.get_display_name()} 已激活")
         # 可以在这里执行激活后的初始化
         if self._widget and hasattr(self._widget, 'on_activated'):
-            self._widget.on_activated()
+            self._widget.on_activated(auto_start_analysis=auto_start_analysis)
     
     def on_module_deactivated(self):
         """模块停用回调"""

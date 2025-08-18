@@ -232,9 +232,9 @@ class Module1Widget(qt.QWidget):
         
         actions_layout.addLayout(button_layout)
         
-        # 主CTA：继续（与后续模块解耦）
+        # 主CTA：开始全自动分析（一键式工作流）
         self.next_module_button = LayoutManager.create_button_with_style(
-            text="继续", 
+            text="开始全自动分析", 
             button_type="primary", 
             size="default", 
             min_height=40
@@ -458,28 +458,54 @@ class Module1Widget(qt.QWidget):
             logging.error(f"重置数据时发生错误: {str(e)}")
             
     def _on_next_module_clicked(self):
-        """处理进入下一模块按钮点击"""
+        """处理开始全自动分析按钮点击"""
         try:
-            # 检查是否满足进入下一模块的条件
+            # 检查是否满足启动分析的条件
             if self._check_ready_for_next_module():
-                logging.info("准备进入模块二")
+                logging.info("准备启动全自动分析流程")
                 # 先发出信号，供上层监听（保持兼容）
                 self.readyForNextModule.emit()
-                # 直接在插件中导航到模块二（与模块二跳转到模块三的方式一致）
-                self._navigate_to_module2()
+                # 跳转到模块二并自动启动分析
+                self._navigate_to_module2_and_start_analysis()
             else:
                 # 显示未满足条件的提示
                 missing_items = self._get_missing_requirements()
                 qt.QMessageBox.information(
                     self, "未满足条件", 
-                    "进入下一模块需要完成以下步骤：\n" + "\n".join(missing_items)
+                    "启动全自动分析需要完成以下步骤：\n" + "\n".join(missing_items)
                 )
                 
         except Exception as e:
-            logging.error(f"检查下一模块条件时发生错误: {str(e)}")
+            logging.error(f"检查分析启动条件时发生错误: {str(e)}")
+
+    def _navigate_to_module2_and_start_analysis(self):
+        """跳转到模块二并自动启动分析"""
+        try:
+            plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
+            if hasattr(plugin, 'main_ui') and plugin.main_ui:
+                # 跳转到模块二并传递自动启动标记
+                plugin.main_ui.switch_to_module("module2", auto_start_analysis=True)
+            else:
+                # 后备：通过插件暴露的模块管理器激活
+                if hasattr(plugin, 'module_manager') and plugin.module_manager:
+                    plugin.module_manager.activate_module("module2", auto_start_analysis=True)
+                else:
+                    # 最终后备：直接使用全局单例的ModuleManager
+                    try:
+                        from ..core.module_manager import ModuleManager as _MM
+                    except Exception:
+                        from core.module_manager import ModuleManager as _MM
+                    _MM().activate_module("module2", auto_start_analysis=True)
+            logging.info("已跳转到模块二并启动全自动分析")
+        except Exception as e:
+            logging.error(f"跳转到模块二并启动分析失败: {e}")
+            try:
+                qt.QMessageBox.warning(self, "启动失败", "无法启动全自动分析，请稍后重试。")
+            except Exception:
+                pass
 
     def _navigate_to_module2(self):
-        """跳转到 module2（全自动分析）标签页"""
+        """跳转到 module2（全自动分析）标签页 - 保留兼容性"""
         try:
             plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
             if hasattr(plugin, 'main_ui') and plugin.main_ui:
@@ -547,12 +573,12 @@ class Module1Widget(qt.QWidget):
             # CTA可用性
             ready_for_next = self._check_ready_for_next_module()
             self.next_module_button.setEnabled(ready_for_next)
-            self.next_module_button.setText("继续")
+            self.next_module_button.setText("开始全自动分析")
 
             # 样式与提示
             if ready_for_next:
                 self._update_button_style(self.next_module_button, "primary", "default")
-                self.next_module_button.setToolTip("继续到下一步")
+                self.next_module_button.setToolTip("启动全自动分析流程")
             else:
                 self._update_button_style(self.next_module_button, "secondary", "default")
                 missing_items = self._get_missing_requirements()
