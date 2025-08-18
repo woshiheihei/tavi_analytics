@@ -267,44 +267,45 @@ class Module3Widget(qt.QWidget):
         # 创建平面切换控制区域
         plane_control_frame = LayoutManager.create_section_frame("快速定位关键平面")
         plane_control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, plane_control_frame)
-        
+
         # 创建按钮网格布局
         buttons_widget = qt.QWidget()
         buttons_layout = qt.QGridLayout(buttons_widget)
         buttons_layout.setSpacing(10)
-        
+
         # 瓣膜支架底部平面按钮
         self.switch_to_valve_plane_btn = LayoutManager.create_button_with_style(
-            "🎯 瓣膜支架底部平面", 
-            "primary", 
-            "default", 
+            "🎯 瓣膜支架底部平面",
+            "primary",
+            "default",
             45
         )
         self.switch_to_valve_plane_btn.clicked.connect(self._on_switch_to_valve_plane)
-        
+
         # Sinus Of Valsalva平面按钮
         self.switch_to_sinus_plane_btn = LayoutManager.create_button_with_style(
-            "🫀 瓦氏窦平面", 
-            "secondary", 
-            "default", 
+            "🫀 瓦氏窦平面",
+            "secondary",
+            "default",
             45
         )
         self.switch_to_sinus_plane_btn.clicked.connect(self._on_switch_to_sinus_plane)
-        
+
         # 排列按钮（1行2列）
         buttons_layout.addWidget(self.switch_to_valve_plane_btn, 0, 0)
         buttons_layout.addWidget(self.switch_to_sinus_plane_btn, 0, 1)
-        
+
         # 组装平面控制区域
         plane_control_layout.addWidget(buttons_widget)
-        
+
         # 添加分析区域 - 使用选项卡显示不同分析模块
         analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
         analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
-        
+
         # 创建选项卡容器
         self.analysis_tabs = qt.QTabWidget()
-        self.analysis_tabs.setStyleSheet("""
+        self.analysis_tabs.setStyleSheet(
+            """
             QTabWidget::pane {
                 border: 1px solid #dee2e6;
                 border-radius: 4px;
@@ -322,28 +323,30 @@ class Module3Widget(qt.QWidget):
                 background-color: white;
                 border-bottom-color: white;
             }
-        """)
-        
+            """
+        )
+
         # 创建独立的分析组件
         self.relm_analysis = RelmAnalysisWidget(self.session, parent=self)
         self.sfd_analysis = SfdAnalysisWidget(self.session, parent=self)
         self.pfd_analysis = PfdAnalysisWidget(self.session, parent=self)
-        
+
         # 添加分析模块到选项卡 - 所有分析模块都是同级的
         self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
         self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
         self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
         self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
-        
+
         analysis_layout.addWidget(self.analysis_tabs)
 
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title)
-        container_layout.addWidget(self.phase_selection)  # 添加期像选择组件
-        container_layout.addWidget(plane_control_frame)   # 添加平面控制区域
-        container_layout.addWidget(analysis_frame)           # 添加分析区域
+        # 调整顺序：将“瓣叶功能评估”置于“期像选择”和“快速定位关键平面”之上
+        container_layout.addWidget(analysis_frame)           # 添加分析区域（在上方）
+        container_layout.addWidget(self.phase_selection)     # 添加期像选择组件（移至下方）
+        container_layout.addWidget(plane_control_frame)      # 添加平面控制区域（移至下方）
 
         main_layout.addWidget(container, 1)
         LayoutManager.add_stretch_with_ratio(main_layout, 1)
