@@ -15,7 +15,7 @@ try:
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module3_logic import Module3Logic
     from .halt_analysis_widget import HaltAnalysisWidget
-    from .paste_analysis_widget import Module3AnalysisWidget
+    from .paste_analysis_widget import Module3AnalysisWidget, RelmAnalysisWidget, SfdAnalysisWidget, PfdAnalysisWidget
 except ImportError:
     import os
     import sys
@@ -32,7 +32,7 @@ except ImportError:
     from widgets.phase_selection_widget import PhaseSelectionWidget
     from module3_logic import Module3Logic
     from halt_analysis_widget import HaltAnalysisWidget
-    from paste_analysis_widget import Module3AnalysisWidget
+    from paste_analysis_widget import Module3AnalysisWidget, RelmAnalysisWidget, SfdAnalysisWidget, PfdAnalysisWidget
 
 
 class Module3Widget(qt.QWidget):
@@ -51,8 +51,9 @@ class Module3Widget(qt.QWidget):
         # 创建HALT分析组件
         self.halt_analysis = HaltAnalysisWidget(session, parent=self)
         
-        # 创建模块三标准化分析组件
-        self.module3_analysis = Module3AnalysisWidget(session, parent=self)
+        # 注释：原来的module3_analysis已被拆分为独立的RELM、SFD、PFD组件
+        # 保留引用以向后兼容，但在新的UI中不再使用
+        # self.module3_analysis = Module3AnalysisWidget(session, parent=self)
         
         self.setObjectName("Module3Widget")
         self._setup_ui()
@@ -323,9 +324,16 @@ class Module3Widget(qt.QWidget):
             }
         """)
         
-        # 添加分析模块到选项卡
+        # 创建独立的分析组件
+        self.relm_analysis = RelmAnalysisWidget(self.session, parent=self)
+        self.sfd_analysis = SfdAnalysisWidget(self.session, parent=self)
+        self.pfd_analysis = PfdAnalysisWidget(self.session, parent=self)
+        
+        # 添加分析模块到选项卡 - 所有分析模块都是同级的
         self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
-        self.analysis_tabs.addTab(self.module3_analysis, "其他分析")
+        self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
+        self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
+        self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
         
         analysis_layout.addWidget(self.analysis_tabs)
 
@@ -346,6 +354,13 @@ class Module3Widget(qt.QWidget):
             self.phase_selection.set_session(session)
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.set_session(session)
+        if hasattr(self, 'relm_analysis'):
+            self.relm_analysis.set_session(session)
+        if hasattr(self, 'sfd_analysis'):
+            self.sfd_analysis.set_session(session)
+        if hasattr(self, 'pfd_analysis'):
+            self.pfd_analysis.set_session(session)
+        # 保留原有的module3_analysis支持（向后兼容）
         if hasattr(self, 'module3_analysis'):
             self.module3_analysis.set_session(session)
         if self.logic:
@@ -366,7 +381,15 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_activated()
         
-        # 激活模块三分析组件
+        # 激活独立的分析组件
+        if hasattr(self, 'relm_analysis'):
+            self.relm_analysis.on_activated()
+        if hasattr(self, 'sfd_analysis'):
+            self.sfd_analysis.on_activated()
+        if hasattr(self, 'pfd_analysis'):
+            self.pfd_analysis.on_activated()
+        
+        # 保留原有的module3_analysis支持（向后兼容）
         if hasattr(self, 'module3_analysis'):
             self.module3_analysis.on_activated()
         
@@ -380,6 +403,13 @@ class Module3Widget(qt.QWidget):
         logging.info("模块三已停用")
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_deactivated()
+        if hasattr(self, 'relm_analysis'):
+            self.relm_analysis.on_deactivated()
+        if hasattr(self, 'sfd_analysis'):
+            self.sfd_analysis.on_deactivated()
+        if hasattr(self, 'pfd_analysis'):
+            self.pfd_analysis.on_deactivated()
+        # 保留原有的module3_analysis支持（向后兼容）
         if hasattr(self, 'module3_analysis'):
             self.module3_analysis.on_deactivated()
 
@@ -473,6 +503,13 @@ class Module3Widget(qt.QWidget):
             self.phase_selection.cleanup()
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.cleanup()
+        if hasattr(self, 'relm_analysis'):
+            self.relm_analysis.cleanup()
+        if hasattr(self, 'sfd_analysis'):
+            self.sfd_analysis.cleanup()
+        if hasattr(self, 'pfd_analysis'):
+            self.pfd_analysis.cleanup()
+        # 保留原有的module3_analysis支持（向后兼容）
         if hasattr(self, 'module3_analysis'):
             self.module3_analysis.cleanup()
         if self.logic:

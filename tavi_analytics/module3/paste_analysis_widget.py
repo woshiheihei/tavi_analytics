@@ -55,6 +55,10 @@ class BaseAnalysisWidget(qt.QWidget):
         """重置分析 - 子类应该实现"""
         logging.info(f"{self.analysis_type}分析重置 - 基类默认实现")
     
+    def set_session(self, session: TAVRStudySession):
+        """设置会话对象"""
+        self.session = session
+    
     def on_activated(self):
         """激活时的回调"""
         logging.info(f"{self.analysis_type}分析界面激活")
