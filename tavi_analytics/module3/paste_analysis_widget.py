@@ -1,11 +1,12 @@
 """
-PASTE分析界面组件
+模块三分析界面组件
 
-瓣叶功能评估（PASTE Analysis）的用户界面实现，包含：
-- HALT (低密度瓣叶增厚) 分析
-- RELM (瓣叶活动度减退) 分析  
-- SFD (窦内充盈缺损) 分析
-- PFD (瓣叶下充盈缺损) 分析
+瓣叶功能评估相关分析的标准化用户界面框架，包含：
+- RELM (瓣叶活动度减退) 分析界面占位符
+- SFD (窦内充盈缺损) 分析界面占位符  
+- PFD (瓣叶下充盈缺损) 分析界面占位符
+
+注意：HALT分析有独立的实现 (halt_analysis_widget.py)
 """
 import logging
 from typing import Optional, Dict, Any
@@ -16,7 +17,7 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from .paste_analysis_logic import PasteAnalysisLogic
+    from .paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 except ImportError:
     import os
     import sys
@@ -30,640 +31,908 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from paste_analysis_logic import PasteAnalysisLogic
+    from paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 
 
-class HaltAnalysisSection(qt.QWidget):
-    """HALT (低密度瓣叶增厚) 分析区域"""
+class BaseAnalysisWidget(qt.QWidget):
+    """分析界面基类 - 标准化接口"""
     
-    def __init__(self, parent=None):
+    # 状态改变信号
+    statusChanged = qt.Signal(dict)
+    
+    def __init__(self, analysis_type: str, session: TAVRStudySession, parent=None):
         super().__init__(parent)
-        self.setObjectName("HaltAnalysisSection")
-        self._setup_ui()
+        self.analysis_type = analysis_type
+        self.session = session
+        self.setObjectName(f"{analysis_type}AnalysisWidget")
+        logging.info(f"{analysis_type}分析界面初始化")
     
-    def _setup_ui(self):
-        """设置HALT分析界面"""
-        main_layout = LayoutManager.create_layout(LayoutType.FORM_CONTAINER, self)
-        
-        # 瓣叶选择
-        self.leaflet_combo = qt.QComboBox()
-        self.leaflet_combo.addItems(["选择瓣叶...", "LC", "RC", "NC"])
-        self.leaflet_combo.currentTextChanged.connect(self._on_leaflet_changed)
-        main_layout.addRow("瓣叶:", self.leaflet_combo)
-        
-        # 分割控制
-        self.start_segment_btn = LayoutManager.create_button_with_style(
-            "开始标记", "primary", "default", 40
-        )
-        self.start_segment_btn.clicked.connect(self._on_start_segmentation)
-        self.start_segment_btn.setEnabled(False)
-        
-        self.finish_segment_btn = LayoutManager.create_button_with_style(
-            "完成", "success", "default", 40
-        )
-        self.finish_segment_btn.clicked.connect(self._on_finish_segmentation)
-        self.finish_segment_btn.setEnabled(False)
-        
-        segment_buttons_layout = qt.QHBoxLayout()
-        segment_buttons_layout.addWidget(self.start_segment_btn)
-        segment_buttons_layout.addWidget(self.finish_segment_btn)
-        main_layout.addRow("区域标记:", segment_buttons_layout)
-        
-        # 结果显示
-        self.area_label = qt.QLabel("--")
-        self.area_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        self.percentage_label = qt.QLabel("--")
-        self.percentage_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        self.grade_label = qt.QLabel("--")
-        self.grade_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        main_layout.addRow("面积:", self.area_label)
-        main_layout.addRow("占比:", self.percentage_label)
-        main_layout.addRow("分级:", self.grade_label)
-        
-        # 手动调整
-        self.manual_grade_combo = qt.QComboBox()
-        self.manual_grade_combo.addItems([
-            "自动", "≤25%", "25-50%", "50%-75%", ">75%"
-        ])
-        self.manual_grade_combo.currentTextChanged.connect(self._on_manual_grade_changed)
-        
-        main_layout.addRow("调整分级:", self.manual_grade_combo)
+    def get_analysis_results(self) -> Dict[str, Any]:
+        """获取分析结果 - 子类应该实现"""
+        return {'analysis_type': self.analysis_type, 'status': '基类默认实现'}
     
-    def _on_leaflet_changed(self, leaflet: str):
-        """瓣叶选择改变时的回调"""
-        if leaflet and not leaflet.startswith("选择"):
-            self.start_segment_btn.setEnabled(True)
-            logging.info(f"选择了瓣叶: {leaflet}")
-        else:
-            self.start_segment_btn.setEnabled(False)
+    def reset_analysis(self):
+        """重置分析 - 子类应该实现"""
+        logging.info(f"{self.analysis_type}分析重置 - 基类默认实现")
     
-    def _on_start_segmentation(self):
-        """开始分割标记"""
-        self.start_segment_btn.setEnabled(False)
-        self.finish_segment_btn.setEnabled(True)
-        logging.info("开始HALT区域标记")
-        # TODO: 实现分割逻辑
+    def on_activated(self):
+        """激活时的回调"""
+        logging.info(f"{self.analysis_type}分析界面激活")
     
-    def _on_finish_segmentation(self):
-        """完成分割标记"""
-        self.finish_segment_btn.setEnabled(False)
-        self.start_segment_btn.setEnabled(True)
-        logging.info("完成HALT区域标记")
-        # TODO: 实现计算逻辑
-        # 临时显示示例结果
-        self.area_label.setText("15.2 mm²")
-        self.percentage_label.setText("35.8%")
-        self.grade_label.setText("25-50%")
+    def on_deactivated(self):
+        """停用时的回调"""
+        logging.info(f"{self.analysis_type}分析界面停用")
     
-    def _on_manual_grade_changed(self, grade: str):
-        """手动分级调整"""
-        if grade != "使用自动分级":
-            self.grade_label.setText(grade)
-            logging.info(f"手动调整HALT分级为: {grade}")
+    def cleanup(self):
+        """清理资源"""
+        logging.info(f"{self.analysis_type}分析界面清理完成")
+    
+    def _emit_status_changed(self):
+        """发出状态改变信号"""
+        results = self.get_analysis_results()
+        self.statusChanged.emit(results)
 
 
-class RelmAnalysisSection(qt.QWidget):
-    """RELM (瓣叶活动度减退) 分析区域"""
+class RelmAnalysisWidget(BaseAnalysisWidget):
+    """RELM (瓣叶活动度减退) 分析界面占位符"""
     
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("RelmAnalysisSection")
+    def __init__(self, session: TAVRStudySession, logic: Optional[RelmAnalysisLogic] = None, parent=None):
+        super().__init__("RELM", session, parent)
+        self.logic = logic or RelmAnalysisLogic()
+        self.logic.set_session(session)
         self._setup_ui()
     
     def _setup_ui(self):
         """设置RELM分析界面"""
-        main_layout = LayoutManager.create_layout(LayoutType.FORM_CONTAINER, self)
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
+        
+        # 标题
+        title = qt.QLabel("RELM 瓣叶活动度减退分析")
+        title.setAlignment(qt.Qt.AlignCenter)
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+                color: #2c3e50;
+                background-color: #e8f4f8;
+                padding: 6px 12px;
+                border: 1px solid #bee5eb;
+                border-radius: 4px;
+                margin-bottom: 3px;
+            }
+        """)
+        main_layout.addWidget(title)
+        
+        # 占位符内容区域
+        content_frame = qt.QFrame()
+        content_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 12px;
+            }
+        """)
+        
+        content_layout = qt.QVBoxLayout(content_frame)
+        content_layout.setSpacing(10)
         
         # 瓣叶选择
+        leaflet_layout = qt.QHBoxLayout()
+        leaflet_label = qt.QLabel("瓣叶选择:")
+        leaflet_label.setStyleSheet("font-weight: bold; color: #495057;")
+        
         self.leaflet_combo = qt.QComboBox()
-        self.leaflet_combo.addItems(["选择瓣叶...", "LC", "RC", "NC"])
+        self.leaflet_combo.addItems(["请选择瓣叶...", "LC", "RC", "NC"])
         self.leaflet_combo.currentTextChanged.connect(self._on_leaflet_changed)
-        main_layout.addRow("瓣叶:", self.leaflet_combo)
         
-        # 测量控制
-        self.measure_width_btn = LayoutManager.create_button_with_style(
-            "测量宽度 (W)", "primary", "default", 40
+        leaflet_layout.addWidget(leaflet_label)
+        leaflet_layout.addWidget(self.leaflet_combo)
+        leaflet_layout.addStretch()
+        content_layout.addLayout(leaflet_layout)
+        
+        # 占位符提示
+        placeholder_label = qt.QLabel("📝 RELM分析功能占位符")
+        placeholder_label.setAlignment(qt.Qt.AlignCenter)
+        placeholder_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #6c757d;
+                background-color: #f8f9fa;
+                border: 2px dashed #dee2e6;
+                border-radius: 6px;
+                padding: 20px;
+                margin: 10px 0;
+            }
+        """)
+        content_layout.addWidget(placeholder_label)
+        
+        # 详细说明
+        description = qt.QLabel(
+            "RELM分析将包含以下功能：\n"
+            "• 增厚瓣叶宽度测量\n"
+            "• 支架内径测量\n" 
+            "• RELM值自动计算\n"
+            "• 分级评估与报告生成"
         )
-        self.measure_width_btn.clicked.connect(self._on_measure_width)
-        self.measure_width_btn.setEnabled(False)
+        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
+        content_layout.addWidget(description)
         
-        self.measure_diameter_btn = LayoutManager.create_button_with_style(
-            "测量内径 (D)", "secondary", "default", 40
-        )
-        self.measure_diameter_btn.clicked.connect(self._on_measure_diameter)
-        self.measure_diameter_btn.setEnabled(False)
+        main_layout.addWidget(content_frame)
         
-        self.calculate_relm_btn = LayoutManager.create_button_with_style(
-            "计算RELM", "accent", "default", 40
-        )
-        self.calculate_relm_btn.clicked.connect(self._on_calculate_relm)
-        self.calculate_relm_btn.setEnabled(False)
+        # 操作按钮
+        self._create_action_buttons(main_layout)
+    
+    def _create_action_buttons(self, parent_layout):
+        """创建操作按钮"""
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(8)
         
-        measure_buttons_layout = qt.QHBoxLayout()
-        measure_buttons_layout.addWidget(self.measure_width_btn)
-        measure_buttons_layout.addWidget(self.measure_diameter_btn)
+        # 重置按钮
+        reset_btn = qt.QPushButton("重置分析")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_analysis)
         
-        main_layout.addRow("测量:", measure_buttons_layout)
-        main_layout.addRow("计算:", self.calculate_relm_btn)
+        # 状态按钮
+        status_btn = qt.QPushButton("查看状态")
+        status_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        status_btn.clicked.connect(self._show_status)
         
-        # 测量结果
-        self.width_label = qt.QLabel("--")
-        self.width_label.setStyleSheet(StyleManager.get_label_style("data"))
+        buttons_layout.addWidget(reset_btn)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(status_btn)
         
-        self.diameter_label = qt.QLabel("--")
-        self.diameter_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        self.relm_value_label = qt.QLabel("--")
-        self.relm_value_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        self.relm_grade_label = qt.QLabel("--")
-        self.relm_grade_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        main_layout.addRow("宽度 (W):", self.width_label)
-        main_layout.addRow("内径 (D):", self.diameter_label)
-        main_layout.addRow("RELM值:", self.relm_value_label)
-        main_layout.addRow("分级:", self.relm_grade_label)
-        
-        # 手动调整
-        self.manual_grade_combo = qt.QComboBox()
-        self.manual_grade_combo.addItems([
-            "自动", "正常", "轻度", "中度", "重度"
-        ])
-        self.manual_grade_combo.currentTextChanged.connect(self._on_manual_grade_changed)
-        
-        main_layout.addRow("调整分级:", self.manual_grade_combo)
+        parent_layout.addLayout(buttons_layout)
     
     def _on_leaflet_changed(self, leaflet: str):
         """瓣叶选择改变时的回调"""
-        if leaflet and not leaflet.startswith("选择"):
-            self.measure_width_btn.setEnabled(True)
-            self.measure_diameter_btn.setEnabled(True)
-            logging.info(f"选择了瓣叶: {leaflet}")
-        else:
-            self.measure_width_btn.setEnabled(False)
-            self.measure_diameter_btn.setEnabled(False)
-            self.calculate_relm_btn.setEnabled(False)
+        if leaflet and not leaflet.startswith("请选择"):
+            self.logic.set_leaflet(leaflet)
+            self._emit_status_changed()
+            logging.info(f"RELM分析选择瓣叶: {leaflet}")
     
-    def _on_measure_width(self):
-        """测量增厚宽度"""
-        logging.info("开始测量增厚宽度")
-        # TODO: 实现测量逻辑
-        self.width_label.setText("3.2 mm")
-        self._check_calculate_ready()
+    def _show_status(self):
+        """显示当前状态"""
+        results = self.get_analysis_results()
+        status_text = f"分析类型: {results['analysis_type']}\\n"
+        status_text += f"状态: {results['status']}\\n"
+        status_text += f"当前瓣叶: {results.get('leaflet', '未选择')}\\n"
+        status_text += f"占位符: {results.get('placeholder', False)}"
+        
+        qt.QMessageBox.information(self, "RELM分析状态", status_text)
     
-    def _on_measure_diameter(self):
-        """测量支架内径"""
-        logging.info("开始测量支架内径")
-        # TODO: 实现测量逻辑
-        self.diameter_label.setText("22.5 mm")
-        self._check_calculate_ready()
+    def get_analysis_results(self) -> Dict[str, Any]:
+        """获取RELM分析结果"""
+        return self.logic.get_analysis_results()
     
-    def _check_calculate_ready(self):
-        """检查是否可以计算RELM"""
-        if (self.width_label.text() != "--" and 
-            self.diameter_label.text() != "--"):
-            self.calculate_relm_btn.setEnabled(True)
-    
-    def _on_calculate_relm(self):
-        """计算RELM"""
-        logging.info("计算RELM值")
-        # TODO: 实现RELM计算
-        self.relm_value_label.setText("28.4%")
-        self.relm_grade_label.setText("轻度")
-    
-    def _on_manual_grade_changed(self, grade: str):
-        """手动分级调整"""
-        if grade != "使用自动分级":
-            self.relm_grade_label.setText(grade)
-            logging.info(f"手动调整RELM分级为: {grade}")
+    def reset_analysis(self):
+        """重置RELM分析"""
+        self.logic.reset_analysis()
+        self.leaflet_combo.setCurrentIndex(0)
+        self._emit_status_changed()
+        logging.info("RELM分析已重置")
 
 
-class SfdAnalysisSection(qt.QWidget):
-    """SFD (窦内充盈缺损) 分析区域"""
+class SfdAnalysisWidget(BaseAnalysisWidget):
+    """SFD (窦内充盈缺损) 分析界面占位符"""
     
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("SfdAnalysisSection")
+    def __init__(self, session: TAVRStudySession, logic: Optional[SfdAnalysisLogic] = None, parent=None):
+        super().__init__("SFD", session, parent)
+        self.logic = logic or SfdAnalysisLogic()
+        self.logic.set_session(session)
         self._setup_ui()
     
     def _setup_ui(self):
         """设置SFD分析界面"""
-        main_layout = LayoutManager.create_layout(LayoutType.FORM_CONTAINER, self)
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
         
-        # SFD存在性评估
-        self.sfd_status_group = qt.QButtonGroup()
-        self.sfd_none_radio = qt.QRadioButton("无")
-        self.sfd_present_radio = qt.QRadioButton("有")
-        self.sfd_indeterminate_radio = qt.QRadioButton("难以判定")
+        # 标题
+        title = qt.QLabel("SFD 窦内充盈缺损分析")
+        title.setAlignment(qt.Qt.AlignCenter)
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+                color: #2c3e50;
+                background-color: #fff3cd;
+                padding: 6px 12px;
+                border: 1px solid #ffeaa7;
+                border-radius: 4px;
+                margin-bottom: 3px;
+            }
+        """)
+        main_layout.addWidget(title)
         
-        self.sfd_status_group.addButton(self.sfd_none_radio, 0)
-        self.sfd_status_group.addButton(self.sfd_present_radio, 1)
-        self.sfd_status_group.addButton(self.sfd_indeterminate_radio, 2)
+        # 占位符内容区域
+        content_frame = qt.QFrame()
+        content_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 12px;
+            }
+        """)
         
-        # 默认选择"无"
-        self.sfd_none_radio.setChecked(True)
+        content_layout = qt.QVBoxLayout(content_frame)
+        content_layout.setSpacing(10)
         
-        self.sfd_status_group.buttonClicked.connect(self._on_sfd_status_changed)
-        
+        # SFD状态选择
         status_layout = qt.QHBoxLayout()
-        status_layout.addWidget(self.sfd_none_radio)
-        status_layout.addWidget(self.sfd_present_radio)
-        status_layout.addWidget(self.sfd_indeterminate_radio)
+        status_label = qt.QLabel("SFD状态:")
+        status_label.setStyleSheet("font-weight: bold; color: #495057;")
         
-        main_layout.addRow("状态:", status_layout)
+        self.status_group = qt.QButtonGroup()
+        self.none_radio = qt.QRadioButton("无")
+        self.present_radio = qt.QRadioButton("有")
+        self.indeterminate_radio = qt.QRadioButton("难以判定")
         
-        # 受累主动脉窦选择
-        self.lc_sinus_checkbox = qt.QCheckBox("LC")
-        self.rc_sinus_checkbox = qt.QCheckBox("RC")
-        self.nc_sinus_checkbox = qt.QCheckBox("NC")
+        self.none_radio.setChecked(True)  # 默认选择
         
-        # 初始状态禁用
-        self.lc_sinus_checkbox.setEnabled(False)
-        self.rc_sinus_checkbox.setEnabled(False)
-        self.nc_sinus_checkbox.setEnabled(False)
+        self.status_group.addButton(self.none_radio, 0)
+        self.status_group.addButton(self.present_radio, 1)
+        self.status_group.addButton(self.indeterminate_radio, 2)
+        self.status_group.buttonClicked.connect(self._on_status_changed)
         
-        self.lc_sinus_checkbox.stateChanged.connect(self._on_sinus_selection_changed)
-        self.rc_sinus_checkbox.stateChanged.connect(self._on_sinus_selection_changed)
-        self.nc_sinus_checkbox.stateChanged.connect(self._on_sinus_selection_changed)
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(self.none_radio)
+        status_layout.addWidget(self.present_radio)
+        status_layout.addWidget(self.indeterminate_radio)
+        status_layout.addStretch()
+        content_layout.addLayout(status_layout)
         
-        sinus_layout = qt.QHBoxLayout()
-        sinus_layout.addWidget(self.lc_sinus_checkbox)
-        sinus_layout.addWidget(self.rc_sinus_checkbox)
-        sinus_layout.addWidget(self.nc_sinus_checkbox)
+        # 占位符提示
+        placeholder_label = qt.QLabel("📝 SFD分析功能占位符")
+        placeholder_label.setAlignment(qt.Qt.AlignCenter)
+        placeholder_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #6c757d;
+                background-color: #f8f9fa;
+                border: 2px dashed #dee2e6;
+                border-radius: 6px;
+                padding: 20px;
+                margin: 10px 0;
+            }
+        """)
+        content_layout.addWidget(placeholder_label)
         
-        main_layout.addRow("受累窦部:", sinus_layout)
+        # 详细说明
+        description = qt.QLabel(
+            "SFD分析将包含以下功能：\n"
+            "• 主动脉窦充盈缺损检测\n"
+            "• 受累窦部标记与记录\n" 
+            "• 缺损程度评估\n"
+            "• 临床意义分析报告"
+        )
+        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
+        content_layout.addWidget(description)
         
-        # 分析结果
-        self.sfd_result_label = qt.QLabel("无SFD")
-        self.sfd_result_label.setStyleSheet(StyleManager.get_label_style("data"))
+        main_layout.addWidget(content_frame)
         
-        self.affected_sinuses_label = qt.QLabel("无")
-        self.affected_sinuses_label.setStyleSheet(StyleManager.get_label_style("data"))
-        
-        main_layout.addRow("SFD:", self.sfd_result_label)
-        main_layout.addRow("受累窦部:", self.affected_sinuses_label)
+        # 操作按钮
+        self._create_action_buttons(main_layout)
     
-    def _on_sfd_status_changed(self, button):
+    def _create_action_buttons(self, parent_layout):
+        """创建操作按钮"""
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(8)
+        
+        # 重置按钮
+        reset_btn = qt.QPushButton("重置分析")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_analysis)
+        
+        # 状态按钮
+        status_btn = qt.QPushButton("查看状态")
+        status_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #ffc107;
+                color: #212529;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #e0a800;
+            }
+        """)
+        status_btn.clicked.connect(self._show_status)
+        
+        buttons_layout.addWidget(reset_btn)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(status_btn)
+        
+        parent_layout.addLayout(buttons_layout)
+    
+    def _on_status_changed(self, button):
         """SFD状态改变时的回调"""
-        button_id = self.sfd_status_group.id(button)
+        button_id = self.status_group.id(button)
+        status_map = {0: 'none', 1: 'present', 2: 'indeterminate'}
+        status = status_map.get(button_id, 'none')
         
-        if button_id == 1:  # "有"被选中
-            self.lc_sinus_checkbox.setEnabled(True)
-            self.rc_sinus_checkbox.setEnabled(True)
-            self.nc_sinus_checkbox.setEnabled(True)
-            self.sfd_result_label.setText("存在SFD")
-            logging.info("SFD状态: 存在")
-        else:
-            # "无"或"难以判定"被选中
-            self.lc_sinus_checkbox.setEnabled(False)
-            self.rc_sinus_checkbox.setEnabled(False)
-            self.nc_sinus_checkbox.setEnabled(False)
-            
-            # 清除选择
-            self.lc_sinus_checkbox.setChecked(False)
-            self.rc_sinus_checkbox.setChecked(False)
-            self.nc_sinus_checkbox.setChecked(False)
-            
-            if button_id == 0:
-                self.sfd_result_label.setText("无SFD")
-                self.affected_sinuses_label.setText("无")
-                logging.info("SFD状态: 无")
-            else:
-                self.sfd_result_label.setText("难以判定")
-                self.affected_sinuses_label.setText("难以判定")
-                logging.info("SFD状态: 难以判定")
+        self.logic.set_status(status)
+        self._emit_status_changed()
+        logging.info(f"SFD状态设置为: {status}")
     
-    def _on_sinus_selection_changed(self):
-        """受累窦部选择改变时的回调"""
-        affected = []
-        if self.lc_sinus_checkbox.isChecked():
-            affected.append("LC")
-        if self.rc_sinus_checkbox.isChecked():
-            affected.append("RC")
-        if self.nc_sinus_checkbox.isChecked():
-            affected.append("NC")
+    def _show_status(self):
+        """显示当前状态"""
+        results = self.get_analysis_results()
+        status_text = f"分析类型: {results['analysis_type']}\\n"
+        status_text += f"状态: {results['status']}\\n"
+        status_text += f"受累窦部: {', '.join(results.get('affected_sinuses', []))  or '无'}\\n"
+        status_text += f"占位符: {results.get('placeholder', False)}"
         
-        if affected:
-            self.affected_sinuses_label.setText(", ".join(affected))
-        else:
-            self.affected_sinuses_label.setText("无")
-        
-        logging.info(f"受累窦部: {affected}")
+        qt.QMessageBox.information(self, "SFD分析状态", status_text)
+    
+    def get_analysis_results(self) -> Dict[str, Any]:
+        """获取SFD分析结果"""
+        return self.logic.get_analysis_results()
+    
+    def reset_analysis(self):
+        """重置SFD分析"""
+        self.logic.reset_analysis()
+        self.none_radio.setChecked(True)
+        self._emit_status_changed()
+        logging.info("SFD分析已重置")
 
 
-class PfdAnalysisSection(qt.QWidget):
-    """PFD (瓣叶下充盈缺损) 分析区域"""
+class PfdAnalysisWidget(BaseAnalysisWidget):
+    """PFD (瓣叶下充盈缺损) 分析界面占位符"""
     
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("PfdAnalysisSection")
+    def __init__(self, session: TAVRStudySession, logic: Optional[PfdAnalysisLogic] = None, parent=None):
+        super().__init__("PFD", session, parent)
+        self.logic = logic or PfdAnalysisLogic()
+        self.logic.set_session(session)
         self._setup_ui()
     
     def _setup_ui(self):
         """设置PFD分析界面"""
-        main_layout = LayoutManager.create_layout(LayoutType.FORM_CONTAINER, self)
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
         
-        # PFD存在性评估
-        self.pfd_status_group = qt.QButtonGroup()
-        self.pfd_none_radio = qt.QRadioButton("无")
-        self.pfd_present_radio = qt.QRadioButton("有")
-        self.pfd_indeterminate_radio = qt.QRadioButton("难以判定")
+        # 标题
+        title = qt.QLabel("PFD 瓣叶下充盈缺损分析")
+        title.setAlignment(qt.Qt.AlignCenter)
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+                color: #2c3e50;
+                background-color: #fdeaea;
+                padding: 6px 12px;
+                border: 1px solid #fadbd8;
+                border-radius: 4px;
+                margin-bottom: 3px;
+            }
+        """)
+        main_layout.addWidget(title)
         
-        self.pfd_status_group.addButton(self.pfd_none_radio, 0)
-        self.pfd_status_group.addButton(self.pfd_present_radio, 1)
-        self.pfd_status_group.addButton(self.pfd_indeterminate_radio, 2)
+        # 占位符内容区域
+        content_frame = qt.QFrame()
+        content_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 12px;
+            }
+        """)
         
-        # 默认选择"无"
-        self.pfd_none_radio.setChecked(True)
+        content_layout = qt.QVBoxLayout(content_frame)
+        content_layout.setSpacing(10)
         
-        self.pfd_status_group.buttonClicked.connect(self._on_pfd_status_changed)
-        
+        # PFD状态选择
         status_layout = qt.QHBoxLayout()
-        status_layout.addWidget(self.pfd_none_radio)
-        status_layout.addWidget(self.pfd_present_radio)
-        status_layout.addWidget(self.pfd_indeterminate_radio)
+        status_label = qt.QLabel("PFD状态:")
+        status_label.setStyleSheet("font-weight: bold; color: #495057;")
         
-        main_layout.addRow("状态:", status_layout)
+        self.status_group = qt.QButtonGroup()
+        self.none_radio = qt.QRadioButton("无")
+        self.present_radio = qt.QRadioButton("有")
+        self.indeterminate_radio = qt.QRadioButton("难以判定")
         
-        # PFD测量
-        self.measure_thickness_btn = LayoutManager.create_button_with_style(
-            "测量厚度", "primary", "default", 40
-        )
-        self.measure_thickness_btn.clicked.connect(self._on_measure_thickness)
-        self.measure_thickness_btn.setEnabled(False)
+        self.none_radio.setChecked(True)  # 默认选择
         
-        main_layout.addRow("测量:", self.measure_thickness_btn)
+        self.status_group.addButton(self.none_radio, 0)
+        self.status_group.addButton(self.present_radio, 1)
+        self.status_group.addButton(self.indeterminate_radio, 2)
+        self.status_group.buttonClicked.connect(self._on_status_changed)
         
-        # 测量结果
-        self.pfd_result_label = qt.QLabel("无PFD")
-        self.pfd_result_label.setStyleSheet(StyleManager.get_label_style("data"))
+        status_layout.addWidget(status_label)
+        status_layout.addWidget(self.none_radio)
+        status_layout.addWidget(self.present_radio)
+        status_layout.addWidget(self.indeterminate_radio)
+        status_layout.addStretch()
+        content_layout.addLayout(status_layout)
         
-        self.thickness_label = qt.QLabel("--")
-        self.thickness_label.setStyleSheet(StyleManager.get_label_style("data"))
+        # 厚度输入（条件显示）
+        thickness_layout = qt.QHBoxLayout()
+        thickness_label = qt.QLabel("厚度 (mm):")
+        thickness_label.setStyleSheet("font-weight: bold; color: #495057;")
         
-        main_layout.addRow("PFD:", self.pfd_result_label)
-        main_layout.addRow("厚度:", self.thickness_label)
-        
-        # 手动输入
         self.thickness_spinbox = qt.QDoubleSpinBox()
         self.thickness_spinbox.setRange(0.0, 50.0)
         self.thickness_spinbox.setDecimals(1)
         self.thickness_spinbox.setSuffix(" mm")
         self.thickness_spinbox.setEnabled(False)
-        self.thickness_spinbox.valueChanged.connect(self._on_manual_thickness_changed)
+        self.thickness_spinbox.valueChanged.connect(self._on_thickness_changed)
         
-        main_layout.addRow("手动厚度:", self.thickness_spinbox)
+        thickness_layout.addWidget(thickness_label)
+        thickness_layout.addWidget(self.thickness_spinbox)
+        thickness_layout.addStretch()
+        content_layout.addLayout(thickness_layout)
+        
+        # 占位符提示
+        placeholder_label = qt.QLabel("📝 PFD分析功能占位符")
+        placeholder_label.setAlignment(qt.Qt.AlignCenter)
+        placeholder_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #6c757d;
+                background-color: #f8f9fa;
+                border: 2px dashed #dee2e6;
+                border-radius: 6px;
+                padding: 20px;
+                margin: 10px 0;
+            }
+        """)
+        content_layout.addWidget(placeholder_label)
+        
+        # 详细说明
+        description = qt.QLabel(
+            "PFD分析将包含以下功能：\n"
+            "• 瓣叶下充盈缺损检测\n"
+            "• 最大厚度测量工具\n" 
+            "• 缺损范围与程度评估\n"
+            "• 血流动力学影响分析"
+        )
+        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
+        content_layout.addWidget(description)
+        
+        main_layout.addWidget(content_frame)
+        
+        # 操作按钮
+        self._create_action_buttons(main_layout)
     
-    def _on_pfd_status_changed(self, button):
+    def _create_action_buttons(self, parent_layout):
+        """创建操作按钮"""
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(8)
+        
+        # 重置按钮
+        reset_btn = qt.QPushButton("重置分析")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_analysis)
+        
+        # 状态按钮
+        status_btn = qt.QPushButton("查看状态")
+        status_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 11px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        status_btn.clicked.connect(self._show_status)
+        
+        buttons_layout.addWidget(reset_btn)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(status_btn)
+        
+        parent_layout.addLayout(buttons_layout)
+    
+    def _on_status_changed(self, button):
         """PFD状态改变时的回调"""
-        button_id = self.pfd_status_group.id(button)
+        button_id = self.status_group.id(button)
+        status_map = {0: 'none', 1: 'present', 2: 'indeterminate'}
+        status = status_map.get(button_id, 'none')
         
-        if button_id == 1:  # "有"被选中
-            self.measure_thickness_btn.setEnabled(True)
-            self.thickness_spinbox.setEnabled(True)
-            self.pfd_result_label.setText("存在PFD")
-            self.thickness_label.setText("--")
-        else:
-            # "无"或"难以判定"被选中
-            self.measure_thickness_btn.setEnabled(False)
-            self.thickness_spinbox.setEnabled(False)
+        # 启用或禁用厚度输入
+        self.thickness_spinbox.setEnabled(status == 'present')
+        if status != 'present':
             self.thickness_spinbox.setValue(0.0)
-            
-            if button_id == 0:
-                self.pfd_result_label.setText("无PFD")
-                self.thickness_label.setText("--")
-            else:
-                self.pfd_result_label.setText("难以判定")
-                self.thickness_label.setText("--")
+        
+        self.logic.set_status(status)
+        self._emit_status_changed()
+        logging.info(f"PFD状态设置为: {status}")
     
-    def _on_measure_thickness(self):
-        """测量充盈缺损厚度"""
-        # TODO: 实现测量逻辑
-        self.thickness_label.setText("2.3 mm")
-        self.thickness_spinbox.setValue(2.3)
+    def _on_thickness_changed(self, value):
+        """厚度值改变时的回调"""
+        self.logic.set_thickness(value)
+        self._emit_status_changed()
+        logging.info(f"PFD厚度设置为: {value} mm")
     
-    def _on_manual_thickness_changed(self, value):
-        """手动厚度输入改变时的回调"""
-        if value > 0:
-            self.thickness_label.setText(f"{value:.1f} mm")
+    def _show_status(self):
+        """显示当前状态"""
+        results = self.get_analysis_results()
+        status_text = f"分析类型: {results['analysis_type']}\\n"
+        status_text += f"状态: {results['status']}\\n"
+        thickness = results.get('max_thickness')
+        thickness_text = f"{thickness} mm" if thickness is not None else "未设置"
+        status_text += f"最大厚度: {thickness_text}\\n"
+        status_text += f"占位符: {results.get('placeholder', False)}"
+        
+        qt.QMessageBox.information(self, "PFD分析状态", status_text)
+    
+    def get_analysis_results(self) -> Dict[str, Any]:
+        """获取PFD分析结果"""
+        return self.logic.get_analysis_results()
+    
+    def reset_analysis(self):
+        """重置PFD分析"""
+        self.logic.reset_analysis()
+        self.none_radio.setChecked(True)
+        self.thickness_spinbox.setValue(0.0)
+        self.thickness_spinbox.setEnabled(False)
+        self._emit_status_changed()
+        logging.info("PFD分析已重置")
 
 
-class PasteAnalysisWidget(qt.QWidget):
-    """PASTE分析主界面"""
+class Module3AnalysisWidget(qt.QWidget):
+    """模块三标准化分析主界面"""
     
-    def __init__(self, session: TAVRStudySession, logic: Optional[PasteAnalysisLogic] = None, parent=None):
+    # 状态改变信号
+    statusChanged = qt.Signal(dict)
+    
+    def __init__(self, session: TAVRStudySession, logic: Optional[Module3AnalysisLogic] = None, parent=None):
         super().__init__(parent)
         self.session = session
-        self.logic = logic or PasteAnalysisLogic()
+        self.logic = logic or Module3AnalysisLogic()
+        self.logic.set_session(session)
         
-        self.setObjectName("PasteAnalysisWidget")
+        self.setObjectName("Module3AnalysisWidget")
         self._setup_ui()
-        logging.info("PasteAnalysisWidget 初始化完成")
+        logging.info("模块三分析界面初始化完成")
     
     def _setup_ui(self):
-        """设置PASTE分析主界面"""
+        """设置主界面"""
         main_layout = qt.QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(5)
+        main_layout.setSpacing(8)
         
         # 主标题
-        title = qt.QLabel("瓣叶功能评估 (PASTE分析)")
+        title = qt.QLabel("模块三：瓣叶功能评估分析")
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet(StyleManager.get_label_style("large"))
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #2c3e50;
+                background-color: #f8f9fa;
+                padding: 8px 16px;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                margin-bottom: 5px;
+            }
+        """)
+        main_layout.addWidget(title)
         
-        # 创建可滚动区域
-        scroll_area = qt.QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
-        scroll_area.setFrameShape(qt.QFrame.NoFrame)  # 移除边框
-        scroll_area.setMinimumHeight(400)  # 设置最小高度确保滚动条出现
-        
-        # 设置滚动区域样式，美化滚动条
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
+        # 创建选项卡容器
+        self.analysis_tabs = qt.QTabWidget()
+        self.analysis_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                background-color: white;
             }
-            QScrollBar:vertical {
-                border: none;
-                background: #f1f1f1;
-                width: 12px;
-                border-radius: 6px;
+            QTabBar::tab {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
             }
-            QScrollBar::handle:vertical {
-                background: #c1c1c1;
-                border-radius: 6px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #a8a8a8;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background: #f1f1f1;
-                height: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:horizontal {
-                background: #c1c1c1;
-                border-radius: 6px;
-                min-width: 20px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background: #a8a8a8;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom-color: white;
             }
         """)
         
-        # 创建滚动内容容器
-        scroll_content = qt.QWidget()
-        scroll_content.setMinimumSize(400, 800)  # 设置最小尺寸确保内容足够大
-        scroll_layout = qt.QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(10, 10, 10, 10)
-        scroll_layout.setSpacing(10)
+        # 创建分析模块
+        self.relm_widget = RelmAnalysisWidget(self.session, self.logic.get_relm_logic(), self)
+        self.sfd_widget = SfdAnalysisWidget(self.session, self.logic.get_sfd_logic(), self)
+        self.pfd_widget = PfdAnalysisWidget(self.session, self.logic.get_pfd_logic(), self)
         
-        # 创建四个分析区域，直接作为section frame
-        halt_frame = LayoutManager.create_section_frame("HALT Analysis")
-        halt_layout = qt.QVBoxLayout(halt_frame)
-        halt_layout.addWidget(HaltAnalysisSection())
+        # 连接信号
+        self.relm_widget.statusChanged.connect(self._on_child_status_changed)
+        self.sfd_widget.statusChanged.connect(self._on_child_status_changed)
+        self.pfd_widget.statusChanged.connect(self._on_child_status_changed)
         
-        relm_frame = LayoutManager.create_section_frame("RELM Analysis")
-        relm_layout = qt.QVBoxLayout(relm_frame)
-        relm_layout.addWidget(RelmAnalysisSection())
+        # 添加到选项卡
+        self.analysis_tabs.addTab(self.relm_widget, "RELM分析")
+        self.analysis_tabs.addTab(self.sfd_widget, "SFD分析")
+        self.analysis_tabs.addTab(self.pfd_widget, "PFD分析")
         
-        sfd_frame = LayoutManager.create_section_frame("SFD Analysis")
-        sfd_layout = qt.QVBoxLayout(sfd_frame)
-        sfd_layout.addWidget(SfdAnalysisSection())
+        main_layout.addWidget(self.analysis_tabs, 1)
         
-        pfd_frame = LayoutManager.create_section_frame("PFD Analysis")
-        pfd_layout = qt.QVBoxLayout(pfd_frame)
-        pfd_layout.addWidget(PfdAnalysisSection())
-        
-        # 添加到滚动布局
-        scroll_layout.addWidget(halt_frame)
-        scroll_layout.addWidget(relm_frame)
-        scroll_layout.addWidget(sfd_frame)
-        scroll_layout.addWidget(pfd_frame)
-        
-        # 添加弹性空间，确保内容顶部对齐
-        scroll_layout.addStretch()
-        
-        # 设置滚动内容
-        scroll_area.setWidget(scroll_content)
-        
-        # 操作按钮区域 - 直接使用水平布局
-        self.reset_all_btn = LayoutManager.create_button_with_style(
-            "重置所有分析", "warning", "default", 40
-        )
-        self.reset_all_btn.clicked.connect(self._on_reset_all)
-        
-        self.export_results_btn = LayoutManager.create_button_with_style(
-            "导出分析结果", "info", "default", 40
-        )
-        self.export_results_btn.clicked.connect(self._on_export_results)
-        
-        self.save_session_btn = LayoutManager.create_button_with_style(
-            "保存到会话", "success", "default", 40
-        )
-        self.save_session_btn.clicked.connect(self._on_save_session)
-        
-        actions_buttons_layout = qt.QHBoxLayout()
-        actions_buttons_layout.addWidget(self.reset_all_btn)
-        actions_buttons_layout.addWidget(self.export_results_btn)
-        actions_buttons_layout.addWidget(self.save_session_btn)
-        
-        # 组装主布局
-        main_layout.addWidget(title)
-        main_layout.addWidget(scroll_area, 1)  # 占据大部分空间
-        main_layout.addLayout(actions_buttons_layout)
+        # 全局操作按钮
+        self._create_global_actions(main_layout)
     
-    def _on_reset_all(self):
+    def _create_global_actions(self, parent_layout):
+        """创建全局操作按钮"""
+        actions_frame = qt.QFrame()
+        actions_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """)
+        
+        actions_layout = qt.QHBoxLayout(actions_frame)
+        actions_layout.setSpacing(8)
+        
+        # 重置所有按钮
+        reset_all_btn = qt.QPushButton("重置所有分析")
+        reset_all_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 11px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        reset_all_btn.clicked.connect(self._reset_all_analyses)
+        
+        # 导出结果按钮
+        export_btn = qt.QPushButton("导出分析结果")
+        export_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 11px;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        export_btn.clicked.connect(self._export_results)
+        
+        # 查看摘要按钮
+        summary_btn = qt.QPushButton("查看分析摘要")
+        summary_btn.setStyleSheet("""
+            QPushButton {
+                padding: 8px 16px;
+                font-size: 11px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        summary_btn.clicked.connect(self._show_summary)
+        
+        actions_layout.addWidget(reset_all_btn)
+        actions_layout.addStretch()
+        actions_layout.addWidget(summary_btn)
+        actions_layout.addWidget(export_btn)
+        
+        parent_layout.addWidget(actions_frame)
+    
+    def _on_child_status_changed(self, results):
+        """子模块状态改变时的回调"""
+        # 汇总所有结果并发出信号
+        all_results = self.get_all_analysis_results()
+        self.statusChanged.emit(all_results)
+    
+    def _reset_all_analyses(self):
         """重置所有分析"""
-        # TODO: 实现重置逻辑
-        qt.QMessageBox.information(self, "重置", "所有PASTE分析已重置")
+        reply = qt.QMessageBox.question(
+            self,
+            "确认重置",
+            "确定要重置所有分析吗？\\n\\n这将清除所有输入的数据。",
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        
+        if reply == qt.QMessageBox.Yes:
+            self.logic.reset_all_analyses()
+            self.relm_widget.reset_analysis()
+            self.sfd_widget.reset_analysis() 
+            self.pfd_widget.reset_analysis()
+            logging.info("所有模块三分析已重置")
     
-    def _on_export_results(self):
+    def _export_results(self):
         """导出分析结果"""
-        # TODO: 实现导出逻辑
-        qt.QMessageBox.information(self, "导出", "PASTE分析结果已导出")
+        try:
+            results = self.get_all_analysis_results()
+            
+            # 简单的文本导出
+            from pathlib import Path
+            import json
+            
+            export_dir = Path.home() / "TAVR_Analytics_Exports"
+            export_dir.mkdir(exist_ok=True)
+            
+            timestamp = qt.QDateTime.currentDateTime().toString("yyyy-MM-dd_hh-mm-ss")
+            
+            # 导出JSON数据
+            json_file = export_dir / f"Module3_Analysis_{timestamp}.json"
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+            
+            # 导出摘要报告
+            summary = self.logic.get_analysis_summary()
+            report_file = export_dir / f"Module3_Summary_{timestamp}.txt"
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write(summary)
+            
+            qt.QMessageBox.information(
+                self,
+                "导出成功",
+                f"模块三分析结果已导出：\\n\\n"
+                f"数据文件：{json_file}\\n"
+                f"摘要文件：{report_file}"
+            )
+            
+        except Exception as e:
+            logging.error(f"导出模块三分析结果失败: {e}")
+            qt.QMessageBox.critical(
+                self,
+                "导出失败",
+                f"导出过程中出现错误：\\n{e}"
+            )
     
-    def _on_save_session(self):
-        """保存到会话"""
-        # TODO: 实现保存逻辑
-        qt.QMessageBox.information(self, "保存", "PASTE分析结果已保存到会话")
+    def _show_summary(self):
+        """显示分析摘要"""
+        summary = self.logic.get_analysis_summary()
+        
+        # 创建摘要对话框
+        dialog = qt.QDialog(self)
+        dialog.setWindowTitle("模块三分析摘要")
+        dialog.setModal(True)
+        dialog.resize(400, 300)
+        
+        layout = qt.QVBoxLayout(dialog)
+        
+        # 摘要文本
+        summary_text = qt.QTextEdit()
+        summary_text.setPlainText(summary)
+        summary_text.setReadOnly(True)
+        summary_text.setStyleSheet("""
+            QTextEdit {
+                font-family: monospace;
+                font-size: 11px;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+            }
+        """)
+        layout.addWidget(summary_text)
+        
+        # 关闭按钮
+        close_btn = qt.QPushButton("关闭")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.exec_()
+    
+    def get_all_analysis_results(self) -> Dict[str, Any]:
+        """获取所有分析结果"""
+        return self.logic.get_all_results()
     
     def set_session(self, session: TAVRStudySession):
-        """设置会话"""
+        """设置会话对象"""
         self.session = session
-        if self.logic:
-            # TODO: 将session传递给logic
-            pass
+        self.logic.set_session(session)
+        self.relm_widget.session = session
+        self.sfd_widget.session = session
+        self.pfd_widget.session = session
     
     def on_activated(self):
         """激活时的回调"""
-        pass
+        logging.info("模块三分析界面激活")
+        self.relm_widget.on_activated()
+        self.sfd_widget.on_activated()
+        self.pfd_widget.on_activated()
     
     def on_deactivated(self):
         """停用时的回调"""
-        pass
+        logging.info("模块三分析界面停用")
+        self.relm_widget.on_deactivated()
+        self.sfd_widget.on_deactivated()
+        self.pfd_widget.on_deactivated()
     
     def cleanup(self):
         """清理资源"""
-        if self.logic:
-            self.logic.cleanup()
+        self.relm_widget.cleanup()
+        self.sfd_widget.cleanup()
+        self.pfd_widget.cleanup()
+        self.logic.cleanup()
+        logging.info("模块三分析界面清理完成")
 
-    def get_analysis_results(self) -> Dict[str, Any]:
-        """获取所有分析结果"""
-        results = {
-            'halt': self._get_halt_results(),
-            'relm': self._get_relm_results(),
-            'sfd': self._get_sfd_results(),
-            'pfd': self._get_pfd_results()
-        }
-        return results
-    
-    def _get_halt_results(self) -> Dict[str, Any]:
-        """获取HALT分析结果"""
-        # TODO: 从halt_section获取实际结果
-        return {
-            'leaflet': 'LC',
-            'area': '15.2 mm²',
-            'percentage': '35.8%',
-            'grade': '25-50%'
-        }
-    
-    def _get_relm_results(self) -> Dict[str, Any]:
-        """获取RELM分析结果"""
-        # TODO: 从relm_section获取实际结果
-        return {
-            'leaflet': 'LC',
-            'width': '3.2 mm',
-            'diameter': '22.5 mm',
-            'value': '28.4%',
-            'grade': '轻度'
-        }
-    
-    def _get_sfd_results(self) -> Dict[str, Any]:
-        """获取SFD分析结果"""
-        # TODO: 从sfd_section获取实际结果
-        return {
-            'status': '无SFD',
-            'affected_sinuses': []
-        }
-    
-    def _get_pfd_results(self) -> Dict[str, Any]:
-        """获取PFD分析结果"""
-        # TODO: 从pfd_section获取实际结果
-        return {
-            'status': '无PFD',
-            'thickness': None
-        }
+
+# 向后兼容性别名
+PasteAnalysisWidget = Module3AnalysisWidget
+
+# 导出的公共接口
+__all__ = [
+    'BaseAnalysisWidget',
+    'RelmAnalysisWidget',
+    'SfdAnalysisWidget', 
+    'PfdAnalysisWidget',
+    'Module3AnalysisWidget',
+    'PasteAnalysisWidget'  # 向后兼容
+]

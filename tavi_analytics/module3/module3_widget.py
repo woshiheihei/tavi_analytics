@@ -15,6 +15,7 @@ try:
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from .module3_logic import Module3Logic
     from .halt_analysis_widget import HaltAnalysisWidget
+    from .paste_analysis_widget import Module3AnalysisWidget
 except ImportError:
     import os
     import sys
@@ -31,6 +32,7 @@ except ImportError:
     from widgets.phase_selection_widget import PhaseSelectionWidget
     from module3_logic import Module3Logic
     from halt_analysis_widget import HaltAnalysisWidget
+    from paste_analysis_widget import Module3AnalysisWidget
 
 
 class Module3Widget(qt.QWidget):
@@ -48,6 +50,9 @@ class Module3Widget(qt.QWidget):
         
         # 创建HALT分析组件
         self.halt_analysis = HaltAnalysisWidget(session, parent=self)
+        
+        # 创建模块三标准化分析组件
+        self.module3_analysis = Module3AnalysisWidget(session, parent=self)
         
         self.setObjectName("Module3Widget")
         self._setup_ui()
@@ -292,10 +297,37 @@ class Module3Widget(qt.QWidget):
         # 组装平面控制区域
         plane_control_layout.addWidget(buttons_widget)
         
-        # 添加分析区域 - 仅显示HALT分析
+        # 添加分析区域 - 使用选项卡显示不同分析模块
         analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
         analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
-        analysis_layout.addWidget(self.halt_analysis)
+        
+        # 创建选项卡容器
+        self.analysis_tabs = qt.QTabWidget()
+        self.analysis_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QTabBar::tab {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom-color: white;
+            }
+        """)
+        
+        # 添加分析模块到选项卡
+        self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
+        self.analysis_tabs.addTab(self.module3_analysis, "其他分析")
+        
+        analysis_layout.addWidget(self.analysis_tabs)
 
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
@@ -314,6 +346,8 @@ class Module3Widget(qt.QWidget):
             self.phase_selection.set_session(session)
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.set_session(session)
+        if hasattr(self, 'module3_analysis'):
+            self.module3_analysis.set_session(session)
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
             pass
@@ -332,6 +366,10 @@ class Module3Widget(qt.QWidget):
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_activated()
         
+        # 激活模块三分析组件
+        if hasattr(self, 'module3_analysis'):
+            self.module3_analysis.on_activated()
+        
         # 3D窗口居中显示
         self._center_3d_view()
         
@@ -342,6 +380,8 @@ class Module3Widget(qt.QWidget):
         logging.info("模块三已停用")
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.on_deactivated()
+        if hasattr(self, 'module3_analysis'):
+            self.module3_analysis.on_deactivated()
 
     def _center_3d_view(self):
         """
@@ -433,6 +473,8 @@ class Module3Widget(qt.QWidget):
             self.phase_selection.cleanup()
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.cleanup()
+        if hasattr(self, 'module3_analysis'):
+            self.module3_analysis.cleanup()
         if self.logic:
             self.logic.cleanup()
         logging.info("模块三界面清理完成")
