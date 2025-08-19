@@ -191,35 +191,39 @@ class HaltAnalysisWidget(qt.QWidget):
         main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
         self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
-        # 主标题 - 更简洁紧凑的样式
+        # 主标题 - 与其他模块保持一致的特色样式
         title = qt.QLabel("HALT 瓣叶低密度增厚评估")
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet(
-            """
+        title.setStyleSheet("""
             QLabel {
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
                 color: #2c3e50;
-                background-color: #f8f9fa;
+                background-color: #d4f6d4;
                 padding: 6px 12px;
-                border: 1px solid #dee2e6;
+                border: 1px solid #a3e4a3;
                 border-radius: 4px;
                 margin-bottom: 3px;
             }
-            """
-        )
+        """)
         main_layout.addWidget(title)
 
-        # 主要内容容器（不使用内部滚动区域，由外层容器自适应撑开）
-        content_widget = qt.QWidget()
-        content_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
-        content_layout = qt.QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(4, 4, 4, 4)
-        content_layout.setSpacing(6)
-        content_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-
         # 0. 分析控制区域（开始HALT分析）
-        self._create_analysis_control_section(content_layout)
+        self._create_analysis_control_section(main_layout)
+
+        # 主要内容区域 - 与其他模块保持一致的框架样式
+        content_frame = qt.QFrame()
+        content_frame.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 12px;
+            }
+        """)
+        
+        content_layout = qt.QVBoxLayout(content_frame)
+        content_layout.setSpacing(10)
 
         # 1. 整体HALT状态选择
         self._create_overall_status_section(content_layout)
@@ -229,15 +233,11 @@ class HaltAnalysisWidget(qt.QWidget):
 
         # 3. 统计信息（条件显示）
         self._create_summary_section(content_layout)
+        
+        main_layout.addWidget(content_frame)
 
         # 4. 关键视图管理 - 使用公共组件
-        self._create_key_view_section(content_layout)
-
-        # 添加弹性空间
-        content_layout.addStretch()
-
-        # 将内容直接添加到主布局，让父容器按内容扩展
-        main_layout.addWidget(content_widget)
+        self._create_key_view_section(main_layout)
 
         # 5. 操作按钮 - 固定在底部
         self._create_action_buttons_section(main_layout)

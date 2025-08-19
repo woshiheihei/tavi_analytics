@@ -137,27 +137,28 @@ class SfdAnalysisLogic(BaseAnalysisLogic):
             'ready_for_implementation': True
         }
     
+    def set_status(self, status: str):
+        """设置SFD状态"""
+        if status in ['none', 'present', 'indeterminate']:
+            self.sfd_status = status
+            # 如果状态不是"present"，清空受累窦部
+            if status != 'present':
+                self.affected_sinuses.clear()
+            logging.info(f"SFD状态设置为: {status}")
+        else:
+            logging.warning(f"无效的SFD状态: {status}")
+    
+    def set_affected_sinuses(self, sinuses: List[str]):
+        """设置受累的主动脉窦"""
+        valid_sinuses = ['LC', 'RC', 'NC']
+        self.affected_sinuses = [s for s in sinuses if s in valid_sinuses]
+        logging.info(f"SFD受累主动脉窦设置为: {self.affected_sinuses}")
+    
     def reset_analysis(self):
         """重置SFD分析"""
         self.sfd_status = "none"
         self.affected_sinuses.clear()
         logging.info("SFD分析已重置")
-    
-    def set_status(self, status: str) -> bool:
-        """设置SFD状态"""
-        if status in ['none', 'present', 'indeterminate']:
-            self.sfd_status = status
-            if status != 'present':
-                self.affected_sinuses.clear()
-            logging.info(f"SFD状态设置为: {status}")
-            return True
-        return False
-    
-    def set_affected_sinuses(self, sinuses: List[str]):
-        """设置受累窦部"""
-        valid_sinuses = ['LC', 'RC', 'NC']
-        self.affected_sinuses = [s for s in sinuses if s in valid_sinuses]
-        logging.info(f"SFD受累窦部: {self.affected_sinuses}")
 
 
 class PfdAnalysisLogic(BaseAnalysisLogic):

@@ -38,6 +38,7 @@ except ImportError:
     from paste_analysis_logic import Module3AnalysisLogic, RelmAnalysisLogic, SfdAnalysisLogic, PfdAnalysisLogic
 
 
+
 class BaseAnalysisWidget(qt.QWidget):
     """分析界面基类 - 标准化接口"""
     
@@ -141,32 +142,6 @@ class RelmAnalysisWidget(BaseAnalysisWidget):
         leaflet_layout.addStretch()
         content_layout.addLayout(leaflet_layout)
         
-        # 占位符提示
-        placeholder_label = qt.QLabel("📝 RELM分析功能占位符")
-        placeholder_label.setAlignment(qt.Qt.AlignCenter)
-        placeholder_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #6c757d;
-                background-color: #f8f9fa;
-                border: 2px dashed #dee2e6;
-                border-radius: 6px;
-                padding: 20px;
-                margin: 10px 0;
-            }
-        """)
-        content_layout.addWidget(placeholder_label)
-        
-        # 详细说明
-        description = qt.QLabel(
-            "RELM分析将包含以下功能：\n"
-            "• 增厚瓣叶宽度测量\n"
-            "• 支架内径测量\n" 
-            "• RELM值自动计算\n"
-            "• 分级评估与报告生成"
-        )
-        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
-        content_layout.addWidget(description)
         
         main_layout.addWidget(content_frame)
         
@@ -361,56 +336,62 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         content_layout = qt.QVBoxLayout(content_frame)
         content_layout.setSpacing(10)
         
-        # SFD状态选择
-        status_layout = qt.QHBoxLayout()
-        status_label = qt.QLabel("SFD状态:")
-        status_label.setStyleSheet("font-weight: bold; color: #495057;")
+        # SFD状态选择 - 参考HALT样式
+        status_title = qt.QLabel("1. SFD状态")
+        status_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
+        content_layout.addWidget(status_title)
+        
+        # 选项按钮 - 使用HALT的样式布局
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(6)
         
         self.status_group = qt.QButtonGroup()
-        self.none_radio = qt.QRadioButton("无")
-        self.present_radio = qt.QRadioButton("有")
-        self.indeterminate_radio = qt.QRadioButton("难以判定")
         
-        self.none_radio.setChecked(True)  # 默认选择
+        # 样式定义 - 参考HALT的颜色配置
+        button_configs = [
+            ("无", "#d4f6d4", "#28a745"),
+            ("有", "#fdeaea", "#dc3545"),
+            ("难以判定", "#fff8dc", "#ffc107")
+        ]
         
-        self.status_group.addButton(self.none_radio, 0)
-        self.status_group.addButton(self.present_radio, 1)
-        self.status_group.addButton(self.indeterminate_radio, 2)
+        self.status_buttons = {}
+        for i, (status, bg_color, border_color) in enumerate(button_configs):
+            button = qt.QRadioButton(status)
+            button.setStyleSheet(f"""
+                QRadioButton {{
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    margin: 1px;
+                    background-color: {bg_color};
+                    border: 2px solid {bg_color};
+                    border-radius: 4px;
+                }}
+                QRadioButton:checked {{
+                    border: 2px solid {border_color};
+                    font-weight: bold;
+                    background-color: white;
+                }}
+                QRadioButton:hover {{
+                    border: 2px solid {border_color};
+                }}
+            """)
+            
+            self.status_group.addButton(button, i)
+            self.status_buttons[status] = button
+            buttons_layout.addWidget(button)
+        
+        # 默认选择"无"
+        self.status_buttons["无"].setChecked(True)
+        
+        # 连接信号
         self.status_group.buttonClicked.connect(self._on_status_changed)
         
-        status_layout.addWidget(status_label)
-        status_layout.addWidget(self.none_radio)
-        status_layout.addWidget(self.present_radio)
-        status_layout.addWidget(self.indeterminate_radio)
-        status_layout.addStretch()
-        content_layout.addLayout(status_layout)
+        buttons_layout.addStretch()
+        content_layout.addLayout(buttons_layout)
         
-        # 占位符提示
-        placeholder_label = qt.QLabel("📝 SFD分析功能占位符")
-        placeholder_label.setAlignment(qt.Qt.AlignCenter)
-        placeholder_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #6c757d;
-                background-color: #f8f9fa;
-                border: 2px dashed #dee2e6;
-                border-radius: 6px;
-                padding: 20px;
-                margin: 10px 0;
-            }
-        """)
-        content_layout.addWidget(placeholder_label)
-        
-        # 详细说明
-        description = qt.QLabel(
-            "SFD分析将包含以下功能：\n"
-            "• 主动脉窦充盈缺损检测\n"
-            "• 受累窦部标记与记录\n" 
-            "• 缺损程度评估\n"
-            "• 临床意义分析报告"
-        )
-        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
-        content_layout.addWidget(description)
+        # 受累主动脉窦选择（条件显示）
+        self._create_sinus_selection_section(content_layout)
         
         main_layout.addWidget(content_frame)
         
@@ -473,9 +454,35 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         status_map = {0: 'none', 1: 'present', 2: 'indeterminate'}
         status = status_map.get(button_id, 'none')
         
+        # 控制受累主动脉窦选择区域的可见性
+        has_sfd = status == 'present'
+        if hasattr(self, 'sinus_widget'):
+            self.sinus_widget.setVisible(has_sfd)
+            
+            # 如果状态变为"无"或"难以判定"，重置所有窦部选择
+            if not has_sfd:
+                self.affected_sinuses.clear()
+                if hasattr(self, 'sinus_checkboxes'):
+                    for checkbox in self.sinus_checkboxes.values():
+                        checkbox.setChecked(False)
+        
         self.logic.set_status(status)
+        if hasattr(self, 'affected_sinuses'):
+            self.logic.set_affected_sinuses(list(self.affected_sinuses))
         self._emit_status_changed()
         logging.info(f"SFD状态设置为: {status}")
+    
+    def _on_sinus_selection_changed(self, sinus_name: str, is_selected: bool):
+        """主动脉窦选择改变时的回调"""
+        if is_selected:
+            self.affected_sinuses.add(sinus_name)
+        else:
+            self.affected_sinuses.discard(sinus_name)
+        
+        # 更新逻辑层的受累窦部数据
+        self.logic.set_affected_sinuses(list(self.affected_sinuses))
+        self._emit_status_changed()
+        logging.info(f"SFD受累主动脉窦更新: {list(self.affected_sinuses)}")
     
     def _show_status(self):
         """显示当前状态"""
@@ -557,6 +564,63 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         control_layout.addStretch()
         parent_layout.addWidget(self.control_frame)
+    
+    def _create_sinus_selection_section(self, parent_layout):
+        """创建受累主动脉窦选择区域 - 与SFD状态选择风格一致"""
+        # 标题 - 与SFD状态选择保持一致的样式
+        sinus_title = qt.QLabel("2. 受累主动脉窦")
+        sinus_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
+        
+        # 选项按钮 - 使用与SFD状态选择相同的样式
+        sinus_buttons_layout = qt.QHBoxLayout()
+        sinus_buttons_layout.setSpacing(6)
+        
+        # 复选框组 - 使用一致的样式
+        self.sinus_checkboxes = {}
+        self.affected_sinuses = set()  # 跟踪受累的窦部
+        
+        # 为每个窦部使用统一的背景色（使用中性色调）
+        sinus_bg_color = "#f8f9fa"
+        sinus_border_color = "#007bff"
+        
+        for sinus_name in ["LC", "RC", "NC"]:  # 左、右、无冠状窦
+            checkbox = qt.QCheckBox(sinus_name)
+            checkbox.setStyleSheet(f"""
+                QCheckBox {{
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    margin: 1px;
+                    background-color: {sinus_bg_color};
+                    border: 2px solid {sinus_bg_color};
+                    border-radius: 4px;
+                }}
+                QCheckBox:checked {{
+                    border: 2px solid {sinus_border_color};
+                    font-weight: bold;
+                    background-color: white;
+                }}
+                QCheckBox:hover {{
+                    border: 2px solid {sinus_border_color};
+                }}
+            """)
+            checkbox.stateChanged.connect(lambda state, name=sinus_name: self._on_sinus_selection_changed(name, state == qt.Qt.Checked))
+            self.sinus_checkboxes[sinus_name] = checkbox
+            sinus_buttons_layout.addWidget(checkbox)
+        
+        sinus_buttons_layout.addStretch()
+        
+        # 创建容器widget，以便控制可见性
+        self.sinus_widget = qt.QWidget()
+        sinus_widget_layout = qt.QVBoxLayout(self.sinus_widget)
+        sinus_widget_layout.setContentsMargins(0, 0, 0, 0)
+        sinus_widget_layout.setSpacing(6)
+        sinus_widget_layout.addWidget(sinus_title)
+        sinus_widget_layout.addLayout(sinus_buttons_layout)
+        
+        self.sinus_widget.setVisible(False)  # 默认隐藏
+        
+        parent_layout.addWidget(self.sinus_widget)
     
     def _on_start_analysis(self):
         """开始SFD分析"""
@@ -760,7 +824,17 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         
         # 重置逻辑状态
         self.logic.reset_analysis()
-        self.none_radio.setChecked(True)
+        self.status_buttons["无"].setChecked(True)
+        
+        # 重置受累主动脉窦选择
+        if hasattr(self, 'affected_sinuses'):
+            self.affected_sinuses.clear()
+        if hasattr(self, 'sinus_checkboxes'):
+            for checkbox in self.sinus_checkboxes.values():
+                checkbox.setChecked(False)
+        if hasattr(self, 'sinus_widget'):
+            self.sinus_widget.setVisible(False)
+        
         self._emit_status_changed()
         logging.info("SFD分析已重置")
 
@@ -821,34 +895,68 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         content_layout = qt.QVBoxLayout(content_frame)
         content_layout.setSpacing(10)
         
-        # PFD状态选择
-        status_layout = qt.QHBoxLayout()
-        status_label = qt.QLabel("PFD状态:")
-        status_label.setStyleSheet("font-weight: bold; color: #495057;")
+        # PFD状态选择 - 参考SFD样式
+        status_title = qt.QLabel("1. PFD状态")
+        status_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
+        content_layout.addWidget(status_title)
+        
+        # 选项按钮 - 使用SFD的样式布局
+        buttons_layout = qt.QHBoxLayout()
+        buttons_layout.setSpacing(6)
         
         self.status_group = qt.QButtonGroup()
-        self.none_radio = qt.QRadioButton("无")
-        self.present_radio = qt.QRadioButton("有")
-        self.indeterminate_radio = qt.QRadioButton("难以判定")
         
-        self.none_radio.setChecked(True)  # 默认选择
+        # 样式定义 - 参考SFD的颜色配置
+        button_configs = [
+            ("无", "#d4f6d4", "#28a745"),
+            ("有", "#fdeaea", "#dc3545"),
+            ("难以判定", "#fff8dc", "#ffc107")
+        ]
         
-        self.status_group.addButton(self.none_radio, 0)
-        self.status_group.addButton(self.present_radio, 1)
-        self.status_group.addButton(self.indeterminate_radio, 2)
+        self.status_buttons = {}
+        for i, (status, bg_color, border_color) in enumerate(button_configs):
+            button = qt.QRadioButton(status)
+            button.setStyleSheet(f"""
+                QRadioButton {{
+                    font-size: 11px;
+                    font-weight: 500;
+                    padding: 6px 12px;
+                    margin: 1px;
+                    background-color: {bg_color};
+                    border: 2px solid {bg_color};
+                    border-radius: 4px;
+                }}
+                QRadioButton:checked {{
+                    border: 2px solid {border_color};
+                    font-weight: bold;
+                    background-color: white;
+                }}
+                QRadioButton:hover {{
+                    border: 2px solid {border_color};
+                }}
+            """)
+            
+            self.status_group.addButton(button, i)
+            self.status_buttons[status] = button
+            buttons_layout.addWidget(button)
+        
+        # 默认选择"无"
+        self.status_buttons["无"].setChecked(True)
+        
+        # 连接信号
         self.status_group.buttonClicked.connect(self._on_status_changed)
         
-        status_layout.addWidget(status_label)
-        status_layout.addWidget(self.none_radio)
-        status_layout.addWidget(self.present_radio)
-        status_layout.addWidget(self.indeterminate_radio)
-        status_layout.addStretch()
-        content_layout.addLayout(status_layout)
+        buttons_layout.addStretch()
+        content_layout.addLayout(buttons_layout)
         
-        # 厚度输入（条件显示）
+        # 厚度输入（条件显示） - 与状态选择风格一致
+        thickness_title = qt.QLabel("2. 最大厚度")
+        thickness_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
+        content_layout.addWidget(thickness_title)
+        
         thickness_layout = qt.QHBoxLayout()
         thickness_label = qt.QLabel("厚度 (mm):")
-        thickness_label.setStyleSheet("font-weight: bold; color: #495057;")
+        thickness_label.setStyleSheet("font-size: 11px; font-weight: 500; color: #495057;")
         
         self.thickness_spinbox = qt.QDoubleSpinBox()
         self.thickness_spinbox.setRange(0.0, 50.0)
@@ -862,32 +970,6 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         thickness_layout.addStretch()
         content_layout.addLayout(thickness_layout)
         
-        # 占位符提示
-        placeholder_label = qt.QLabel("📝 PFD分析功能占位符")
-        placeholder_label.setAlignment(qt.Qt.AlignCenter)
-        placeholder_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #6c757d;
-                background-color: #f8f9fa;
-                border: 2px dashed #dee2e6;
-                border-radius: 6px;
-                padding: 20px;
-                margin: 10px 0;
-            }
-        """)
-        content_layout.addWidget(placeholder_label)
-        
-        # 详细说明
-        description = qt.QLabel(
-            "PFD分析将包含以下功能：\n"
-            "• 瓣叶下充盈缺损检测\n"
-            "• 最大厚度测量工具\n" 
-            "• 缺损范围与程度评估\n"
-            "• 血流动力学影响分析"
-        )
-        description.setStyleSheet("color: #495057; font-size: 11px; line-height: 1.4;")
-        content_layout.addWidget(description)
         
         main_layout.addWidget(content_frame)
         
@@ -1250,7 +1332,7 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         # 重置逻辑状态
         self.logic.reset_analysis()
-        self.none_radio.setChecked(True)
+        self.status_buttons["无"].setChecked(True)
         self.thickness_spinbox.setValue(0.0)
         self.thickness_spinbox.setEnabled(False)
         self._emit_status_changed()
