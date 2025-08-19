@@ -185,13 +185,17 @@ class HaltAnalysisWidget(qt.QWidget):
     def _setup_ui(self):
         """设置HALT分析主界面"""
         main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)  # 减小边距
-        main_layout.setSpacing(8)  # 减小间距
-        
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
+        # 根据内容提供最小尺寸，便于父容器按内容扩展
+        main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+        self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+
         # 主标题 - 更简洁紧凑的样式
         title = qt.QLabel("HALT 瓣叶低密度增厚评估")
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
+        title.setStyleSheet(
+            """
             QLabel {
                 font-size: 14px;
                 font-weight: bold;
@@ -202,43 +206,39 @@ class HaltAnalysisWidget(qt.QWidget):
                 border-radius: 4px;
                 margin-bottom: 3px;
             }
-        """)
+            """
+        )
         main_layout.addWidget(title)
-        
-        # 创建滚动区域容纳主要内容
-        scroll_area = qt.QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(qt.QFrame.NoFrame)
-        scroll_area.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
-        scroll_area.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
-        
-        # 滚动区域内容容器
-        scroll_content = qt.QWidget()
-        content_layout = qt.QVBoxLayout(scroll_content)
-        content_layout.setContentsMargins(4, 4, 4, 4)  # 减小边距
-        content_layout.setSpacing(6)  # 减小间距
-        
+
+        # 主要内容容器（不使用内部滚动区域，由外层容器自适应撑开）
+        content_widget = qt.QWidget()
+        content_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        content_layout = qt.QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(4, 4, 4, 4)
+        content_layout.setSpacing(6)
+        content_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+
         # 0. 分析控制区域（开始HALT分析）
         self._create_analysis_control_section(content_layout)
-        
+
         # 1. 整体HALT状态选择
         self._create_overall_status_section(content_layout)
-        
+
         # 2. 瓣叶分级表格（条件显示）
         self._create_grading_section(content_layout)
-        
+
         # 3. 统计信息（条件显示）
         self._create_summary_section(content_layout)
-        
+
         # 4. 关键视图管理 - 使用公共组件
         self._create_key_view_section(content_layout)
-        
+
         # 添加弹性空间
         content_layout.addStretch()
-        
-        scroll_area.setWidget(scroll_content)
-        main_layout.addWidget(scroll_area, 1)  # 占据大部分空间
-        
+
+        # 将内容直接添加到主布局，让父容器按内容扩展
+        main_layout.addWidget(content_widget)
+
         # 5. 操作按钮 - 固定在底部
         self._create_action_buttons_section(main_layout)
         

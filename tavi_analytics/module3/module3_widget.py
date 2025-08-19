@@ -271,6 +271,12 @@ class Module3Widget(qt.QWidget):
     def _setup_ui(self):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
+        # 让模块整体根据内容提供最小尺寸，外层容器据此扩展
+        try:
+            main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
 
         # 标题区 - 创建水平布局包含标题和期像切换器
         title_container = qt.QWidget()
@@ -325,9 +331,20 @@ class Module3Widget(qt.QWidget):
         # 添加分析区域 - 使用选项卡显示不同分析模块
         analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
         analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
+        try:
+            analysis_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+            analysis_frame.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
 
         # 创建选项卡容器
         self.analysis_tabs = qt.QTabWidget()
+        try:
+            # 按内容给出最小高度，避免内部滚动
+            self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+            self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
+        except Exception:
+            pass
         self.analysis_tabs.setStyleSheet(
             """
             QTabWidget::pane {
@@ -366,6 +383,11 @@ class Module3Widget(qt.QWidget):
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
+        try:
+            container_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+            container.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
         container_layout.addWidget(title_container)  # 使用新的标题容器
         # 调整顺序：上方显示"瓣叶功能评估"，下方为平面控制区域
         container_layout.addWidget(analysis_frame)
