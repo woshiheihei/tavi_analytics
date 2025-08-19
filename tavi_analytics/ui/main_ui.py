@@ -126,10 +126,22 @@ class MainUI(qt.QWidget):
         """创建内容区域"""
         # 创建可滚动的内容容器
         self._content_scroll, self._content_container = LayoutManager.create_scrollable_container(LayoutType.MODULE_CONTAINER)
+        try:
+            # 由主界面统一管理滚动条
+            self._content_scroll.setWidgetResizable(True)
+            self._content_scroll.setFrameShape(qt.QFrame.NoFrame)
+            self._content_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
+            self._content_scroll.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
+        except Exception:
+            pass
         
         # 创建堆叠组件来管理不同模块的界面
         self._content_stack = qt.QStackedWidget()
-        LayoutManager.setup_widget_size_policy(self._content_stack, LayoutType.MODULE_CONTAINER, SizePolicy.EXPANDING)
+        # 使用内容驱动的高度，在外层滚动
+        try:
+            self._content_stack.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
         
         # 创建默认页面（无模块选中时显示）
         default_page = self._create_default_page()
@@ -137,6 +149,13 @@ class MainUI(qt.QWidget):
         
         # 将堆叠组件添加到容器布局中
         container_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self._content_container)
+        try:
+            container_layout.setContentsMargins(0, 0, 0, 0)
+            container_layout.setSpacing(8)
+            container_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+            self._content_container.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
         container_layout.addWidget(self._content_stack)
         
         # 将滚动区域添加到主布局，并设置最大的伸缩因子
@@ -482,6 +501,8 @@ TAVR Analytics 帮助
             # 切换到模块组件
             self._content_stack.setCurrentWidget(module_widget)
             self._current_module = module_name
+            # 刷新滚动容器以匹配当前模块内容
+            self._refresh_content_scroll()
             
             # 更新界面状态
             module_info = self._module_manager.get_module_info(module_name)
@@ -507,6 +528,29 @@ TAVR Analytics 帮助
             self._show_error_message("切换失败", f"切换到模块 {module_name} 时发生错误: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def _refresh_content_scroll(self):
+        """在模块切换后刷新滚动区域，使滚动条只在主容器中出现"""
+        try:
+            def _do_adjust():
+                try:
+                    current = self._content_stack.currentWidget()
+                    if current is not None:
+                        current.adjustSize()
+                    self._content_stack.adjustSize()
+                    self._content_container.adjustSize()
+                    self._content_scroll.updateGeometry()
+                    # 重置滚动位置到顶部
+                    try:
+                        self._content_scroll.verticalScrollBar().setValue(0)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+            # 让布局先完成再调整
+            qt.QTimer.singleShot(0, _do_adjust)
+        except Exception:
+            pass
     
     def _auto_start_analysis_in_module2(self, module_widget):
         """在module2中自动启动分析"""

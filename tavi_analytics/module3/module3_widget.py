@@ -271,7 +271,6 @@ class Module3Widget(qt.QWidget):
     def _setup_ui(self):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
-        # 让模块整体根据内容提供最小尺寸，外层容器据此扩展
         try:
             main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
             self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
@@ -281,54 +280,38 @@ class Module3Widget(qt.QWidget):
         # 标题区 - 创建水平布局包含标题和期像切换器
         title_container = qt.QWidget()
         title_layout = qt.QHBoxLayout(title_container)
-        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setContentsMargins(8, 8, 8, 8)
         title_layout.setSpacing(20)
 
-        # 标题标签
         title = qt.QLabel("模块三：自动化测量")
         title.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
-
-        # 将标题和紧凑期像切换器添加到布局
         title_layout.addWidget(title)
         title_layout.addWidget(self.compact_phase_toggle)
-        title_layout.addStretch()  # 添加弹性空间推向左侧
+        title_layout.addStretch()
 
-        # 创建平面切换控制区域
+        # 平面切换控制区域
         plane_control_frame = LayoutManager.create_section_frame("快速定位关键平面")
         plane_control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, plane_control_frame)
-
-        # 创建按钮网格布局
         buttons_widget = qt.QWidget()
         buttons_layout = qt.QGridLayout(buttons_widget)
         buttons_layout.setSpacing(10)
 
-        # 瓣膜支架底部平面按钮
         self.switch_to_valve_plane_btn = LayoutManager.create_button_with_style(
-            "🎯 瓣膜支架底部平面",
-            "primary",
-            "default",
-            45
+            "🎯 瓣膜支架底部平面", "primary", "default", 45
         )
         self.switch_to_valve_plane_btn.clicked.connect(self._on_switch_to_valve_plane)
 
-        # Sinus Of Valsalva平面按钮
         self.switch_to_sinus_plane_btn = LayoutManager.create_button_with_style(
-            "🫀 瓦氏窦平面",
-            "secondary",
-            "default",
-            45
+            "🫀 瓦氏窦平面", "secondary", "default", 45
         )
         self.switch_to_sinus_plane_btn.clicked.connect(self._on_switch_to_sinus_plane)
 
-        # 排列按钮（1行2列）
         buttons_layout.addWidget(self.switch_to_valve_plane_btn, 0, 0)
         buttons_layout.addWidget(self.switch_to_sinus_plane_btn, 0, 1)
-
-        # 组装平面控制区域
         plane_control_layout.addWidget(buttons_widget)
 
-        # 添加分析区域 - 使用选项卡显示不同分析模块
+        # 分析区域 - 选项卡
         analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
         analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
         try:
@@ -337,64 +320,35 @@ class Module3Widget(qt.QWidget):
         except Exception:
             pass
 
-        # 创建选项卡容器
         self.analysis_tabs = qt.QTabWidget()
         try:
-            # 按内容给出最小高度，避免内部滚动
             self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
             self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
         except Exception:
             pass
         self.analysis_tabs.setStyleSheet(
             """
-            QTabWidget::pane {
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                background-color: white;
-            }
-            QTabBar::tab {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                padding: 8px 16px;
-                margin-right: 2px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background-color: white;
-                border-bottom-color: white;
-            }
+            QTabWidget::pane { border: 1px solid #dee2e6; border-radius: 4px; background-color: white; }
+            QTabBar::tab { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+            QTabBar::tab:selected { background-color: white; border-bottom-color: white; }
             """
         )
 
-        # 创建独立的分析组件
+        # 创建并添加分析组件
         self.relm_analysis = RelmAnalysisWidget(self.session, parent=self)
         self.sfd_analysis = SfdAnalysisWidget(self.session, parent=self)
         self.pfd_analysis = PfdAnalysisWidget(self.session, parent=self)
-
-        # 添加分析模块到选项卡 - 所有分析模块都是同级的
         self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
         self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
         self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
         self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
-
         analysis_layout.addWidget(self.analysis_tabs)
 
-        # 容器组装
-        container = LayoutManager.create_section_frame("模块三")
-        container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
-        try:
-            container_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-            container.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
-        except Exception:
-            pass
-        container_layout.addWidget(title_container)  # 使用新的标题容器
-        # 调整顺序：上方显示"瓣叶功能评估"，下方为平面控制区域
-        container_layout.addWidget(analysis_frame)
-        container_layout.addWidget(plane_control_frame)
-
-        main_layout.addWidget(container, 1)
-        LayoutManager.add_stretch_with_ratio(main_layout, 1)
+        # 汇总布局（滚动在主界面 MainUI 中提供）
+        main_layout.addWidget(title_container)
+        main_layout.addWidget(analysis_frame)
+        main_layout.addWidget(plane_control_frame)
+        main_layout.addStretch()
 
     def set_session(self, session: TAVRStudySession):
         self.session = session
