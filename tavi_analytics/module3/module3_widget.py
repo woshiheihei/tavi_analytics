@@ -13,6 +13,7 @@ try:
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.phase_selection_widget import PhaseSelectionWidget
+    from ..widgets.compact_phase_toggle import CompactPhaseToggle
     from .module3_logic import Module3Logic
     from .halt_analysis_widget import HaltAnalysisWidget
     from .paste_analysis_widget import Module3AnalysisWidget, RelmAnalysisWidget, SfdAnalysisWidget, PfdAnalysisWidget
@@ -30,6 +31,7 @@ except ImportError:
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.phase_selection_widget import PhaseSelectionWidget
+    from widgets.compact_phase_toggle import CompactPhaseToggle
     from module3_logic import Module3Logic
     from halt_analysis_widget import HaltAnalysisWidget
     from paste_analysis_widget import Module3AnalysisWidget, RelmAnalysisWidget, SfdAnalysisWidget, PfdAnalysisWidget
@@ -47,6 +49,10 @@ class Module3Widget(qt.QWidget):
         self.phase_selection = PhaseSelectionWidget(session, self)
         self.phase_selection.phaseChanged.connect(self._on_phase_changed)
         self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
+        
+        # 创建紧凑期像切换组件
+        self.compact_phase_toggle = CompactPhaseToggle(session, self)
+        self.compact_phase_toggle.phaseChanged.connect(self._on_phase_changed)
         
         # 创建HALT分析组件
         self.halt_analysis = HaltAnalysisWidget(session, parent=self)
@@ -74,8 +80,34 @@ class Module3Widget(qt.QWidget):
             domain_phase = 'end_diastole' if phase == 'diastole' else 'end_systole'
             self.logic.set_current_phase(domain_phase)
         
+        # 同步两个期像选择组件的状态
+        self._sync_phase_widgets(phase)
+        
         # 自动刷新平面状态以显示当前期像下的可用平面
         qt.QTimer.singleShot(100, self._on_refresh_plane_status)  # 延迟100ms刷新
+    
+    def _sync_phase_widgets(self, phase: str):
+        """
+        同步两个期像选择组件的状态
+        
+        Args:
+            phase: 期像类型 ('diastole' 或 'systole')
+        """
+        try:
+            # 同步标准期像选择组件
+            if hasattr(self, 'phase_selection'):
+                current_phase = self.phase_selection.get_current_phase()
+                if current_phase != phase:
+                    self.phase_selection.sync_phase_from_external(phase)
+            
+            # 同步紧凑期像切换组件
+            if hasattr(self, 'compact_phase_toggle'):
+                current_phase = self.compact_phase_toggle.get_current_phase()
+                if current_phase != phase:
+                    self.compact_phase_toggle.sync_phase_from_external(phase)
+                    
+        except Exception as e:
+            logging.error(f"同步期像组件状态失败: {e}")
     
     def _on_phase_status_updated(self, status: str):
         """
@@ -253,10 +285,21 @@ class Module3Widget(qt.QWidget):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 标题区
+        # 标题区 - 创建水平布局包含标题和期像切换器
+        title_container = qt.QWidget()
+        title_layout = qt.QHBoxLayout(title_container)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(20)
+        
+        # 标题标签
         title = qt.QLabel("模块三：自动化测量")
-        title.setAlignment(qt.Qt.AlignCenter)
+        title.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
+        
+        # 将标题和紧凑期像切换器添加到布局
+        title_layout.addWidget(title)
+        title_layout.addWidget(self.compact_phase_toggle)
+        title_layout.addStretch()  # 添加弹性空间推向左侧
 
         # 添加期像选择组件
         self.phase_selection.set_info_text(
@@ -342,8 +385,8 @@ class Module3Widget(qt.QWidget):
         # 容器组装
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
-        container_layout.addWidget(title)
-        # 调整顺序：将“瓣叶功能评估”置于“期像选择”和“快速定位关键平面”之上
+        container_layout.addWidget(title_container)  # 使用新的标题容器
+        # 调整顺序：将"瓣叶功能评估"置于"期像选择"和"快速定位关键平面"之上
         container_layout.addWidget(analysis_frame)           # 添加分析区域（在上方）
         container_layout.addWidget(self.phase_selection)     # 添加期像选择组件（移至下方）
         container_layout.addWidget(plane_control_frame)      # 添加平面控制区域（移至下方）
@@ -355,6 +398,8 @@ class Module3Widget(qt.QWidget):
         self.session = session
         if hasattr(self, 'phase_selection'):
             self.phase_selection.set_session(session)
+        if hasattr(self, 'compact_phase_toggle'):
+            self.compact_phase_toggle.session = session
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.set_session(session)
         if hasattr(self, 'relm_analysis'):
@@ -379,6 +424,12 @@ class Module3Widget(qt.QWidget):
         # 激活期像选择组件，默认选择舒张末期
         if hasattr(self, 'phase_selection'):
             self.phase_selection.auto_activate(preferred_phase='diastole')
+        
+        # 同步紧凑期像切换器的状态
+        if hasattr(self, 'compact_phase_toggle') and hasattr(self, 'phase_selection'):
+            current_phase = self.phase_selection.get_current_phase()
+            if current_phase:
+                self.compact_phase_toggle.set_current_phase(current_phase)
         
         # 激活HALT分析组件
         if hasattr(self, 'halt_analysis'):
@@ -504,6 +555,8 @@ class Module3Widget(qt.QWidget):
     def cleanup(self):
         if hasattr(self, 'phase_selection'):
             self.phase_selection.cleanup()
+        if hasattr(self, 'compact_phase_toggle'):
+            self.compact_phase_toggle.cleanup()
         if hasattr(self, 'halt_analysis'):
             self.halt_analysis.cleanup()
         if hasattr(self, 'relm_analysis'):

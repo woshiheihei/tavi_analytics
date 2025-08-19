@@ -5,10 +5,12 @@
 """
 
 from .phase_selection_widget import PhaseSelectionWidget
+from .compact_phase_toggle import CompactPhaseToggle
 from .key_view_manager_widget import KeyViewManagerWidget, create_key_view_manager
 
 __all__ = [
     'PhaseSelectionWidget',
+    'CompactPhaseToggle', 
     'KeyViewManagerWidget',
     'create_key_view_manager'
 ]
