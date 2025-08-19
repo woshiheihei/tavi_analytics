@@ -12,7 +12,6 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from ..widgets.phase_selection_widget import PhaseSelectionWidget
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
     from .module3_logic import Module3Logic
     from .halt_analysis_widget import HaltAnalysisWidget
@@ -30,7 +29,6 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from widgets.phase_selection_widget import PhaseSelectionWidget
     from widgets.compact_phase_toggle import CompactPhaseToggle
     from module3_logic import Module3Logic
     from halt_analysis_widget import HaltAnalysisWidget
@@ -44,11 +42,6 @@ class Module3Widget(qt.QWidget):
         super().__init__(parent)
         self.session = session
         self.logic = logic or Module3Logic()
-        
-        # 创建期像选择组件
-        self.phase_selection = PhaseSelectionWidget(session, self)
-        self.phase_selection.phaseChanged.connect(self._on_phase_changed)
-        self.phase_selection.statusUpdated.connect(self._on_phase_status_updated)
         
         # 创建紧凑期像切换组件
         self.compact_phase_toggle = CompactPhaseToggle(session, self)
@@ -88,18 +81,12 @@ class Module3Widget(qt.QWidget):
     
     def _sync_phase_widgets(self, phase: str):
         """
-        同步两个期像选择组件的状态
+        同步期像切换组件的状态（仅紧凑版）
         
         Args:
             phase: 期像类型 ('diastole' 或 'systole')
         """
         try:
-            # 同步标准期像选择组件
-            if hasattr(self, 'phase_selection'):
-                current_phase = self.phase_selection.get_current_phase()
-                if current_phase != phase:
-                    self.phase_selection.sync_phase_from_external(phase)
-            
             # 同步紧凑期像切换组件
             if hasattr(self, 'compact_phase_toggle'):
                 current_phase = self.compact_phase_toggle.get_current_phase()
@@ -290,22 +277,16 @@ class Module3Widget(qt.QWidget):
         title_layout = qt.QHBoxLayout(title_container)
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(20)
-        
+
         # 标题标签
         title = qt.QLabel("模块三：自动化测量")
         title.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
-        
+
         # 将标题和紧凑期像切换器添加到布局
         title_layout.addWidget(title)
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()  # 添加弹性空间推向左侧
-
-        # 添加期像选择组件
-        self.phase_selection.set_info_text(
-            "💡 提示：请选择要进行测量分析的期像。\n"
-            "不同期像的测量结果可能会有所差异。"
-        )
 
         # 创建平面切换控制区域
         plane_control_frame = LayoutManager.create_section_frame("快速定位关键平面")
@@ -386,18 +367,15 @@ class Module3Widget(qt.QWidget):
         container = LayoutManager.create_section_frame("模块三")
         container_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, container)
         container_layout.addWidget(title_container)  # 使用新的标题容器
-        # 调整顺序：将"瓣叶功能评估"置于"期像选择"和"快速定位关键平面"之上
-        container_layout.addWidget(analysis_frame)           # 添加分析区域（在上方）
-        container_layout.addWidget(self.phase_selection)     # 添加期像选择组件（移至下方）
-        container_layout.addWidget(plane_control_frame)      # 添加平面控制区域（移至下方）
+        # 调整顺序：上方显示"瓣叶功能评估"，下方为平面控制区域
+        container_layout.addWidget(analysis_frame)
+        container_layout.addWidget(plane_control_frame)
 
         main_layout.addWidget(container, 1)
         LayoutManager.add_stretch_with_ratio(main_layout, 1)
 
     def set_session(self, session: TAVRStudySession):
         self.session = session
-        if hasattr(self, 'phase_selection'):
-            self.phase_selection.set_session(session)
         if hasattr(self, 'compact_phase_toggle'):
             self.compact_phase_toggle.session = session
         if hasattr(self, 'halt_analysis'):
@@ -421,15 +399,10 @@ class Module3Widget(qt.QWidget):
         # 启用MPR交互式切片相交线功能
         self._enable_mpr_crosshairs()
         
-        # 激活期像选择组件，默认选择舒张末期
-        if hasattr(self, 'phase_selection'):
-            self.phase_selection.auto_activate(preferred_phase='diastole')
-        
-        # 同步紧凑期像切换器的状态
-        if hasattr(self, 'compact_phase_toggle') and hasattr(self, 'phase_selection'):
-            current_phase = self.phase_selection.get_current_phase()
-            if current_phase:
-                self.compact_phase_toggle.set_current_phase(current_phase)
+        # 设置默认期像到紧凑切换器并同步逻辑
+        if hasattr(self, 'compact_phase_toggle'):
+            self.compact_phase_toggle.set_current_phase('diastole')
+            # 由组件信号驱动逻辑同步
         
         # 激活HALT分析组件
         if hasattr(self, 'halt_analysis'):
@@ -553,8 +526,6 @@ class Module3Widget(qt.QWidget):
             return False
     
     def cleanup(self):
-        if hasattr(self, 'phase_selection'):
-            self.phase_selection.cleanup()
         if hasattr(self, 'compact_phase_toggle'):
             self.compact_phase_toggle.cleanup()
         if hasattr(self, 'halt_analysis'):
