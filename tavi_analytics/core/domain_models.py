@@ -13,9 +13,9 @@ from abc import ABC, abstractmethod
 
 class CriticalContourType(Enum):
     """关键轮廓类型枚举"""
-    VALVE_STENT_BOTTOM = "plane_bootom"  # 瓣膜支架的最底端闭合轮廓
-    SINUS_OF_VALSALVA = "plane_max"     # Sinus Of Valsalva的轮廓
-    STENT_BEST_FIT = "plane_0"          # 支架的best fit轮廓
+    VALVE_STENT_BOTTOM = "Stent_Frame_Base_plane"  # 瓣膜支架的最底端闭合轮廓
+    SINUS_OF_VALSALVA = "SOV_plane"     # Sinus Of Valsalva的轮廓
+    STENT_BEST_FIT = "Stent_Cross_Sectional_0_Plane"          # 支架的best fit轮廓
 
 
 class CardiacPhase(Enum):

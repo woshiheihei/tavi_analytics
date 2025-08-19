@@ -15,7 +15,7 @@ curl -X GET http://http://192.168.4.210:5000/result/measurement/{task-id} -o mea
 
 
 class DCMProcessor:
-    def __init__(self, base_url="http://192.168.4.210:5000"):
+    def __init__(self, base_url="http://192.168.4.210:5001"):
         self.base_url = base_url
 
     def upload_file(self, file_path):
