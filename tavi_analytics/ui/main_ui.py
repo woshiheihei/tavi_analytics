@@ -94,6 +94,7 @@ class MainUI(qt.QWidget):
         
         # 获取可用模块并创建按钮
         available_modules = self._module_manager.get_available_modules()
+        logging.info(f"MainUI 可用模块: {available_modules}")
         
         for module_name in available_modules:
             module_info = self._module_manager.get_module_info(module_name)
@@ -750,6 +751,8 @@ TAVR Analytics 帮助
                         
                         # 在弹性空间之前插入按钮
                         button_layout.insertWidget(button_layout.count() - 1, button)
+
+            logging.info(f"导航区域刷新后的可用模块: {available_modules}")
             
             logging.info("导航区域已刷新")
             

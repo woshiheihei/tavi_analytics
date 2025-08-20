@@ -119,7 +119,7 @@ class PluginConfig:
                     "auto_measure": False
                 },
                 "module4": {
-                    "enabled": False,
+                    "enabled": True,
                     "auto_generate_report": False
                 },
                 "module5": {

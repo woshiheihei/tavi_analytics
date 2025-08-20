@@ -102,7 +102,20 @@ class tavi_analytics(ScriptedLoadableModule):
                 manager.register_module(module3_info)
                 logging.info("模块三注册成功")
             
-            # 这里可以注册其他模块（模块四、五）
+            # 注册模块四
+            if self._config.is_module_enabled("module4"):
+                from module4.module4_adapter import Module4Adapter
+                module4_info = ModuleInfo(
+                    name="module4",
+                    display_name="瓣膜支架几何形态评估",
+                    module_class=Module4Adapter,
+                    dependencies=["module1"],  # 暂仅依赖模块一，后续可加其他依赖
+                    enabled=True
+                )
+                manager.register_module(module4_info)
+                logging.info("模块四注册成功")
+            
+            # 这里可以注册其他模块（模块五等）
             # TODO: 注册其他模块
             
         except Exception as e:
