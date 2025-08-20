@@ -14,6 +14,7 @@ try:
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
     from .module4_logic import Module4Logic
+    from .geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 except ImportError:
     import os
     import sys
@@ -29,6 +30,7 @@ except ImportError:
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.compact_phase_toggle import CompactPhaseToggle
     from module4_logic import Module4Logic
+    from geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 
 
 class Module4Widget(qt.QWidget):
@@ -42,6 +44,11 @@ class Module4Widget(qt.QWidget):
         # 创建紧凑期像切换组件
         self.compact_phase_toggle = CompactPhaseToggle(session, self)
         self.compact_phase_toggle.phaseChanged.connect(self._on_phase_changed)
+        
+        # 创建几何形态分析组件
+        self.inflow_analysis = InflowAnalysisWidget(session, parent=self)
+        self.nadir_analysis = NadirAnalysisWidget(session, parent=self)
+        self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, parent=self)
         
         self.setObjectName("Module4Widget")
         self._setup_ui()
@@ -104,35 +111,50 @@ class Module4Widget(qt.QWidget):
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()
 
-        # 主要内容区域 - 暂时显示占位符内容
-        content_frame = LayoutManager.create_section_frame("瓣膜支架几何形态分析")
-        content_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, content_frame)
-        
-        # 占位符标签
-        placeholder_label = qt.QLabel("模块四功能正在开发中...")
-        placeholder_label.setAlignment(qt.Qt.AlignCenter)
-        placeholder_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 16px;
-                font-style: italic;
-                padding: 40px;
-                border: 2px dashed #d1d5db;
-                border-radius: 8px;
-                background-color: #f9fafb;
-            }
-        """)
-        content_layout.addWidget(placeholder_label)
+        # 分析区域 - 选项卡
+        analysis_frame = LayoutManager.create_section_frame("瓣膜支架几何形态分析")
+        analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
+        try:
+            analysis_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
+            analysis_frame.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        except Exception:
+            pass
+
+        self.analysis_tabs = qt.QTabWidget()
+        try:
+            self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+            self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
+        except Exception:
+            pass
+        self.analysis_tabs.setStyleSheet(
+            """
+            QTabWidget::pane { border: 1px solid #dee2e6; border-radius: 4px; background-color: white; }
+            QTabBar::tab { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+            QTabBar::tab:selected { background-color: white; border-bottom-color: white; }
+            """
+        )
+
+        # 创建并添加分析组件
+        self.analysis_tabs.addTab(self.inflow_analysis, "Inflow")
+        self.analysis_tabs.addTab(self.nadir_analysis, "Nadir")
+        self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure Level")
+        analysis_layout.addWidget(self.analysis_tabs)
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
-        main_layout.addWidget(content_frame)
+        main_layout.addWidget(analysis_frame)
         main_layout.addStretch()
 
     def set_session(self, session: TAVRStudySession):
         self.session = session
         if hasattr(self, 'compact_phase_toggle'):
             self.compact_phase_toggle.session = session
+        if hasattr(self, 'inflow_analysis'):
+            self.inflow_analysis.set_session(session)
+        if hasattr(self, 'nadir_analysis'):
+            self.nadir_analysis.set_session(session)
+        if hasattr(self, 'commissure_level_analysis'):
+            self.commissure_level_analysis.set_session(session)
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
             pass
@@ -147,11 +169,25 @@ class Module4Widget(qt.QWidget):
         if hasattr(self, 'compact_phase_toggle'):
             self.compact_phase_toggle.set_current_phase('diastole')
         
+        # 激活几何形态分析组件
+        if hasattr(self, 'inflow_analysis'):
+            self.inflow_analysis.on_activated()
+        if hasattr(self, 'nadir_analysis'):
+            self.nadir_analysis.on_activated()
+        if hasattr(self, 'commissure_level_analysis'):
+            self.commissure_level_analysis.on_activated()
+        
         # 3D窗口居中显示
         self._center_3d_view()
 
     def on_deactivated(self):
         logging.info("模块四已停用")
+        if hasattr(self, 'inflow_analysis'):
+            self.inflow_analysis.on_deactivated()
+        if hasattr(self, 'nadir_analysis'):
+            self.nadir_analysis.on_deactivated()
+        if hasattr(self, 'commissure_level_analysis'):
+            self.commissure_level_analysis.on_deactivated()
 
     def _center_3d_view(self):
         """
@@ -235,6 +271,12 @@ class Module4Widget(qt.QWidget):
     def cleanup(self):
         if hasattr(self, 'compact_phase_toggle'):
             self.compact_phase_toggle.cleanup()
+        if hasattr(self, 'inflow_analysis'):
+            self.inflow_analysis.cleanup()
+        if hasattr(self, 'nadir_analysis'):
+            self.nadir_analysis.cleanup()
+        if hasattr(self, 'commissure_level_analysis'):
+            self.commissure_level_analysis.cleanup()
         if self.logic:
             self.logic.cleanup()
         logging.info("模块四界面清理完成")
