@@ -39,16 +39,16 @@ class Module4Widget(qt.QWidget):
     def __init__(self, session: TAVRStudySession, logic: Optional[Module4Logic] = None, parent=None):
         super().__init__(parent)
         self.session = session
-        self.logic = logic or Module4Logic()
+        self.logic = logic or Module4Logic(session)
         
         # 创建紧凑期像切换组件
         self.compact_phase_toggle = CompactPhaseToggle(session, self)
         self.compact_phase_toggle.phaseChanged.connect(self._on_phase_changed)
         
-        # 创建几何形态分析组件
-        self.inflow_analysis = InflowAnalysisWidget(session, parent=self)
-        self.nadir_analysis = NadirAnalysisWidget(session, parent=self)
-        self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, parent=self)
+        # 创建几何形态分析组件，传入逻辑组件
+        self.inflow_analysis = InflowAnalysisWidget(session, self.logic, parent=self)
+        self.nadir_analysis = NadirAnalysisWidget(session, self.logic, parent=self)
+        self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, self.logic, parent=self)
         
         self.setObjectName("Module4Widget")
         self._setup_ui()

@@ -39,6 +39,13 @@ class PasteAnalysisType(Enum):
     PFD = "pfd"     # Post-implant Flow Dynamics
 
 
+class ValvePlaneLevel(Enum):
+    """瓣膜平面级别枚举"""
+    INFLOW = "inflow"               # 流入段
+    NADIR = "nadir"                 # 最低点
+    COMMISSURE = "commissure"       # 连合水平
+
+
 @dataclass
 class VisualizationConfig:
     """可视化配置"""
@@ -1489,6 +1496,316 @@ class PhaseContourRepository:
             CardiacPhase.END_DIASTOLE.value: self.diastole.get_loaded_contours_summary(),
             CardiacPhase.END_SYSTOLE.value: self.systole.get_loaded_contours_summary(),
         }
+
+
+@dataclass
+class MultiLevelPlaneContour(ContourGeometry, ContourBase):
+    """多层级瓣膜平面轮廓
+    
+    用于处理从支架底部向上不同高度的平面轮廓数据，
+    支持瓣膜特定的 inflow、nadir、commissure level 映射。
+    """
+    
+    height: float = 0.0  # 平面高度 (cm)
+    level_type: Optional[str] = None  # 级别类型 (inflow/nadir/commissure)
+    
+    def __init__(self, height=0.0, level_type=None, points=None, less_points=None, 
+                 plane_params=None, perimeter=0.0, area=0.0, ped=0.0, aed=0.0, 
+                 max_dist=0.0, min_dist=0.0, average_dist=0.0, max_dist_pair=None, 
+                 min_dist_pair=None, cardiac_phase=None):
+        # 初始化ContourGeometry的数据
+        super().__init__(
+            points=points or [],
+            less_points=less_points or [],
+            plane_params=plane_params or [],
+            perimeter=perimeter,
+            area=area,
+            ped=ped,
+            aed=aed,
+            max_dist=max_dist,
+            min_dist=min_dist,
+            average_dist=average_dist,
+            max_dist_pair=max_dist_pair or [],
+            min_dist_pair=min_dist_pair or []
+        )
+        # 初始化ContourBase
+        ContourBase.__init__(self, cardiac_phase)
+        
+        # 多层级平面特有属性
+        self.height = height
+        self.level_type = level_type
+    
+    @property
+    def contour_type(self) -> CriticalContourType:
+        # 为多层级平面创建动态类型标识
+        return CriticalContourType.VALVE_STENT_BOTTOM  # 复用现有类型，但通过高度区分
+    
+    @property
+    def json_field_name(self) -> str:
+        """获取对应的JSON字段名"""
+        return f"Stent_Frame_base_up_{self.height}_plane"
+    
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据字典加载轮廓数据"""
+        try:
+            # 设置ContourGeometry的属性
+            self.points = data.get('points', [])
+            self.less_points = data.get('less_points', [])
+            self.plane_params = data.get('plane_params', [])
+            self.perimeter = data.get('perimeter', 0.0)
+            self.area = data.get('area', 0.0)
+            self.ped = data.get('PED', 0.0)
+            self.aed = data.get('AED', 0.0)
+            self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist = data.get('min_dist', 0.0)
+            self.average_dist = data.get('average_dist', 0.0)
+            self.max_dist_pair = data.get('max_dist_pair', [])
+            self.min_dist_pair = data.get('min_dist_pair', [])
+            self._slicer_node_id = data.get('_slicer_node_id')
+            return True
+        except Exception as e:
+            logging.error(f"加载多层级平面轮廓数据失败: {e}")
+            return False
+    
+    def get_measurements(self) -> Dict[str, float]:
+        """获取测量数据"""
+        return self.get_plane_measurements()
+    
+    @property
+    def description(self) -> str:
+        level_desc = f" ({self.level_type})" if self.level_type else ""
+        return f"支架底部上方 {self.height}cm 平面{level_desc}"
+    
+    @property
+    def standard_node_name(self) -> str:
+        """生成包含期像和高度信息的标准节点名称"""
+        base_name = f"StentPlane_{self.height}cm"
+        if self.level_type:
+            base_name += f"_{self.level_type.title()}"
+        if self.cardiac_phase:
+            phase_suffix = self._get_phase_suffix(self.cardiac_phase)
+            return f"{base_name}_{phase_suffix}"
+        return base_name
+    
+    def get_plane_measurements(self) -> Dict[str, float]:
+        """获取平面相关测量"""
+        return {
+            'height': self.height,
+            'perimeter': self.perimeter,
+            'area': self.area,
+            'longest_diameter': self.max_dist,
+            'shortest_diameter': self.min_dist,
+            'perimeter_derived_diameter': self.ped,
+            'area_derived_diameter': self.aed,
+            'average_diameter': self.average_dist
+        }
+    
+    def create_visualization(self) -> bool:
+        """创建可视化节点"""
+        # 为多层级平面使用特殊的可视化配置
+        node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.VALVE_STENT_BOTTOM)
+        return node_id is not None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """将多层级平面轮廓数据转换为字典格式"""
+        base_dict = super().to_dict()
+        base_dict.update({
+            'contour_type': 'MultiLevelPlaneContour',
+            'height': self.height,
+            'level_type': self.level_type,
+            'json_field_name': self.json_field_name
+        })
+        return base_dict
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'MultiLevelPlaneContour':
+        """从字典创建多层级平面轮廓对象"""
+        instance = cls(
+            height=data.get('height', 0.0),
+            level_type=data.get('level_type'),
+            points=data.get('points', []),
+            less_points=data.get('less_points', []),
+            plane_params=data.get('plane_params', []),
+            perimeter=data.get('perimeter', 0.0),
+            area=data.get('area', 0.0),
+            ped=data.get('ped', 0.0),
+            aed=data.get('aed', 0.0),
+            max_dist=data.get('max_dist', 0.0),
+            min_dist=data.get('min_dist', 0.0),
+            average_dist=data.get('average_dist', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
+            min_dist_pair=data.get('min_dist_pair', []),
+            cardiac_phase=data.get('cardiac_phase')
+        )
+        instance._slicer_node_id = data.get('_slicer_node_id')
+        return instance
+
+
+class MultiLevelPlaneManager:
+    """多层级平面管理器
+    
+    管理多个高度的瓣膜平面轮廓，提供基于瓣膜类型的
+    inflow、nadir、commissure level 映射功能。
+    """
+    
+    def __init__(self, cardiac_phase: Optional[str] = None):
+        self.logger = logging.getLogger(__name__)
+        self.cardiac_phase = cardiac_phase
+        self._planes: Dict[float, MultiLevelPlaneContour] = {}
+        self._valve_config: Optional[Any] = None  # 瓣膜配置，避免循环导入
+    
+    def set_valve_config(self, valve_config):
+        """设置瓣膜配置（由外部注入以避免循环导入）"""
+        self._valve_config = valve_config
+    
+    def load_planes_from_measurement_data(self, measurement_data: Dict[str, Any], 
+                                        available_heights: List[float]) -> int:
+        """
+        从measurement.json数据中加载多个高度的平面
+        
+        Args:
+            measurement_data: 测量数据字典
+            available_heights: 可用的高度列表
+            
+        Returns:
+            int: 成功加载的平面数量
+        """
+        loaded_count = 0
+        
+        for height in available_heights:
+            field_name = f"Stent_Frame_base_up_{height}_plane"
+            
+            if field_name in measurement_data:
+                try:
+                    plane_data = measurement_data[field_name]
+                    plane_contour = MultiLevelPlaneContour(
+                        height=height,
+                        cardiac_phase=self.cardiac_phase
+                    )
+                    
+                    if plane_contour.load_from_data(plane_data):
+                        self._planes[height] = plane_contour
+                        loaded_count += 1
+                        self.logger.info(f"成功加载 {height}cm 平面数据")
+                    else:
+                        self.logger.warning(f"加载 {height}cm 平面数据失败")
+                        
+                except Exception as e:
+                    self.logger.error(f"处理 {height}cm 平面数据时出错: {e}")
+            else:
+                self.logger.debug(f"未找到 {height}cm 平面数据: {field_name}")
+        
+        self.logger.info(f"共加载 {loaded_count} 个多层级平面")
+        return loaded_count
+    
+    def set_level_mappings(self, manufacturer: str, model: str):
+        """
+        根据瓣膜类型设置级别映射
+        
+        Args:
+            manufacturer: 瓣膜厂家
+            model: 瓣膜型号
+        """
+        if not self._valve_config:
+            self.logger.warning("瓣膜配置未设置，无法进行级别映射")
+            return
+        
+        try:
+            # 获取瓣膜特定的高度配置
+            valve_config = self._valve_config.get_valve_plane_config(manufacturer, model)
+            
+            # 为每个平面设置级别类型
+            for height, plane in self._planes.items():
+                if abs(height - valve_config.inflow) < 0.01:
+                    plane.level_type = ValvePlaneLevel.INFLOW.value
+                elif abs(height - valve_config.nadir) < 0.01:
+                    plane.level_type = ValvePlaneLevel.NADIR.value
+                elif abs(height - valve_config.commissure) < 0.01:
+                    plane.level_type = ValvePlaneLevel.COMMISSURE.value
+                else:
+                    plane.level_type = None  # 其他高度不设置级别
+            
+            self.logger.info(f"完成瓣膜 {manufacturer} {model} 的级别映射")
+            
+        except Exception as e:
+            self.logger.error(f"设置级别映射失败: {e}")
+    
+    def get_plane_by_height(self, height: float) -> Optional[MultiLevelPlaneContour]:
+        """根据高度获取平面"""
+        return self._planes.get(height)
+    
+    def get_plane_by_level(self, level: str) -> Optional[MultiLevelPlaneContour]:
+        """根据级别获取平面"""
+        for plane in self._planes.values():
+            if plane.level_type == level:
+                return plane
+        return None
+    
+    def get_all_planes(self) -> List[MultiLevelPlaneContour]:
+        """获取所有平面"""
+        return list(self._planes.values())
+    
+    def get_available_heights(self) -> List[float]:
+        """获取已加载的高度列表"""
+        return sorted(self._planes.keys())
+    
+    def get_level_planes(self) -> Dict[str, Optional[MultiLevelPlaneContour]]:
+        """获取各级别对应的平面"""
+        return {
+            ValvePlaneLevel.INFLOW.value: self.get_plane_by_level(ValvePlaneLevel.INFLOW.value),
+            ValvePlaneLevel.NADIR.value: self.get_plane_by_level(ValvePlaneLevel.NADIR.value),
+            ValvePlaneLevel.COMMISSURE.value: self.get_plane_by_level(ValvePlaneLevel.COMMISSURE.value)
+        }
+    
+    def create_all_visualizations(self) -> Dict[float, bool]:
+        """为所有平面创建可视化"""
+        results = {}
+        for height, plane in self._planes.items():
+            try:
+                results[height] = plane.create_visualization()
+            except Exception as e:
+                self.logger.error(f"创建 {height}cm 平面可视化失败: {e}")
+                results[height] = False
+        return results
+    
+    def remove_all_visualizations(self):
+        """移除所有平面的可视化"""
+        for plane in self._planes.values():
+            try:
+                plane.remove_slicer_node()
+            except Exception as e:
+                self.logger.error(f"移除平面可视化失败: {e}")
+    
+    def clear(self):
+        """清理所有数据"""
+        self.remove_all_visualizations()
+        self._planes.clear()
+        self.logger.info("已清理所有多层级平面数据")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            'cardiac_phase': self.cardiac_phase,
+            'planes': {str(height): plane.to_dict() for height, plane in self._planes.items()}
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], valve_config=None) -> 'MultiLevelPlaneManager':
+        """从字典创建实例"""
+        manager = cls(cardiac_phase=data.get('cardiac_phase'))
+        if valve_config:
+            manager.set_valve_config(valve_config)
+        
+        planes_data = data.get('planes', {})
+        for height_str, plane_data in planes_data.items():
+            try:
+                height = float(height_str)
+                plane = MultiLevelPlaneContour.from_dict(plane_data)
+                manager._planes[height] = plane
+            except Exception as e:
+                manager.logger.error(f"恢复平面数据失败: {e}")
+        
+        return manager
 
 
 # ========== 轮廓工厂注册 ==========

@@ -5,6 +5,14 @@
 - Inflow 分析界面
 - Nadir 分析界面
 - Commissure Level 分析界面
+
+每个界面显示对应瓣膜平面的测量参数：
+- 周长 (Perimeter)，单位：mm
+- 面积 (Area)，单位：mm²
+- 最长径 (Longest Diameter)，单位：mm
+- 最短径 (Shortest Diameter)，单位：mm
+- 周长平均径 (Perimeter-derived Diameter)
+- 面积平均径 (Area-derived Diameter)
 """
 import logging
 from typing import Optional, Dict, Any
@@ -15,7 +23,8 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from .geometry_analysis_logic import InflowAnalysisLogic, NadirAnalysisLogic, CommissureLevelAnalysisLogic
+    from .module4_logic import Module4Logic
+    from ..core.domain_models import ValvePlaneLevel
 except ImportError:
     import os
     import sys
@@ -29,7 +38,8 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
-    from geometry_analysis_logic import InflowAnalysisLogic, NadirAnalysisLogic, CommissureLevelAnalysisLogic
+    from module4_logic import Module4Logic
+    from core.domain_models import ValvePlaneLevel
 
 
 class BaseGeometryAnalysisWidget(qt.QWidget):
@@ -38,452 +48,685 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     # 状态改变信号
     statusChanged = qt.Signal(dict)
     
-    def __init__(self, analysis_type: str, session: TAVRStudySession, parent=None):
+    def __init__(self, level_type: str, session: TAVRStudySession, logic: Optional[Module4Logic] = None, parent=None):
         super().__init__(parent)
-        self.analysis_type = analysis_type
+        self.level_type = level_type
         self.session = session
-        self.setObjectName(f"{analysis_type}GeometryAnalysisWidget")
-        logging.info(f"{analysis_type}几何形态分析界面初始化")
+        self.logic = logic
+        self.setObjectName(f"{level_type}GeometryAnalysisWidget")
+        
+        # 添加 logger
+        self.logger = logging.getLogger(__name__)
+        
+        # UI组件
+        self.valve_info_label = None
+        self.measurements_table = None
+        self.load_data_btn = None
+        self.show_plane_btn = None
+        self.hide_plane_btn = None
+        self.status_label = None
+        
+        logging.info(f"{level_type}几何形态分析界面初始化")
+        self._setup_ui()
     
-    def get_analysis_results(self) -> Dict[str, Any]:
-        """获取分析结果 - 子类应该实现"""
-        return {'analysis_type': self.analysis_type, 'status': '基类默认实现'}
+    def _setup_ui(self):
+        """设置用户界面"""
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(8)
+        
+        # 标题区域
+        title_frame = self._create_title_section()
+        main_layout.addWidget(title_frame)
+        
+        # 瓣膜信息区域
+        valve_info_frame = self._create_valve_info_section()
+        main_layout.addWidget(valve_info_frame)
+        
+        # 控制按钮区域
+        control_frame = self._create_control_section()
+        main_layout.addWidget(control_frame)
+        
+        # 测量结果区域
+        measurements_frame = self._create_measurements_section()
+        main_layout.addWidget(measurements_frame)
+        
+        # 状态区域
+        status_frame = self._create_status_section()
+        main_layout.addWidget(status_frame)
+        
+        main_layout.addStretch()
+        
+        # 在UI创建完成后，安全地初始化瓣膜选择器
+        self._setup_valve_selector()
     
-    def reset_analysis(self):
-        """重置分析 - 子类应该实现"""
-        logging.info(f"{self.analysis_type}几何形态分析重置 - 基类默认实现")
+    def _setup_valve_selector(self):
+        """安全地设置瓣膜选择器"""
+        try:
+            # 先初始化型号选项（不连接信号）
+            if hasattr(self, 'manufacturer_combo') and hasattr(self, 'model_combo'):
+                self._init_model_combo_safely()
+            
+            # 延迟连接信号，使用QTimer确保在下一个事件循环中执行
+            import qt
+            qt.QTimer.singleShot(100, self._connect_valve_selector_signals)
+                
+        except Exception as e:
+            self.logger.error(f"设置瓣膜选择器失败: {e}")
+    
+    def _init_model_combo_safely(self):
+        """安全地初始化型号下拉框"""
+        try:
+            if not hasattr(self, 'model_combo'):
+                return
+                
+            # 直接设置默认的Medtronic型号
+            self.model_combo.clear()
+            self.model_combo.addItems(["Evolut R/PRO", "Evolut FX", "CoreValve", "Evolut PRO+"])
+            
+        except Exception as e:
+            self.logger.error(f"安全初始化型号下拉框失败: {e}")
+    
+    def _connect_valve_selector_signals(self):
+        """延迟连接瓣膜选择器信号"""
+        try:
+            # 连接厂家选择变化信号 - 使用lambda避免参数传递问题
+            if hasattr(self, 'manufacturer_combo'):
+                self.manufacturer_combo.currentTextChanged.connect(lambda: self._update_model_options())
+            
+            # 连接设置按钮信号
+            if hasattr(self, 'set_valve_btn'):
+                self.set_valve_btn.clicked.connect(self._on_set_valve)
+                
+        except Exception as e:
+            self.logger.error(f"连接瓣膜选择器信号失败: {e}")
+    
+    def _update_model_options(self):
+        """更新型号选项"""
+        try:
+            if not hasattr(self, 'manufacturer_combo') or not hasattr(self, 'model_combo'):
+                return
+                
+            manufacturer = self.manufacturer_combo.currentText()
+            self.model_combo.clear()
+            
+            # 添加对应厂家的型号
+            if manufacturer == "Medtronic":
+                self.model_combo.addItems(["Evolut R/PRO", "Evolut FX", "CoreValve", "Evolut PRO+"])
+            elif manufacturer == "Edwards Lifesciences":
+                self.model_combo.addItems(["SAPIEN 3", "SAPIEN 3 Ultra", "SAPIEN XT"])
+            elif manufacturer == "Venus Medtech":
+                self.model_combo.addItems(["VenusA-Valve", "VenusA-Plus"])
+            elif manufacturer == "MicroPort":
+                self.model_combo.addItems(["VitaFlow"])
+            elif manufacturer == "Peijia Medical":
+                self.model_combo.addItems(["TaurusOne"])
+            else:
+                self.model_combo.addItem("Unknown Model")
+                
+        except Exception as e:
+            self.logger.error(f"更新型号选项失败: {e}")
+    
+    def _on_manufacturer_changed(self, manufacturer: str):
+        """厂家选择变化时更新型号选项"""
+        try:
+            self._update_model_options()
+        except Exception as e:
+            self.logger.error(f"厂家选择变化处理失败: {e}")
+    
+    def _on_set_valve(self):
+        """应用瓣膜设置"""
+        try:
+            if not hasattr(self, 'manufacturer_combo') or not hasattr(self, 'model_combo'):
+                self._update_status("瓣膜选择器未初始化", "error")
+                return
+                
+            manufacturer = self.manufacturer_combo.currentText()
+            model = self.model_combo.currentText()
+            
+            if not manufacturer or not model:
+                self._update_status("请选择瓣膜厂家和型号", "warning")
+                return
+            
+            # 设置到逻辑组件
+            if self.logic:
+                self.logic.set_valve_info(manufacturer, model)
+                
+                # 如果有会话，也更新会话中的患者数据
+                if self.session:
+                    patient_data = self.session.get_patient_data()
+                    if patient_data:
+                        patient_data.valveBrand = manufacturer
+                        patient_data.valveModel = model
+                        self.logger.info(f"设置瓣膜信息: {manufacturer} {model}")
+                
+                # 更新显示
+                self._update_valve_info()
+                self._update_status(f"已设置瓣膜: {manufacturer} {model}", "success")
+                
+                # 检查并隐藏选择器
+                self._check_and_hide_valve_selector()
+            else:
+                self._update_status("逻辑组件未初始化", "error")
+                
+        except Exception as e:
+            self.logger.error(f"应用瓣膜设置失败: {e}")
+            self._update_status(f"设置失败: {e}", "error")
+    
+    def _check_and_hide_valve_selector(self):
+        """检查瓣膜信息并决定是否隐藏选择器"""
+        try:
+            if not hasattr(self, 'valve_selector_frame'):
+                return
+                
+            if self.logic:
+                mapping_summary = self.logic.get_valve_mapping_summary()
+                if 'error' not in mapping_summary:
+                    # 瓣膜信息已设置，隐藏选择器
+                    self.valve_selector_frame.setVisible(False)
+                else:
+                    # 瓣膜信息未设置，显示选择器
+                    self.valve_selector_frame.setVisible(True)
+        except Exception as e:
+            self.logger.error(f"检查瓣膜选择器状态失败: {e}")
+    
+    def _create_title_section(self) -> qt.QWidget:
+        """创建标题区域"""
+        frame = qt.QWidget()
+        layout = qt.QVBoxLayout(frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        
+        # 主标题
+        title_text = f"{self.level_type.title()} 几何形态分析"
+        title = qt.QLabel(title_text)
+        title.setAlignment(qt.Qt.AlignCenter)
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #1e40af;
+                background-color: #dbeafe;
+                padding: 8px 16px;
+                border: 1px solid #93c5fd;
+                border-radius: 6px;
+                margin-bottom: 4px;
+            }
+        """)
+        layout.addWidget(title)
+        
+        # 描述
+        description_text = f"分析瓣膜支架 {self.level_type} 级别的几何形态参数"
+        description = qt.QLabel(description_text)
+        description.setAlignment(qt.Qt.AlignCenter)
+        description.setStyleSheet(StyleManager.get_label_style("small"))
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        
+        return frame
+    
+    def _create_valve_info_section(self) -> qt.QWidget:
+        """创建瓣膜信息区域"""
+        frame = LayoutManager.create_section_frame("瓣膜信息")
+        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
+        
+        # 瓣膜信息显示标签
+        self.valve_info_label = qt.QLabel("瓣膜信息未设置")
+        self.valve_info_label.setStyleSheet("""
+            QLabel {
+                color: #6b7280;
+                font-size: 12px;
+                padding: 8px;
+                background-color: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+            }
+        """)
+        layout.addWidget(self.valve_info_label)
+        
+        # 瓣膜选择器
+        self.valve_selector_frame = qt.QWidget()
+        selector_layout = qt.QHBoxLayout(self.valve_selector_frame)
+        selector_layout.setContentsMargins(0, 8, 0, 0)
+        selector_layout.setSpacing(8)
+        
+        # 添加说明标签
+        selector_label = qt.QLabel("瓣膜选择:")
+        selector_label.setStyleSheet("""
+            QLabel {
+                color: #374151;
+                font-size: 12px;
+                font-weight: bold;
+                min-width: 60px;
+            }
+        """)
+        selector_layout.addWidget(selector_label)
+        
+        # 厂家选择下拉框
+        self.manufacturer_combo = qt.QComboBox()
+        self.manufacturer_combo.addItems([
+            "Medtronic", "Edwards Lifesciences", "Venus Medtech", 
+            "MicroPort", "Peijia Medical"
+        ])
+        self.manufacturer_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 12px;
+                min-width: 120px;
+                max-width: 140px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border-color: #9ca3af;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+            }
+        """)
+        selector_layout.addWidget(self.manufacturer_combo)
+        
+        # 型号选择下拉框
+        self.model_combo = qt.QComboBox()
+        self.model_combo.setStyleSheet("""
+            QComboBox {
+                padding: 6px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                font-size: 12px;
+                min-width: 130px;
+                max-width: 150px;
+                background-color: white;
+            }
+            QComboBox:hover {
+                border-color: #9ca3af;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+            }
+        """)
+        selector_layout.addWidget(self.model_combo)
+        
+        # 设置按钮
+        self.set_valve_btn = LayoutManager.create_button_with_style(
+            "应用", "primary", "sm", 32
+        )
+        self.set_valve_btn.setMinimumWidth(80)  # 设置最小宽度防止被压缩
+        selector_layout.addWidget(self.set_valve_btn)
+        
+        selector_layout.addStretch()
+        
+        layout.addWidget(self.valve_selector_frame)
+        
+        return frame
+    
+    def _create_control_section(self) -> qt.QWidget:
+        """创建控制按钮区域"""
+        frame = LayoutManager.create_section_frame("操作控制")
+        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
+        
+        # 按钮布局
+        button_layout = qt.QHBoxLayout()
+        button_layout.setSpacing(8)
+        
+        # 加载数据按钮
+        self.load_data_btn = LayoutManager.create_button_with_style(
+            "加载平面数据", "primary", "default", 36
+        )
+        self.load_data_btn.clicked.connect(self._on_load_data)
+        button_layout.addWidget(self.load_data_btn)
+        
+        # 显示平面按钮
+        self.show_plane_btn = LayoutManager.create_button_with_style(
+            "显示平面", "secondary", "default", 36
+        )
+        self.show_plane_btn.clicked.connect(self._on_show_plane)
+        self.show_plane_btn.setEnabled(False)
+        button_layout.addWidget(self.show_plane_btn)
+        
+        # 隐藏平面按钮
+        self.hide_plane_btn = LayoutManager.create_button_with_style(
+            "隐藏平面", "secondary", "default", 36
+        )
+        self.hide_plane_btn.clicked.connect(self._on_hide_plane)
+        self.hide_plane_btn.setEnabled(False)
+        button_layout.addWidget(self.hide_plane_btn)
+        
+        layout.addLayout(button_layout)
+        return frame
+    
+    def _create_measurements_section(self) -> qt.QWidget:
+        """创建测量结果区域"""
+        frame = LayoutManager.create_section_frame("测量参数")
+        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
+        
+        # 创建测量参数表格
+        self.measurements_table = qt.QTableWidget()
+        self.measurements_table.setColumnCount(2)
+        self.measurements_table.setHorizontalHeaderLabels(["参数", "数值"])
+        
+        # 设置表格样式
+        self.measurements_table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+                background-color: white;
+                gridline-color: #f3f4f6;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #f3f4f6;
+            }
+            QHeaderView::section {
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
+                padding: 8px;
+                font-weight: bold;
+                color: #374151;
+            }
+        """)
+        
+        # 设置表格属性
+        self.measurements_table.horizontalHeader().setStretchLastSection(True)
+        self.measurements_table.verticalHeader().setVisible(False)
+        self.measurements_table.setAlternatingRowColors(True)
+        self.measurements_table.setSelectionBehavior(qt.QAbstractItemView.SelectRows)
+        self.measurements_table.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
+        
+        # 设置固定高度
+        self.measurements_table.setFixedHeight(240)
+        
+        # 初始化空表格
+        self._init_empty_measurements_table()
+        
+        layout.addWidget(self.measurements_table)
+        return frame
+    
+    def _create_status_section(self) -> qt.QWidget:
+        """创建状态区域"""
+        frame = qt.QWidget()
+        layout = qt.QHBoxLayout(frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.status_label = qt.QLabel("等待加载数据...")
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #6b7280;
+                font-size: 11px;
+                font-style: italic;
+                padding: 4px 8px;
+            }
+        """)
+        layout.addWidget(self.status_label)
+        layout.addStretch()
+        
+        return frame
+    
+    def _init_empty_measurements_table(self):
+        """初始化空的测量参数表格"""
+        parameters = [
+            ("周长 (Perimeter)", "-- mm"),
+            ("面积 (Area)", "-- mm²"),
+            ("最长径 (Longest Diameter)", "-- mm"),
+            ("最短径 (Shortest Diameter)", "-- mm"),
+            ("周长平均径 (PED)", "-- mm"),
+            ("面积平均径 (AED)", "-- mm"),
+            ("平面高度 (Height)", "-- cm")
+        ]
+        
+        self.measurements_table.setRowCount(len(parameters))
+        
+        for row, (param_name, default_value) in enumerate(parameters):
+            # 参数名称
+            param_item = qt.QTableWidgetItem(param_name)
+            param_item.setFlags(param_item.flags() & ~qt.Qt.ItemIsEditable)
+            self.measurements_table.setItem(row, 0, param_item)
+            
+            # 参数值
+            value_item = qt.QTableWidgetItem(default_value)
+            value_item.setFlags(value_item.flags() & ~qt.Qt.ItemIsEditable)
+            value_item.setTextAlignment(qt.Qt.AlignRight | qt.Qt.AlignVCenter)
+            self.measurements_table.setItem(row, 1, value_item)
+    
+    def _on_load_data(self):
+        """加载数据按钮响应"""
+        try:
+            if not self.logic:
+                self._update_status("错误: 逻辑组件未初始化", "error")
+                return
+            
+            # 从会话更新瓣膜信息
+            if self.logic.update_from_session():
+                self._update_valve_info()
+                # 如果成功从会话获取瓣膜信息，隐藏临时选择器
+                self._check_and_hide_temp_selector()
+            
+            # 获取测量数据
+            measurements = self.logic.get_plane_measurements_for_level(self.level_type)
+            
+            if 'error' in measurements:
+                self._update_status(f"未找到 {self.level_type} 级别的平面数据", "warning")
+                self.show_plane_btn.setEnabled(False)
+                self.hide_plane_btn.setEnabled(False)
+            else:
+                self._update_measurements_table(measurements)
+                self._update_status(f"成功加载 {self.level_type} 级别数据", "success")
+                self.show_plane_btn.setEnabled(True)
+                self.hide_plane_btn.setEnabled(True)
+                
+        except Exception as e:
+            self._update_status(f"加载数据失败: {e}", "error")
+            logging.error(f"加载 {self.level_type} 数据失败: {e}")
+    
+    def _check_and_hide_temp_selector(self):
+        """检查瓣膜信息并决定是否隐藏临时选择器（现在调用新方法）"""
+        self._check_and_hide_valve_selector()
+    
+    def _on_show_plane(self):
+        """显示平面按钮响应"""
+        try:
+            if self.logic and self.logic.create_visualizations_for_level(self.level_type):
+                self._update_status(f"{self.level_type} 平面已显示", "success")
+            else:
+                self._update_status(f"显示 {self.level_type} 平面失败", "error")
+        except Exception as e:
+            self._update_status(f"显示平面失败: {e}", "error")
+            logging.error(f"显示 {self.level_type} 平面失败: {e}")
+    
+    def _on_hide_plane(self):
+        """隐藏平面按钮响应"""
+        try:
+            if self.logic:
+                self.logic.remove_visualizations_for_level(self.level_type)
+                self._update_status(f"{self.level_type} 平面已隐藏", "info")
+        except Exception as e:
+            self._update_status(f"隐藏平面失败: {e}", "error")
+            logging.error(f"隐藏 {self.level_type} 平面失败: {e}")
+    
+    def _update_measurements_table(self, measurements: Dict[str, Any]):
+        """更新测量参数表格"""
+        try:
+            # 参数映射
+            param_mapping = [
+                ("周长 (Perimeter)", "perimeter", "mm"),
+                ("面积 (Area)", "area", "mm²"),
+                ("最长径 (Longest Diameter)", "longest_diameter", "mm"),
+                ("最短径 (Shortest Diameter)", "shortest_diameter", "mm"),
+                ("周长平均径 (PED)", "perimeter_derived_diameter", "mm"),
+                ("面积平均径 (AED)", "area_derived_diameter", "mm"),
+                ("平面高度 (Height)", "height", "cm")
+            ]
+            
+            for row, (display_name, key, unit) in enumerate(param_mapping):
+                value = measurements.get(key, 0.0)
+                
+                if isinstance(value, (int, float)) and value > 0:
+                    formatted_value = f"{value:.2f} {unit}"
+                else:
+                    formatted_value = f"-- {unit}"
+                
+                # 更新值
+                value_item = self.measurements_table.item(row, 1)
+                if value_item:
+                    value_item.setText(formatted_value)
+                    
+                    # 根据数值设置颜色
+                    if value > 0:
+                        value_item.setForeground(qt.QColor("#059669"))  # 绿色表示有效数值
+                    else:
+                        value_item.setForeground(qt.QColor("#6b7280"))  # 灰色表示无效数值
+                        
+        except Exception as e:
+            logging.error(f"更新测量参数表格失败: {e}")
+    
+    def _update_valve_info(self):
+        """更新瓣膜信息显示"""
+        try:
+            if not self.logic:
+                self._show_valve_info_error("逻辑组件未初始化")
+                return
+                
+            mapping_summary = self.logic.get_valve_mapping_summary()
+            
+            if 'error' in mapping_summary:
+                error_msg = mapping_summary['error']
+                if '瓣膜信息未设置' in error_msg:
+                    self._show_valve_info_warning("请在下方选择瓣膜品牌和型号")
+                else:
+                    self._show_valve_info_error(error_msg)
+            else:
+                valve_info = mapping_summary.get('valve_info', {})
+                plane_info = mapping_summary.get('plane_mappings', {}).get(self.level_type, {})
+                
+                manufacturer = valve_info.get('manufacturer', '')
+                model = valve_info.get('model', '')
+                height = plane_info.get('height', 0)
+                
+                info_text = f"瓣膜: {manufacturer} {model} | {self.level_type.title()} 高度: {height}cm"
+                self._show_valve_info_success(info_text)
+                
+        except Exception as e:
+            logging.error(f"更新瓣膜信息失败: {e}")
+            self._show_valve_info_error(f"更新失败: {e}")
+    
+    def _show_valve_info_success(self, message: str):
+        """显示成功的瓣膜信息"""
+        self.valve_info_label.setText(message)
+        self.valve_info_label.setStyleSheet("""
+            QLabel {
+                color: #059669;
+                font-size: 12px;
+                padding: 8px;
+                background-color: #ecfdf5;
+                border: 1px solid #a7f3d0;
+                border-radius: 4px;
+            }
+        """)
+    
+    def _show_valve_info_warning(self, message: str):
+        """显示警告的瓣膜信息"""
+        self.valve_info_label.setText(f"⚠️ {message}")
+        self.valve_info_label.setStyleSheet("""
+            QLabel {
+                color: #d97706;
+                font-size: 12px;
+                padding: 8px;
+                background-color: #fffbeb;
+                border: 1px solid #fcd34d;
+                border-radius: 4px;
+            }
+        """)
+    
+    def _show_valve_info_error(self, message: str):
+        """显示错误的瓣膜信息"""
+        self.valve_info_label.setText(f"❌ {message}")
+        self.valve_info_label.setStyleSheet("""
+            QLabel {
+                color: #dc2626;
+                font-size: 12px;
+                padding: 8px;
+                background-color: #fef2f2;
+                border: 1px solid #fca5a5;
+                border-radius: 4px;
+            }
+        """)
+    
+    
+    def _update_status(self, message: str, status_type: str = "info"):
+        """更新状态信息"""
+        self.status_label.setText(message)
+        
+        color_map = {
+            "success": "#059669",
+            "error": "#dc2626", 
+            "warning": "#d97706",
+            "info": "#6b7280"
+        }
+        
+        color = color_map.get(status_type, "#6b7280")
+        self.status_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                font-size: 11px;
+                font-style: italic;
+                padding: 4px 8px;
+            }}
+        """)
+    
+    def set_logic(self, logic: Module4Logic):
+        """设置逻辑组件"""
+        self.logic = logic
     
     def set_session(self, session: TAVRStudySession):
         """设置会话对象"""
         self.session = session
+        if self.logic:
+            self.logic.session = session
     
     def on_activated(self):
         """激活时的回调"""
-        logging.info(f"{self.analysis_type}几何形态分析界面激活")
+        logging.info(f"{self.level_type}几何形态分析界面激活")
+        
+        # 检查并更新瓣膜信息显示
+        self._check_and_hide_temp_selector()
+        self._update_valve_info()
+        
+        # 自动加载数据
+        self._on_load_data()
     
     def on_deactivated(self):
         """停用时的回调"""
-        logging.info(f"{self.analysis_type}几何形态分析界面停用")
+        logging.info(f"{self.level_type}几何形态分析界面停用")
     
     def cleanup(self):
         """清理资源"""
-        logging.info(f"{self.analysis_type}几何形态分析界面清理完成")
-    
-    def _emit_status_changed(self):
-        """发出状态改变信号"""
-        results = self.get_analysis_results()
-        self.statusChanged.emit(results)
+        try:
+            # 隐藏可视化
+            if self.logic:
+                self.logic.remove_visualizations_for_level(self.level_type)
+        except Exception as e:
+            logging.error(f"清理 {self.level_type} 界面失败: {e}")
+        
+        logging.info(f"{self.level_type}几何形态分析界面清理完成")
 
 
 class InflowAnalysisWidget(BaseGeometryAnalysisWidget):
     """Inflow 几何形态分析界面"""
     
-    def __init__(self, session: TAVRStudySession, logic: Optional[InflowAnalysisLogic] = None, parent=None):
-        super().__init__("Inflow", session, parent)
-        self.logic = logic or InflowAnalysisLogic()
-        self.logic.set_session(session)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """设置Inflow分析界面"""
-        main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
-        
-        # 标题
-        title = qt.QLabel("Inflow 流入口几何形态分析")
-        title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                font-weight: bold;
-                color: #2c3e50;
-                background-color: #e8f4f8;
-                padding: 6px 12px;
-                border: 1px solid #bee5eb;
-                border-radius: 4px;
-                margin-bottom: 3px;
-            }
-        """)
-        main_layout.addWidget(title)
-        
-        # 描述
-        description = qt.QLabel("分析瓣膜支架流入口的几何形态参数")
-        description.setStyleSheet(StyleManager.get_label_style("small"))
-        description.setWordWrap(True)
-        main_layout.addWidget(description)
-        
-        # 分析控制面板
-        control_frame = LayoutManager.create_section_frame("分析控制")
-        control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, control_frame)
-        
-        # 分析按钮
-        self.analyze_btn = LayoutManager.create_button_with_style(
-            "开始 Inflow 分析", "primary", "default", 40
-        )
-        self.analyze_btn.clicked.connect(self._on_analyze)
-        control_layout.addWidget(self.analyze_btn)
-        
-        # 重置按钮
-        self.reset_btn = LayoutManager.create_button_with_style(
-            "重置分析", "secondary", "default", 40
-        )
-        self.reset_btn.clicked.connect(self._on_reset)
-        control_layout.addWidget(self.reset_btn)
-        
-        main_layout.addWidget(control_frame)
-        
-        # 结果显示面板
-        results_frame = LayoutManager.create_section_frame("分析结果")
-        results_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, results_frame)
-        
-        self.results_label = qt.QLabel("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        results_layout.addWidget(self.results_label)
-        
-        main_layout.addWidget(results_frame)
-        main_layout.addStretch()
-    
-    def _on_analyze(self):
-        """执行Inflow分析"""
-        try:
-            self.analyze_btn.setEnabled(False)
-            self.analyze_btn.setText("正在分析...")
-            
-            # 这里添加实际的分析逻辑
-            logging.info("开始Inflow几何形态分析")
-            
-            # 模拟分析结果
-            self.results_label.setText("Inflow 分析完成\n- 流入口直径: 23.5 mm\n- 流入口面积: 434.2 mm²\n- 椭圆度: 0.15")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #059669;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #d1fae5;
-                    border-radius: 4px;
-                    background-color: #ecfdf5;
-                }
-            """)
-            
-            self._emit_status_changed()
-            
-        except Exception as e:
-            logging.error(f"Inflow分析失败: {e}")
-            self.results_label.setText(f"分析失败: {str(e)}")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #dc2626;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #fecaca;
-                    border-radius: 4px;
-                    background-color: #fef2f2;
-                }
-            """)
-        finally:
-            self.analyze_btn.setEnabled(True)
-            self.analyze_btn.setText("开始 Inflow 分析")
-    
-    def _on_reset(self):
-        """重置分析"""
-        self.reset_analysis()
-        self.results_label.setText("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        logging.info("Inflow分析已重置")
+    def __init__(self, session: TAVRStudySession, logic: Optional[Module4Logic] = None, parent=None):
+        super().__init__(ValvePlaneLevel.INFLOW.value, session, logic, parent)
 
 
 class NadirAnalysisWidget(BaseGeometryAnalysisWidget):
     """Nadir 几何形态分析界面"""
     
-    def __init__(self, session: TAVRStudySession, logic: Optional[NadirAnalysisLogic] = None, parent=None):
-        super().__init__("Nadir", session, parent)
-        self.logic = logic or NadirAnalysisLogic()
-        self.logic.set_session(session)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """设置Nadir分析界面"""
-        main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
-        
-        # 标题
-        title = qt.QLabel("Nadir 最低点几何形态分析")
-        title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                font-weight: bold;
-                color: #2c3e50;
-                background-color: #e8f4f8;
-                padding: 6px 12px;
-                border: 1px solid #bee5eb;
-                border-radius: 4px;
-                margin-bottom: 3px;
-            }
-        """)
-        main_layout.addWidget(title)
-        
-        # 描述
-        description = qt.QLabel("分析瓣膜支架最低点的几何形态参数")
-        description.setStyleSheet(StyleManager.get_label_style("small"))
-        description.setWordWrap(True)
-        main_layout.addWidget(description)
-        
-        # 分析控制面板
-        control_frame = LayoutManager.create_section_frame("分析控制")
-        control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, control_frame)
-        
-        # 分析按钮
-        self.analyze_btn = LayoutManager.create_button_with_style(
-            "开始 Nadir 分析", "primary", "default", 40
-        )
-        self.analyze_btn.clicked.connect(self._on_analyze)
-        control_layout.addWidget(self.analyze_btn)
-        
-        # 重置按钮
-        self.reset_btn = LayoutManager.create_button_with_style(
-            "重置分析", "secondary", "default", 40
-        )
-        self.reset_btn.clicked.connect(self._on_reset)
-        control_layout.addWidget(self.reset_btn)
-        
-        main_layout.addWidget(control_frame)
-        
-        # 结果显示面板
-        results_frame = LayoutManager.create_section_frame("分析结果")
-        results_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, results_frame)
-        
-        self.results_label = qt.QLabel("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        results_layout.addWidget(self.results_label)
-        
-        main_layout.addWidget(results_frame)
-        main_layout.addStretch()
-    
-    def _on_analyze(self):
-        """执行Nadir分析"""
-        try:
-            self.analyze_btn.setEnabled(False)
-            self.analyze_btn.setText("正在分析...")
-            
-            # 这里添加实际的分析逻辑
-            logging.info("开始Nadir几何形态分析")
-            
-            # 模拟分析结果
-            self.results_label.setText("Nadir 分析完成\n- 最低点高度: 12.3 mm\n- 瓣叶下陷深度: 2.1 mm\n- 对称性指数: 0.92")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #059669;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #d1fae5;
-                    border-radius: 4px;
-                    background-color: #ecfdf5;
-                }
-            """)
-            
-            self._emit_status_changed()
-            
-        except Exception as e:
-            logging.error(f"Nadir分析失败: {e}")
-            self.results_label.setText(f"分析失败: {str(e)}")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #dc2626;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #fecaca;
-                    border-radius: 4px;
-                    background-color: #fef2f2;
-                }
-            """)
-        finally:
-            self.analyze_btn.setEnabled(True)
-            self.analyze_btn.setText("开始 Nadir 分析")
-    
-    def _on_reset(self):
-        """重置分析"""
-        self.reset_analysis()
-        self.results_label.setText("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        logging.info("Nadir分析已重置")
+    def __init__(self, session: TAVRStudySession, logic: Optional[Module4Logic] = None, parent=None):
+        super().__init__(ValvePlaneLevel.NADIR.value, session, logic, parent)
 
 
 class CommissureLevelAnalysisWidget(BaseGeometryAnalysisWidget):
     """Commissure Level 几何形态分析界面"""
     
-    def __init__(self, session: TAVRStudySession, logic: Optional[CommissureLevelAnalysisLogic] = None, parent=None):
-        super().__init__("CommissureLevel", session, parent)
-        self.logic = logic or CommissureLevelAnalysisLogic()
-        self.logic.set_session(session)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """设置Commissure Level分析界面"""
-        main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
-        
-        # 标题
-        title = qt.QLabel("Commissure Level 联合水平面几何形态分析")
-        title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                font-weight: bold;
-                color: #2c3e50;
-                background-color: #e8f4f8;
-                padding: 6px 12px;
-                border: 1px solid #bee5eb;
-                border-radius: 4px;
-                margin-bottom: 3px;
-            }
-        """)
-        main_layout.addWidget(title)
-        
-        # 描述
-        description = qt.QLabel("分析瓣膜联合处水平面的几何形态参数")
-        description.setStyleSheet(StyleManager.get_label_style("small"))
-        description.setWordWrap(True)
-        main_layout.addWidget(description)
-        
-        # 分析控制面板
-        control_frame = LayoutManager.create_section_frame("分析控制")
-        control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, control_frame)
-        
-        # 分析按钮
-        self.analyze_btn = LayoutManager.create_button_with_style(
-            "开始 Commissure Level 分析", "primary", "default", 40
-        )
-        self.analyze_btn.clicked.connect(self._on_analyze)
-        control_layout.addWidget(self.analyze_btn)
-        
-        # 重置按钮
-        self.reset_btn = LayoutManager.create_button_with_style(
-            "重置分析", "secondary", "default", 40
-        )
-        self.reset_btn.clicked.connect(self._on_reset)
-        control_layout.addWidget(self.reset_btn)
-        
-        main_layout.addWidget(control_frame)
-        
-        # 结果显示面板
-        results_frame = LayoutManager.create_section_frame("分析结果")
-        results_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, results_frame)
-        
-        self.results_label = qt.QLabel("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        results_layout.addWidget(self.results_label)
-        
-        main_layout.addWidget(results_frame)
-        main_layout.addStretch()
-    
-    def _on_analyze(self):
-        """执行Commissure Level分析"""
-        try:
-            self.analyze_btn.setEnabled(False)
-            self.analyze_btn.setText("正在分析...")
-            
-            # 这里添加实际的分析逻辑
-            logging.info("开始Commissure Level几何形态分析")
-            
-            # 模拟分析结果
-            self.results_label.setText("Commissure Level 分析完成\n- 联合处高度: 15.8 mm\n- 三联合角度: 120°, 118°, 122°\n- 平面倾斜度: 3.2°")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #059669;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #d1fae5;
-                    border-radius: 4px;
-                    background-color: #ecfdf5;
-                }
-            """)
-            
-            self._emit_status_changed()
-            
-        except Exception as e:
-            logging.error(f"Commissure Level分析失败: {e}")
-            self.results_label.setText(f"分析失败: {str(e)}")
-            self.results_label.setStyleSheet("""
-                QLabel {
-                    color: #dc2626;
-                    font-size: 14px;
-                    padding: 20px;
-                    border: 1px solid #fecaca;
-                    border-radius: 4px;
-                    background-color: #fef2f2;
-                }
-            """)
-        finally:
-            self.analyze_btn.setEnabled(True)
-            self.analyze_btn.setText("开始 Commissure Level 分析")
-    
-    def _on_reset(self):
-        """重置分析"""
-        self.reset_analysis()
-        self.results_label.setText("尚未进行分析")
-        self.results_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 14px;
-                font-style: italic;
-                padding: 20px;
-                border: 1px dashed #d1d5db;
-                border-radius: 4px;
-                background-color: #f9fafb;
-            }
-        """)
-        logging.info("Commissure Level分析已重置")
+    def __init__(self, session: TAVRStudySession, logic: Optional[Module4Logic] = None, parent=None):
+        super().__init__(ValvePlaneLevel.COMMISSURE.value, session, logic, parent)

@@ -900,6 +900,75 @@ class TAVRStudySession:
         """兼容方法：调用新的轮廓方法"""
         return self.get_phase_contours_summary()
 
+    # ====== 多层级平面管理 (Module4) ======
+    def load_multi_level_plane_data(self, measurement_data: Dict[str, Any]) -> bool:
+        """
+        从measurement.json加载多层级平面数据到Module4
+        
+        Args:
+            measurement_data: 测量数据字典
+            
+        Returns:
+            bool: 加载是否成功
+        """
+        try:
+            # 延迟导入避免循环依赖
+            from ..module4.module4_logic import Module4Logic
+            from ..services.valve_plane_config_service import get_valve_plane_config_service
+            
+            # 创建临时逻辑实例来处理数据加载
+            temp_logic = Module4Logic(self)
+            
+            # 从会话更新瓣膜信息
+            temp_logic.update_from_session()
+            
+            # 加载测量数据
+            success = temp_logic.load_measurement_data(measurement_data)
+            
+            if success:
+                # 存储到会话中以供Module4使用
+                self._multi_level_plane_data = measurement_data
+                self.logger.info("多层级平面数据加载成功")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"加载多层级平面数据失败: {e}")
+            return False
+    
+    def get_multi_level_plane_data(self) -> Optional[Dict[str, Any]]:
+        """获取多层级平面数据"""
+        return getattr(self, '_multi_level_plane_data', None)
+    
+    def get_valve_plane_summary(self) -> Dict[str, Any]:
+        """
+        获取瓣膜平面配置摘要
+        
+        Returns:
+            dict: 包含瓣膜信息和平面映射的摘要
+        """
+        try:
+            patient_data = self.get_patient_data()
+            if not patient_data or not patient_data.valveBrand or not patient_data.valveModel:
+                return {
+                    'error': '瓣膜信息未设置',
+                    'valve_brand': '',
+                    'valve_model': ''
+                }
+            
+            # 延迟导入避免循环依赖
+            from ..services.valve_plane_config_service import get_valve_plane_config_service
+            
+            valve_config_service = get_valve_plane_config_service()
+            return valve_config_service.get_valve_mapping_summary(
+                patient_data.valveBrand, 
+                patient_data.valveModel
+            )
+            
+        except Exception as e:
+            self.logger.error(f"获取瓣膜平面摘要失败: {e}")
+            return {'error': f'获取摘要失败: {e}'}
+
     # ====== 期像管理服务集成 ======
     def get_phase_management_service(self):
         """
