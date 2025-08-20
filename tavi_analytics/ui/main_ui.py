@@ -38,14 +38,17 @@ class MainUI(qt.QWidget):
                 qt_parent = None
         else:
             qt_parent = None
-            
+        
         # 调用Qt基类构造函数
         super().__init__(qt_parent)
-        
+
+        # 成员初始化
         self._session = session
         self._module_manager = module_manager
         self._current_module = None
         self._module_widgets = {}  # 缓存模块组件
+        self._dev_panel = None     # 开发者面板（可隐藏）
+        self._main_layout = None   # 主布局引用，便于动态插入开发者面板
         
         # 设置主界面
         self._setup_ui()
@@ -57,6 +60,7 @@ class MainUI(qt.QWidget):
         """设置用户界面"""
         # 创建主布局 - 使用标准化布局管理器
         main_layout = LayoutManager.create_layout(LayoutType.MAIN_CONTAINER, self)
+        self._main_layout = main_layout
         
         # 设置主界面响应式布局
         LayoutManager.apply_responsive_layout(self, min_width=400, min_height=700)
@@ -67,10 +71,18 @@ class MainUI(qt.QWidget):
         # 创建内容区域（模块内容）- 使用可滚动容器
         self._create_content_area(main_layout)
 
-        # 如果处于开发者模式（默认开启），添加开发者面板
+        # 开发者面板：按偏好/环境显示（可用快捷键随时切换）
         try:
-            flag = str(os.environ.get("TAVI_DEBUG", "1")).strip().lower()
-            if flag not in ("0", "false", "off"):
+            settings = qt.QSettings()
+            pref = settings.value("TAVRAnalytics/DeveloperPanelVisible", None)
+            if pref is None:
+                # 默认遵循环境变量（默认开启）
+                flag = str(os.environ.get("TAVI_DEBUG", "1")).strip().lower()
+                show_dev = flag not in ("0", "false", "off")
+            else:
+                show_dev = str(pref).strip().lower() in ("1", "true", "on", "yes")
+
+            if show_dev:
                 self._create_developer_panel(main_layout)
         except Exception as e:
             logging.warning(f"检查开发者模式失败: {e}")
@@ -324,6 +336,13 @@ class MainUI(qt.QWidget):
         # <--- START: 用下面这行代码替换掉之前删除的 for 循环
         self._module_buttons.buttonClicked.connect(self._on_module_button_clicked)
         # <--- END: 完成替换
+
+        # 开发者面板快捷键（Ctrl+Alt+D）
+        try:
+            self._dev_toggle_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+Alt+D"), self)
+            self._dev_toggle_shortcut.activated.connect(self._on_toggle_dev_panel)
+        except Exception as e:
+            logging.warning(f"注册开发者面板快捷键失败: {e}")
         
         # 监听会话变化（如果需要的话）
         # TODO: 实现会话状态监听
@@ -624,6 +643,51 @@ TAVR Analytics 帮助
         # 这里可以实现一个临时的成功通知
         # 目前只记录到日志
         logging.info(f"用户通知: {message}")
+
+    def _on_toggle_dev_panel(self):
+        """快捷键回调：显示/隐藏开发者面板（如未创建则按需创建）"""
+        try:
+            # 若面板尚未创建，则尝试创建并显示
+            if self._dev_panel is None:
+                if self._main_layout is None:
+                    self._main_layout = self.layout() or LayoutManager.create_layout(LayoutType.MAIN_CONTAINER, self)
+                self._create_developer_panel(self._main_layout)
+                self._dev_panel.setVisible(True)
+            else:
+                self._dev_panel.setVisible(not self._dev_panel.isVisible())
+
+            # 持久化可见性
+            try:
+                settings = qt.QSettings()
+                settings.setValue("TAVRAnalytics/DeveloperPanelVisible", self._dev_panel.isVisible())
+            except Exception:
+                pass
+
+            state = "显示" if self._dev_panel.isVisible() else "隐藏"
+            self.update_status(f"开发者面板已{state}", "success")
+        except Exception as e:
+            logging.warning(f"切换开发者面板可见性失败: {e}")
+
+    def toggle_developer_panel(self, show: Optional[bool] = None):
+        """编程方式切换开发者面板可见性。
+        show 为 None 时取反，否则按传入布尔值设置。
+        """
+        try:
+            if self._dev_panel is None:
+                if self._main_layout is None:
+                    self._main_layout = self.layout() or LayoutManager.create_layout(LayoutType.MAIN_CONTAINER, self)
+                self._create_developer_panel(self._main_layout)
+            if show is None:
+                self._dev_panel.setVisible(not self._dev_panel.isVisible())
+            else:
+                self._dev_panel.setVisible(bool(show))
+            try:
+                settings = qt.QSettings()
+                settings.setValue("TAVRAnalytics/DeveloperPanelVisible", self._dev_panel.isVisible())
+            except Exception:
+                pass
+        except Exception as e:
+            logging.warning(f"toggle_developer_panel 执行失败: {e}")
         
     def _show_info_message(self, title: str, message: str):
         """显示信息消息"""
