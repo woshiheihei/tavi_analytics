@@ -94,7 +94,7 @@ class tavi_analytics(ScriptedLoadableModule):
                 from module3.module3_adapter import Module3Adapter
                 module3_info = ModuleInfo(
                     name="module3",
-                    display_name="自动化测量",
+                    display_name="瓣叶功能评估",
                     module_class=Module3Adapter,
                     dependencies=["module1"],  # 暂仅依赖模块一，后续可加module2
                     enabled=True

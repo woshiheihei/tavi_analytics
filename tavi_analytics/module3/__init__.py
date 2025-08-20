@@ -1,8 +1,8 @@
 """
-模块三：自动化测量算法
+模块三：瓣叶功能评估
 
-负责各种TAVR术后评估指标的自动化测量，
-包括瓣膜形态、血栓检测、功能评估等。
+负责各种TAVR术后瓣叶功能评估，
+包括HALT分析、RELM分析、SFD分析、PFD分析等。
 """
 
 from .module3_logic import Module3Logic

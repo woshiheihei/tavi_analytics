@@ -1,7 +1,7 @@
 """
 模块三界面组件
 
-自动化测量功能界面。
+瓣叶功能评估界面。
 """
 import logging
 from typing import Optional
@@ -283,7 +283,7 @@ class Module3Widget(qt.QWidget):
         title_layout.setContentsMargins(8, 8, 8, 8)
         title_layout.setSpacing(20)
 
-        title = qt.QLabel("模块三：自动化测量")
+        title = qt.QLabel("模块三：瓣叶功能评估")
         title.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
         title_layout.addWidget(title)

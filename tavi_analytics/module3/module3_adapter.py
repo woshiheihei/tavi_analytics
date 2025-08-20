@@ -31,7 +31,7 @@ class Module3Adapter(ModuleInterface):
         return "module3"
 
     def get_display_name(self) -> str:
-        return "自动化测量"
+        return "瓣叶功能评估"
 
     def is_available(self) -> bool:
         try:

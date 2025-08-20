@@ -1,7 +1,7 @@
 """
 模块三逻辑组件
 
-自动化测量相关算法与流程。
+瓣叶功能评估相关算法与流程。
 """
 import logging
 from typing import Dict, List, Tuple, Optional

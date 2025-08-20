@@ -217,7 +217,7 @@ class Module2Widget(qt.QWidget):
         layout.addWidget(nav_group)
 
     def _on_enter_analysis_page(self):
-        """跳转到 module3（自动化测量）标签页"""
+        """跳转到 module3（瓣叶功能评估）标签页"""
         try:
             plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
             if hasattr(plugin, 'main_ui') and plugin.main_ui:
@@ -233,7 +233,7 @@ class Module2Widget(qt.QWidget):
                     except Exception:
                         from core.module_manager import ModuleManager as _MM
                     _MM().activate_module("module3")
-            logging.info("已跳转到模块三（自动化测量）")
+            logging.info("已跳转到模块三（瓣叶功能评估）")
         except Exception as e:
             logging.error(f"跳转到分析页面失败: {e}")
             self._update_analysis_status("❌ 跳转失败，请稍后重试", "error")
