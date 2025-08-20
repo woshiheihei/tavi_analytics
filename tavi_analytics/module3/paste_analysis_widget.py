@@ -950,25 +950,7 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         content_layout.addLayout(buttons_layout)
         
         # 厚度输入（条件显示） - 与状态选择风格一致
-        thickness_title = qt.QLabel("2. 最大厚度")
-        thickness_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
-        content_layout.addWidget(thickness_title)
-        
-        thickness_layout = qt.QHBoxLayout()
-        thickness_label = qt.QLabel("厚度 (mm):")
-        thickness_label.setStyleSheet("font-size: 11px; font-weight: 500; color: #495057;")
-        
-        self.thickness_spinbox = qt.QDoubleSpinBox()
-        self.thickness_spinbox.setRange(0.0, 50.0)
-        self.thickness_spinbox.setDecimals(1)
-        self.thickness_spinbox.setSuffix(" mm")
-        self.thickness_spinbox.setEnabled(False)
-        self.thickness_spinbox.valueChanged.connect(self._on_thickness_changed)
-        
-        thickness_layout.addWidget(thickness_label)
-        thickness_layout.addWidget(self.thickness_spinbox)
-        thickness_layout.addStretch()
-        content_layout.addLayout(thickness_layout)
+        self._create_thickness_section(content_layout)
         
         
         main_layout.addWidget(content_frame)
@@ -1026,16 +1008,53 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         
         parent_layout.addLayout(buttons_layout)
     
+    def _create_thickness_section(self, parent_layout):
+        """创建厚度输入区域 - 与PFD状态选择风格一致"""
+        # 标题 - 与PFD状态选择保持一致的样式
+        thickness_title = qt.QLabel("2. 最大厚度")
+        thickness_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
+        
+        # 厚度输入布局
+        thickness_layout = qt.QHBoxLayout()
+        thickness_label = qt.QLabel("厚度 (mm):")
+        thickness_label.setStyleSheet("font-size: 11px; font-weight: 500; color: #495057;")
+        
+        self.thickness_spinbox = qt.QDoubleSpinBox()
+        self.thickness_spinbox.setRange(0.0, 50.0)
+        self.thickness_spinbox.setDecimals(1)
+        self.thickness_spinbox.setSuffix(" mm")
+        self.thickness_spinbox.valueChanged.connect(self._on_thickness_changed)
+        
+        thickness_layout.addWidget(thickness_label)
+        thickness_layout.addWidget(self.thickness_spinbox)
+        thickness_layout.addStretch()
+        
+        # 创建容器widget，以便控制可见性
+        self.thickness_widget = qt.QWidget()
+        thickness_widget_layout = qt.QVBoxLayout(self.thickness_widget)
+        thickness_widget_layout.setContentsMargins(0, 0, 0, 0)
+        thickness_widget_layout.setSpacing(6)
+        thickness_widget_layout.addWidget(thickness_title)
+        thickness_widget_layout.addLayout(thickness_layout)
+        
+        self.thickness_widget.setVisible(False)  # 默认隐藏
+        
+        parent_layout.addWidget(self.thickness_widget)
+    
     def _on_status_changed(self, button):
         """PFD状态改变时的回调"""
         button_id = self.status_group.id(button)
         status_map = {0: 'none', 1: 'present', 2: 'indeterminate'}
         status = status_map.get(button_id, 'none')
         
-        # 启用或禁用厚度输入
-        self.thickness_spinbox.setEnabled(status == 'present')
-        if status != 'present':
-            self.thickness_spinbox.setValue(0.0)
+        # 控制厚度输入区域的可见性
+        has_pfd = status == 'present'
+        if hasattr(self, 'thickness_widget'):
+            self.thickness_widget.setVisible(has_pfd)
+            
+            # 如果状态变为"无"或"难以判定"，重置厚度值
+            if not has_pfd:
+                self.thickness_spinbox.setValue(0.0)
         
         self.logic.set_status(status)
         self._emit_status_changed()
@@ -1333,8 +1352,13 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         # 重置逻辑状态
         self.logic.reset_analysis()
         self.status_buttons["无"].setChecked(True)
-        self.thickness_spinbox.setValue(0.0)
-        self.thickness_spinbox.setEnabled(False)
+        
+        # 重置厚度输入
+        if hasattr(self, 'thickness_spinbox'):
+            self.thickness_spinbox.setValue(0.0)
+        if hasattr(self, 'thickness_widget'):
+            self.thickness_widget.setVisible(False)
+        
         self._emit_status_changed()
         logging.info("PFD分析已重置")
 
