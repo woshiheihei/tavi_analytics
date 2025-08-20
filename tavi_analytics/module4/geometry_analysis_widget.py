@@ -541,42 +541,68 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 self.logger.info(f"轮廓管理器加载摘要: {loaded_summary}")
             
             # 尝试不同的数据源
-            if not plane_data and not all_measurements:
-                # 尝试从分期轮廓管理器获取数据
-                end_diastole_manager = self.session.get_phase_contour_manager('end_diastole')
-                if end_diastole_manager:
-                    ed_measurements = end_diastole_manager.get_all_measurements()
-                    self.logger.info(f"舒张末期测量数据: {ed_measurements is not None}")
-                    if ed_measurements:
-                        self.logger.info(f"舒张末期数据键: {list(ed_measurements.keys())}")
-                        all_measurements = ed_measurements
+            data_sources = []
             
-            if not plane_data and not all_measurements:
+            if plane_data:
+                data_sources.append(("多层级平面数据", plane_data))
+            
+            if all_measurements:
+                data_sources.append(("会话测量数据", all_measurements))
+            
+            # 尝试从分期轮廓管理器获取数据
+            for phase in ['end_diastole', 'end_systole']:
+                try:
+                    phase_manager = self.session.get_phase_contour_manager(phase)
+                    if phase_manager:
+                        phase_measurements = phase_manager.get_all_measurements()
+                        if phase_measurements:
+                            data_sources.append((f"{phase}期像轮廓数据", phase_measurements))
+                            self.logger.info(f"{phase}期像数据键: {list(phase_measurements.keys())}")
+                except Exception as e:
+                    self.logger.warning(f"获取{phase}期像数据失败: {e}")
+            
+            if not data_sources:
                 self._update_status("错误: 未找到任何可用的测量数据", "error")
                 return
             
-            # 使用找到的数据
-            data_to_load = plane_data if plane_data else all_measurements
-            self.logger.info(f"准备加载数据，数据键: {list(data_to_load.keys()) if data_to_load else 'None'}")
+            # 尝试每个数据源
+            load_success = False
+            for source_name, source_data in data_sources:
+                self.logger.info(f"尝试使用{source_name}，数据键: {list(source_data.keys()) if source_data else 'None'}")
+                
+                # 检查数据格式
+                expected_fields = [
+                    f"Stent_Frame_base_up_{h}_plane" for h in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+                ]
+                found_expected_fields = [field for field in expected_fields if field in source_data]
+                
+                # 检查是否有轮廓类型的数据
+                contour_fields = []
+                for contour_type in ["Stent_Frame_Base_plane", "SOV_plane", "Stent_Cross_Sectional_0_Plane"]:
+                    if contour_type in source_data:
+                        contour_fields.append(contour_type)
+                
+                self.logger.info(f"找到的多层级字段: {found_expected_fields}")
+                self.logger.info(f"找到的轮廓字段: {contour_fields}")
+                
+                if found_expected_fields or contour_fields:
+                    try:
+                        if self.logic.load_measurement_data(source_data):
+                            self.logger.info(f"成功使用{source_name}加载数据")
+                            load_success = True
+                            break
+                        else:
+                            self.logger.warning(f"使用{source_name}加载数据失败")
+                    except Exception as e:
+                        self.logger.error(f"使用{source_name}加载数据时出错: {e}")
+                else:
+                    self.logger.info(f"{source_name}不包含可用的平面或轮廓数据")
             
-            # 检查是否有我们期望的平面数据字段
-            expected_fields = [
-                f"Stent_Frame_base_up_{h}_plane" for h in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-            ]
-            found_fields = [field for field in expected_fields if field in data_to_load]
-            self.logger.info(f"找到的期望字段: {found_fields}")
-            if not found_fields:
-                plane_fields = [key for key in data_to_load.keys() if 'plane' in key.lower()]
-                self.logger.info(f"包含'plane'的字段: {plane_fields}")
-                if not plane_fields:
-                    self._update_status("错误: 未找到期望格式的平面测量数据", "error")
-                    return
-            
-            if self.logic.load_measurement_data(data_to_load):
-                self._update_status("数据加载成功", "success")
-            else:
-                self._update_status("数据加载失败", "error")
+            if not load_success:
+                self._update_status("错误: 所有数据源都无法成功加载", "error")
                 return
+            
+            self._update_status("数据加载成功", "success")
             
             # 更新显示
             self._update_valve_info()

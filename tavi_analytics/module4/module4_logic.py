@@ -178,7 +178,11 @@ class Module4Logic:
         """
         try:
             available_heights = self._valve_config_service.get_available_heights()
-            success = True
+            success_count = 0
+            total_phases = len(self._plane_managers)
+            
+            self.logger.info(f"开始加载测量数据，可用高度: {available_heights}")
+            self.logger.info(f"数据键: {list(measurement_data.keys()) if measurement_data else 'None'}")
             
             # 为所有期像加载平面数据
             for phase, manager in self._plane_managers.items():
@@ -187,13 +191,21 @@ class Module4Logic:
                 )
                 if loaded_count == 0:
                     self.logger.warning(f"期像 {phase} 未加载到任何平面数据")
-                    success = False
                 else:
                     self.logger.info(f"期像 {phase} 成功加载 {loaded_count} 个平面")
+                    success_count += 1
             
-            # 如果已设置瓣膜信息，应用级别映射
-            if self._current_valve_manufacturer and self._current_valve_model:
-                self.set_valve_info(self._current_valve_manufacturer, self._current_valve_model)
+            # 至少有一个期像成功加载即认为成功
+            success = success_count > 0
+            
+            if success:
+                self.logger.info(f"数据加载完成，{success_count}/{total_phases} 个期像成功加载平面数据")
+                
+                # 如果已设置瓣膜信息，应用级别映射
+                if self._current_valve_manufacturer and self._current_valve_model:
+                    self.set_valve_info(self._current_valve_manufacturer, self._current_valve_model)
+            else:
+                self.logger.error("所有期像都未能加载平面数据")
             
             return success
             
