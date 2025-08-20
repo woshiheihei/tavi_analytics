@@ -48,7 +48,60 @@ class Module4Logic:
         self._current_valve_manufacturer = ""
         self._current_valve_model = ""
         
+        # 注册期像切换监听
+        self._setup_phase_listener()
+        
         logging.info("Module4Logic 初始化完成")
+
+    def _setup_phase_listener(self):
+        """设置期像切换监听"""
+        if self.session:
+            try:
+                # 获取期像管理服务
+                phase_service = self.session.get_phase_management_service()
+                self.logger.info(f"Module4Logic 获取期像管理服务: {phase_service}")
+                
+                # 连接期像切换信号
+                phase_service.phaseChanged.connect(self._on_phase_changed)
+                self.logger.info("Module4Logic 已连接期像切换信号")
+                
+                # 获取当前期像状态
+                current_service_phase = phase_service.get_current_phase()
+                self.logger.info(f"Module4Logic 当前服务期像: {current_service_phase}")
+                
+            except Exception as e:
+                self.logger.error(f"设置期像监听失败: {e}")
+                import traceback
+                self.logger.error(f"详细错误: {traceback.format_exc()}")
+        else:
+            self.logger.warning("Module4Logic 无session，跳过期像监听设置")
+    
+    def _on_phase_changed(self, old_phase: str, new_phase: str):
+        """期像切换回调"""
+        self.logger.info(f"Module4Logic 收到期像切换信号: {old_phase} -> {new_phase}")
+        try:
+            # 映射界面期像到内部期像
+            phase_mapping = {
+                'diastole': 'end_diastole',
+                'systole': 'end_systole'
+            }
+            
+            internal_phase = phase_mapping.get(new_phase, 'end_diastole')
+            old_internal_phase = self._current_phase
+            
+            self.logger.info(f"Module4Logic 内部期像映射: {new_phase} -> {internal_phase}")
+            self.logger.info(f"Module4Logic 当前内部期像: {old_internal_phase}")
+            
+            if internal_phase != self._current_phase:
+                self._current_phase = internal_phase
+                self.logger.info(f"Module4Logic 期像已切换: {old_internal_phase} -> {internal_phase}")
+            else:
+                self.logger.info(f"Module4Logic 期像无变化，保持: {internal_phase}")
+                
+        except Exception as e:
+            self.logger.error(f"处理期像切换失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
 
     def set_current_phase(self, phase: str):
         """
@@ -325,6 +378,9 @@ class Module4Logic:
             try:
                 success = False
                 
+                # 重新设置期像监听
+                self._setup_phase_listener()
+                
                 # 更新瓣膜信息
                 patient_data = self.session.get_patient_data()
                 if patient_data and patient_data.valveBrand and patient_data.valveModel:
@@ -362,3 +418,11 @@ class Module4Logic:
             
         except Exception as e:
             logging.error(f"清理模块四逻辑资源失败: {e}")
+    
+    def set_session(self, session: TAVRStudySession):
+        """设置会话对象并重新建立期像监听"""
+        old_session = self.session
+        self.session = session
+        if old_session != session:
+            self.logger.info("Module4Logic session已更新，重新设置期像监听")
+            self._setup_phase_listener()

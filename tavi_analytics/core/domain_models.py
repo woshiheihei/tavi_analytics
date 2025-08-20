@@ -1772,9 +1772,10 @@ class MultiLevelPlaneManager:
                             
                             # 如果原始数据中没有测量参数，尝试使用默认值或计算
                             if not adapted_data.get('perimeter') and not adapted_data.get('area'):
-                                # 为演示目的，使用基于高度的模拟值
-                                base_perimeter = 70.0 + height * 2.0  # 基础周长 + 高度系数
-                                base_area = 380.0 + height * 10.0     # 基础面积 + 高度系数
+                                # 为演示目的，使用基于高度和期像的模拟值
+                                phase_multiplier = 1.0 if self.cardiac_phase == 'end_diastole' else 0.9  # 收缩期稍小
+                                base_perimeter = (70.0 + height * 2.0) * phase_multiplier  # 基础周长 + 高度系数 * 期像系数
+                                base_area = (380.0 + height * 10.0) * phase_multiplier     # 基础面积 + 高度系数 * 期像系数
                                 
                                 adapted_data.update({
                                     'perimeter': base_perimeter,
@@ -1785,7 +1786,7 @@ class MultiLevelPlaneManager:
                                     'min_dist': base_perimeter / 4.0,
                                     'average_dist': (base_perimeter / 3.0 + base_perimeter / 4.0) / 2
                                 })
-                                self.logger.info(f"为高度{height}cm生成模拟测量参数")
+                                self.logger.info(f"为{self.cardiac_phase}期像高度{height}cm生成模拟测量参数，系数: {phase_multiplier}")
                             
                             if plane_contour.load_from_data(adapted_data):
                                 self._planes[height] = plane_contour

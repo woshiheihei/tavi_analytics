@@ -68,6 +68,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         
         logging.info(f"{level_type}几何形态分析界面初始化")
         self._setup_ui()
+        self._setup_phase_listener()
     
     def _setup_ui(self):
         """设置用户界面"""
@@ -99,6 +100,68 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         
         # 在UI创建完成后，安全地初始化瓣膜选择器
         self._setup_valve_selector()
+    
+    def _setup_phase_listener(self):
+        """设置期像切换监听"""
+        if self.session:
+            try:
+                # 获取期像管理服务
+                phase_service = self.session.get_phase_management_service()
+                self.logger.info(f"{self.level_type}界面获取期像管理服务: {phase_service}")
+                
+                # 连接期像切换信号
+                phase_service.phaseChanged.connect(self._on_phase_changed)
+                self.logger.info(f"{self.level_type}几何分析界面已连接期像切换信号")
+                
+                # 获取当前期像状态
+                current_service_phase = phase_service.get_current_phase()
+                self.logger.info(f"{self.level_type}界面当前服务期像: {current_service_phase}")
+                
+            except Exception as e:
+                self.logger.error(f"设置期像监听失败: {e}")
+                import traceback
+                self.logger.error(f"详细错误: {traceback.format_exc()}")
+        else:
+            self.logger.warning(f"{self.level_type}界面无session，跳过期像监听设置")
+    
+    def _on_phase_changed(self, old_phase: str, new_phase: str):
+        """期像切换回调 - 更新测量数据显示"""
+        self.logger.info(f"{self.level_type}界面收到期像切换信号: {old_phase} -> {new_phase}")
+        try:
+            # 更新测量数据显示
+            self._refresh_measurements()
+        except Exception as e:
+            self.logger.error(f"处理期像切换失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
+    
+    def _refresh_measurements(self):
+        """刷新测量数据显示"""
+        self.logger.info(f"开始刷新{self.level_type}测量数据")
+        try:
+            if not self.logic:
+                self.logger.warning(f"{self.level_type}界面logic未设置，无法刷新测量数据")
+                return
+            
+            # 记录logic当前期像
+            current_logic_phase = self.logic.get_current_phase()
+            self.logger.info(f"{self.level_type}界面Logic当前期像: {current_logic_phase}")
+            
+            # 获取当前期像的测量数据
+            measurements = self.logic.get_plane_measurements_for_level(self.level_type)
+            self.logger.info(f"{self.level_type}界面获取到的测量数据: {measurements}")
+            
+            if 'error' in measurements:
+                self.logger.warning(f"获取{self.level_type}测量数据失败: {measurements.get('error')}")
+                self._init_empty_measurements_table()
+            else:
+                self._update_measurements_table(measurements)
+                self.logger.info(f"已刷新{self.level_type}测量数据显示")
+                
+        except Exception as e:
+            self.logger.error(f"刷新测量数据失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
     
     def _setup_valve_selector(self):
         """安全地设置瓣膜选择器"""
@@ -654,6 +717,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     
     def _update_measurements_table(self, measurements: Dict[str, Any]):
         """更新测量参数表格"""
+        self.logger.info(f"更新{self.level_type}测量参数表格，数据: {measurements}")
         try:
             # 参数映射 - 使用get_plane_measurements()返回的字段名
             param_mapping = [
@@ -666,8 +730,13 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 ("平面高度 (Height)", "height", "cm")
             ]
             
+            # 记录当前期像信息（如果有的话）
+            phase_info = measurements.get('phase', 'unknown')
+            self.logger.info(f"更新{self.level_type}表格，期像: {phase_info}")
+            
             for row, (display_name, key, unit) in enumerate(param_mapping):
                 value = measurements.get(key, 0.0)
+                self.logger.debug(f"参数 {display_name}: {key} = {value}")
                 
                 if isinstance(value, (int, float)) and value > 0:
                     formatted_value = f"{value:.2f} {unit}"
@@ -677,7 +746,9 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 # 更新值
                 value_item = self.measurements_table.item(row, 1)
                 if value_item:
+                    old_text = value_item.text()
                     value_item.setText(formatted_value)
+                    self.logger.debug(f"表格更新: {display_name} {old_text} -> {formatted_value}")
                     
                     # 根据数值设置颜色
                     if value > 0:
@@ -686,7 +757,9 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                         value_item.setForeground(qt.QColor("#6b7280"))  # 灰色表示无效数值
                         
         except Exception as e:
-            logging.error(f"更新测量参数表格失败: {e}")
+            self.logger.error(f"更新测量参数表格失败: {e}")
+            import traceback
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
     
     def _update_valve_info(self):
         """更新瓣膜信息显示"""
@@ -785,12 +858,17 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     def set_logic(self, logic: Module4Logic):
         """设置逻辑组件"""
         self.logic = logic
+        # 重新设置期像监听（如果session已设置）
+        if self.session:
+            self._setup_phase_listener()
     
     def set_session(self, session: TAVRStudySession):
         """设置会话对象"""
         self.session = session
         if self.logic:
             self.logic.session = session
+        # 重新设置期像监听
+        self._setup_phase_listener()
     
     def on_activated(self):
         """激活时的回调"""

@@ -42,7 +42,11 @@ class Module4Adapter(ModuleInterface):
 
     def create_widget(self, session: TAVRStudySession, parent=None):
         if self._logic is None:
-            self._logic = Module4Logic()
+            self._logic = Module4Logic(session=session)
+        else:
+            # 如果logic已存在，确保session是最新的
+            self._logic.set_session(session)
+            self._logic.update_from_session()
         self._widget = Module4Widget(session, logic=self._logic, parent=parent)
         return self._widget
 
@@ -63,6 +67,11 @@ class Module4Adapter(ModuleInterface):
             self._widget.on_deactivated()
 
     def on_session_changed(self, session):
+        # 更新logic的session
+        if self._logic:
+            self._logic.set_session(session)
+            self._logic.update_from_session()
+        # 更新widget的session
         if self._widget and hasattr(self._widget, 'set_session'):
             self._widget.set_session(session)
 
