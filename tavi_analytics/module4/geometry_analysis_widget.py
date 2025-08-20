@@ -560,21 +560,17 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             self.logger.info(f"准备加载数据，数据键: {list(data_to_load.keys()) if data_to_load else 'None'}")
             
             # 检查是否有我们期望的平面数据字段
-            expected_fields = [f"Stent_Frame_base_up_{h}_plane" for h in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]]
+            expected_fields = [
+                f"Stent_Frame_base_up_{h}_plane" for h in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+            ]
             found_fields = [field for field in expected_fields if field in data_to_load]
             self.logger.info(f"找到的期望字段: {found_fields}")
-            
             if not found_fields:
-                # 尝试查找任何包含 "plane" 的字段
                 plane_fields = [key for key in data_to_load.keys() if 'plane' in key.lower()]
                 self.logger.info(f"包含'plane'的字段: {plane_fields}")
-                
-            # 由于实际数据格式与期望不符，创建模拟的多层级数据进行测试
-            if not found_fields:
-                self.logger.info("未找到期望格式的数据，创建模拟数据进行测试")
-                mock_data = self._create_mock_plane_data(data_to_load)
-                self.logger.info(f"创建的模拟数据键: {list(mock_data.keys()) if mock_data else 'None'}")
-                data_to_load = mock_data
+                if not plane_fields:
+                    self._update_status("错误: 未找到期望格式的平面测量数据", "error")
+                    return
             
             if self.logic.load_measurement_data(data_to_load):
                 self._update_status("数据加载成功", "success")
@@ -785,35 +781,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         """停用时的回调"""
         logging.info(f"{self.level_type}几何形态分析界面停用")
     
-    def _create_mock_plane_data(self, original_data: Dict[str, Any]) -> Dict[str, Any]:
-        """创建模拟的多层级平面数据用于测试"""
-        mock_data = {}
-        
-        # 创建不同高度的模拟平面数据
-        heights = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
-        
-        # 模拟的平面数据结构 - 使用JSON中的实际字段名
-        for height in heights:
-            field_name = f"Stent_Frame_base_up_{height}_plane"
-            mock_data[field_name] = {
-                'perimeter': 25.0 + height * 2,  # 周长
-                'area': 50.0 + height * 5,       # 面积  
-                'max_dist': 8.0 + height * 0.5,  # 最长径 (JSON中使用max_dist)
-                'min_dist': 7.0 + height * 0.3,  # 最短径 (JSON中使用min_dist)
-                'PED': (25.0 + height * 2) / 3.14159,  # 周长导出径 (JSON中使用PED)
-                'AED': 2 * ((50.0 + height * 5) / 3.14159) ** 0.5,  # 面积导出径 (JSON中使用AED)
-                'average_dist': (8.0 + height * 0.5 + 7.0 + height * 0.3) / 2,  # 平均径
-                'height': height,
-                'cardiac_phase': 'end_diastole',
-                'plane_params': {},  # 平面参数
-                'contour_points': [  # 模拟轮廓点
-                    [0.0, 0.0, height], [1.0, 0.0, height], 
-                    [1.0, 1.0, height], [0.0, 1.0, height]
-                ]
-            }
-        
-        self.logger.info(f"创建了 {len(mock_data)} 个模拟平面数据")
-        return mock_data
+    # 已移除: 模拟平面数据创建逻辑（_create_mock_plane_data）
     
     def cleanup(self):
         """清理资源"""
