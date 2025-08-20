@@ -48,10 +48,8 @@ class tavi_analytics(ScriptedLoadableModule):
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Cardiac")]
         self.parent.dependencies = metadata.dependencies
         self.parent.contributors = [metadata.author]
-        self.parent.helpText = _(metadata.description)
-        self.parent.acknowledgementText = _("""
-该插件基于杭州方案术后CT核心实验室评估表开发，用于标准化TAVR术后分析流程。
-""")
+        self.parent.helpText = ""
+        self.parent.acknowledgementText = ""
         
         # 设置日志
         self._config.setup_logging()
