@@ -506,7 +506,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         self.measurements_table.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
         
         # 设置固定高度
-        self.measurements_table.setFixedHeight(240)
+        self.measurements_table.setFixedHeight(210)  # 减少一行的高度
         
         # 初始化空表格
         self._init_empty_measurements_table()
@@ -542,8 +542,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             ("最长径 (Longest Diameter)", "-- mm"),
             ("最短径 (Shortest Diameter)", "-- mm"),
             ("周长平均径 (PED)", "-- mm"),
-            ("面积平均径 (AED)", "-- mm"),
-            ("平面高度 (Height)", "-- cm")
+            ("面积平均径 (AED)", "-- mm")
         ]
         
         self.measurements_table.setRowCount(len(parameters))
@@ -726,8 +725,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 ("最长径 (Longest Diameter)", "longest_diameter", "mm"),  # get_plane_measurements返回longest_diameter
                 ("最短径 (Shortest Diameter)", "shortest_diameter", "mm"),  # get_plane_measurements返回shortest_diameter
                 ("周长平均径 (PED)", "perimeter_derived_diameter", "mm"),  # get_plane_measurements返回perimeter_derived_diameter
-                ("面积平均径 (AED)", "area_derived_diameter", "mm"),  # get_plane_measurements返回area_derived_diameter
-                ("平面高度 (Height)", "height", "cm")
+                ("面积平均径 (AED)", "area_derived_diameter", "mm")  # get_plane_measurements返回area_derived_diameter
             ]
             
             # 记录当前期像信息（如果有的话）

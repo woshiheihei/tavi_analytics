@@ -1595,7 +1595,6 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
     def get_plane_measurements(self) -> Dict[str, float]:
         """获取平面相关测量"""
         return {
-            'height': self.height,
             'perimeter': self.perimeter,
             'area': self.area,
             'longest_diameter': self.max_dist,
