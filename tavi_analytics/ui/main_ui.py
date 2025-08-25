@@ -38,7 +38,7 @@ class MainUI(qt.QWidget):
                 qt_parent = None
         else:
             qt_parent = None
-        
+
         # 调用Qt基类构造函数
         super().__init__(qt_parent)
 
@@ -49,11 +49,16 @@ class MainUI(qt.QWidget):
         self._module_widgets = {}  # 缓存模块组件
         self._dev_panel = None     # 开发者面板（可隐藏）
         self._main_layout = None   # 主布局引用，便于动态插入开发者面板
-        
+        # 新的导航栏引用
+        self._nav_frame = None
+        self._nav_scroll = None
+        self._nav_scroll_content = None
+        self._nav_buttons_layout = None
+
         # 设置主界面
         self._setup_ui()
         self._setup_connections()
-        
+
         logging.info("主界面组件初始化完成")
     
     def _setup_ui(self):
@@ -88,52 +93,110 @@ class MainUI(qt.QWidget):
             logging.warning(f"检查开发者模式失败: {e}")
     
     def _create_navigation_area(self, parent_layout):
-        """创建导航区域（模块切换按钮）"""
-        nav_frame = LayoutManager.create_section_frame("模块导航", LayoutType.BUTTON_GROUP)
-        nav_frame.setMaximumHeight(60)  # 降低高度，只需要容纳按钮行
-        
-        nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_frame)
-        
-        # 获取样式集合
-        styles = ComponentStyleFactory.get_main_ui_styles()
-        
-        # 创建按钮行
-        button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
-        
+        """创建导航区域（专业导航页风格的顶栏）"""
+        # 顶部导航条（非标准section，自定义样式）
+        nav_frame = qt.QFrame()
+        nav_frame.setObjectName("TopNav")
+        nav_frame.setFixedHeight(72)
+        self._nav_frame = nav_frame
+
+        # 轻微阴影，提升分层感
+        try:
+            shadow = qt.QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(16)
+            shadow.setOffset(0, 1)
+            try:
+                # QColor 可能在不同绑定下放在 qt.QColor
+                shadow.setColor(qt.QColor(0, 0, 0, 40))
+            except Exception:
+                pass
+            nav_frame.setGraphicsEffect(shadow)
+        except Exception:
+            pass
+
+        # 顶栏布局
+        nav_layout = qt.QHBoxLayout(nav_frame)
+        nav_layout.setContentsMargins(16, 8, 16, 8)
+        nav_layout.setSpacing(12)
+
+    # 左侧品牌区域已移除
+
+        # 中间模块按钮（可横向滚动）
+        self._nav_scroll = qt.QScrollArea()
+        self._nav_scroll.setFrameShape(qt.QFrame.NoFrame)
+        self._nav_scroll.setWidgetResizable(True)
+        self._nav_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
+        self._nav_scroll.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
+
+        self._nav_scroll_content = qt.QWidget()
+        self._nav_buttons_layout = qt.QHBoxLayout(self._nav_scroll_content)
+        self._nav_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self._nav_buttons_layout.setSpacing(8)
+        self._nav_scroll.setWidget(self._nav_scroll_content)
+        nav_layout.addWidget(self._nav_scroll, 1)
+
+    # 右侧操作区已移除（按需后续可添加其他操作控件）
+
         # 模块切换按钮组
         self._module_buttons = qt.QButtonGroup()
         self._module_buttons.setExclusive(True)
-        
+
         # 获取可用模块并创建按钮
         available_modules = self._module_manager.get_available_modules()
         logging.info(f"MainUI 可用模块: {available_modules}")
-        
-        for module_name in available_modules:
+
+        # 数字表情图标映射
+        number_icons = {1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩"}
+
+        for index, module_name in enumerate(available_modules, 1):
             module_info = self._module_manager.get_module_info(module_name)
             if module_info:
-                button = qt.QPushButton(module_info.display_name)
-                button.setCheckable(True)
-                button.setMinimumWidth(120)
-                button.setMinimumHeight(40)
-                button.setProperty("module_name", module_name)
-                
-                # 应用新的shadcn/ui样式
-                button.setStyleSheet(styles["module_button"])
-                
-                # 连接点击事件  <--- START: 删除下面这一行
-                # button.clicked.connect(self._on_module_button_clicked)
-                # <--- END: 删除上面这一行
-                
-                self._module_buttons.addButton(button)
-                button_layout.addWidget(button)
-        
-        # 添加弹性空间
-        LayoutManager.add_stretch_with_ratio(button_layout, 1)
-        
-        nav_layout.addLayout(button_layout)
-        
-        # 添加到主布局，固定高度
-        parent_layout.addWidget(nav_frame, 0)  # 0 表示固定大小
+                # 添加数字图标到显示名称
+                icon = number_icons.get(index, f"{index}.")
+                display_text = f"{icon} {module_info.display_name}"
+                btn = qt.QPushButton(display_text)
+                btn.setObjectName("NavButton")
+                btn.setCheckable(True)
+                btn.setMinimumHeight(40)
+                btn.setProperty("module_name", module_name)
+                btn.setCursor(qt.Qt.PointingHandCursor)
+                self._module_buttons.addButton(btn)
+                self._nav_buttons_layout.addWidget(btn)
+
+        # 填充剩余空间，避免按钮紧贴右侧
+        self._nav_buttons_layout.addStretch(1)
+
+    # 自定义样式（专业导航条）
+        try:
+            nav_frame.setStyleSheet("""
+                /* 顶栏 */
+                QFrame#TopNav {
+                    background: #ffffff;
+                    border-bottom: 1px solid #e5e7eb; /* neutral-200 */
+                }
+                /* 模块导航按钮（胶囊风格） */
+                QFrame#TopNav QPushButton#NavButton {
+                    background: #f3f4f6; /* gray-100 */
+                    border: 1px solid #e5e7eb; /* gray-200 */
+                    color: #111827; /* gray-900 */
+                    border-radius: 20px;
+                    padding: 8px 14px;
+                    font-weight: bold;
+                }
+                QFrame#TopNav QPushButton#NavButton:hover {
+                    background: #e5e7eb; /* gray-200 */
+                }
+                QFrame#TopNav QPushButton#NavButton:checked {
+                    background: #2563eb; /* indigo-600 */
+                    border: 1px solid #1d4ed8; /* indigo-700 */
+                    color: #ffffff;
+                }
+            """)
+        except Exception:
+            pass
+
+        # 添加到主布局（固定高度）
+        parent_layout.addWidget(nav_frame, 0)
     
     def _create_content_area(self, parent_layout):
         """创建内容区域"""
@@ -768,53 +831,43 @@ TAVR Analytics 帮助
         """刷新导航区域（当模块注册状态改变时）"""
         try:
             # 清除现有按钮
-            for button in self._module_buttons.buttons():
+            for button in list(self._module_buttons.buttons()):
                 self._module_buttons.removeButton(button)
+                if self._nav_buttons_layout is not None:
+                    self._nav_buttons_layout.removeWidget(button)
                 button.setParent(None)
                 button.deleteLater()
-            
+
             # 获取当前可用模块
             available_modules = self._module_manager.get_available_modules()
-            
-            # 重新创建按钮
-            button_layout = None
-            nav_frame = None
-            
-            # 找到导航框架和按钮布局
-            for i in range(self.layout().count()):
-                item = self.layout().itemAt(i)
-                if item and item.widget():
-                    widget = item.widget()
-                    if isinstance(widget, qt.QFrame) and widget.maximumHeight() == 60:
-                        nav_frame = widget
-                        if nav_frame.layout():
-                            for j in range(nav_frame.layout().count()):
-                                layout_item = nav_frame.layout().itemAt(j)
-                                if layout_item and isinstance(layout_item, qt.QHBoxLayout):
-                                    button_layout = layout_item
-                                    break
-                        break
-            
-            if button_layout:
-                # 重新创建按钮
+
+            # 重新创建按钮并插入到导航滚动区
+            if self._nav_buttons_layout is not None:
+                # 数字表情图标映射
+                number_icons = {1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩"}
+                
+                # 在末尾保留一个 stretch，因此在 stretch 之前插入
+                insert_index = max(0, self._nav_buttons_layout.count() - 1)
                 for module_name in available_modules:
                     module_info = self._module_manager.get_module_info(module_name)
                     if module_info:
-                        button = qt.QPushButton(module_info.display_name)
-                        button.setCheckable(True)
-                        button.setMinimumWidth(120)
-                        button.setMinimumHeight(40)
-                        button.setProperty("module_name", module_name)
-                        
-                        # 设置样式和连接
-                        styles = ComponentStyleFactory.get_main_ui_styles()
-                        button.setStyleSheet(styles["module_button"])
-                        
-                        # 不需要单独连接信号，使用按钮组统一处理
-                        self._module_buttons.addButton(button)
-                        
-                        # 在弹性空间之前插入按钮
-                        button_layout.insertWidget(button_layout.count() - 1, button)
+                        # 添加数字图标到显示名称 (重新创建时需要重新计算索引)
+                        module_index = available_modules.index(module_name) + 1
+                        icon = number_icons.get(module_index, f"{module_index}.")
+                        display_text = f"{icon} {module_info.display_name}"
+                        btn = qt.QPushButton(display_text)
+                        btn.setObjectName("NavButton")
+                        btn.setCheckable(True)
+                        btn.setMinimumHeight(40)
+                        btn.setProperty("module_name", module_name)
+                        btn.setCursor(qt.Qt.PointingHandCursor)
+                        self._module_buttons.addButton(btn)
+                        self._nav_buttons_layout.insertWidget(insert_index, btn)
+                        insert_index += 1
+
+                # 重新应用工具提示与右键菜单
+                self._setup_tooltips()
+                self._setup_context_menus()
 
             logging.info(f"导航区域刷新后的可用模块: {available_modules}")
             
