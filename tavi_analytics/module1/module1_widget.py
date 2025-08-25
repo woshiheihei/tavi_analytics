@@ -88,7 +88,6 @@ class Module1Widget(qt.QWidget):
         # 子组件
         self.data_loading_dialog = None
         self.cardiac_cycle_widget = None
-        self.status_display_widget = None
 
         # 事件监听/去抖
         self._scene_observer_tags = []
@@ -112,58 +111,22 @@ class Module1Widget(qt.QWidget):
         logging.info("模块一界面初始化完成")
         
     def _init_ui(self):
-        """初始化用户界面（方案C：右侧信息侧栏）"""
+        """初始化用户界面（简洁的垂直布局）"""
         # 根布局
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 水平分栏：左主区 + 右侧栏
-        self._splitter = qt.QSplitter(qt.Qt.Horizontal)
-        self._splitter.setChildrenCollapsible(False)
-        self._splitter.setHandleWidth(6)
+        # 数据导入section
+        self._create_data_import_section(main_layout)
 
-        # 左侧：主工作区（数据导入 + 心动周期管理）
-        left_container = qt.QWidget()
-        left_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, left_container)
-
-        # 数据导入区域（置于主区顶部）
-        self._create_data_import_section(left_layout)
-
-        # 心动周期管理组件（主要内容，扩展占位）
+        # 心动周期管理section
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
-        LayoutManager.setup_widget_size_policy(self.cardiac_cycle_widget, LayoutType.CONTROL_PANEL, SizePolicy.EXPANDING)
-        left_layout.addWidget(self.cardiac_cycle_widget, 1)
+        main_layout.addWidget(self.cardiac_cycle_widget, 0)  # 固定大小
 
-        # 右侧：信息侧栏（状态 + 进度 + CTA）
-        right_container = qt.QWidget()
-        right_container.setMinimumWidth(260)
-        right_container.setMaximumWidth(380)
-        right_layout = LayoutManager.create_layout(LayoutType.INFO_DISPLAY, right_container)
+        # 分析流程section
+        self._create_action_buttons_section(main_layout)
 
-        # 状态与进度（紧凑展示，默认收起详情）
-        self.status_display_widget = StatusDisplayWidget(self.session, self, compact=True)
-        LayoutManager.setup_widget_size_policy(self.status_display_widget, LayoutType.INFO_DISPLAY, SizePolicy.PREFERRED)
-        self.status_display_widget.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
-        # 连接进度变更，更新底部进度标签
-        try:
-            self.status_display_widget.progressChanged.connect(self._on_progress_changed)
-        except Exception:
-            pass
-        right_layout.addWidget(self.status_display_widget, 0)
-
-        # 使用弹性空白将操作区推到底部
-        right_layout.addStretch(1)
-
-        # 操作按钮区域（侧栏底部，包含继续/重置/重新检测/进度）
-        self._create_action_buttons_section(right_layout)
-
-        # 装配分栏并设置伸缩比例
-        self._splitter.addWidget(left_container)
-        self._splitter.addWidget(right_container)
-        self._splitter.setStretchFactor(0, 3)
-        self._splitter.setStretchFactor(1, 1)
-
-        # 将分栏加入根布局
-        main_layout.addWidget(self._splitter, 1)
+        # 弹性空间，将内容推到顶部
+        main_layout.addStretch(1)
 
         # 连接相位标记信号以实时刷新
         try:
@@ -171,95 +134,102 @@ class Module1Widget(qt.QWidget):
         except Exception:
             pass
 
-    def _on_progress_changed(self, completed: int, total: int):
-        """侧栏进度变化时更新底部提示"""
-        if hasattr(self, 'next_progress_label') and self.next_progress_label:
-            self.next_progress_label.setText(f"已完成 {completed}/{total} 项")
-        
+
     def _create_data_import_section(self, parent_layout):
         """创建数据导入区域"""
-        import_group = LayoutManager.create_section_frame("数据导入", LayoutType.SECTION_CONTAINER)
-        import_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, import_group)
+        import_group = LayoutManager.create_section_frame("数据导入", LayoutType.BUTTON_GROUP)
+        import_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, import_group)
+        try:
+            import_layout.setContentsMargins(0, 0, 0, 0)
+        except Exception:
+            pass
         
-        # 说明文本
-        self.instruction_label = qt.QLabel(
-            "请点击下方按钮导入4D心脏CT数据并配置患者信息。"
-            "支持从DICOM浏览器加载或从现有场景数据创建序列。"
+        # 设置紧凑且等宽的 size policy（水平扩展，与其它 section 一致）
+        import_group.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
+        
+        # 数据状态显示区域
+        self.data_status_container = qt.QWidget()
+        status_layout = LayoutManager.create_horizontal_layout(LayoutType.INFO_DISPLAY, self.data_status_container)
+        
+        # 状态图标
+        self.status_icon_label = qt.QLabel("📂")
+        self.status_icon_label.setFixedSize(24, 24)
+        self.status_icon_label.setAlignment(qt.Qt.AlignCenter)
+        self.status_icon_label.setStyleSheet(
+            "QLabel { font-size: 16px; }"
         )
-        self.instruction_label.setWordWrap(True)
-        # 使用新的shadcn/ui样式系统
-        styles = ComponentStyleFactory.get_module1_styles()
-        self.instruction_label.setStyleSheet(styles["instruction_label"])
-        import_layout.addWidget(self.instruction_label)
+        status_layout.addWidget(self.status_icon_label, 0)
         
-        # 数据导入按钮容器（用于支持下拉菜单）
+        # 状态文本
+        self.status_text_label = qt.QLabel("请导入4D心脏CT数据")
+        self.status_text_label.setWordWrap(True)
+        self.status_text_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 12px; padding-left: 8px; }"
+        )
+        status_layout.addWidget(self.status_text_label, 1)
+        
+        import_layout.addWidget(self.data_status_container)
+        
+        # 按钮区域
         button_container = qt.QWidget()
         button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP, button_container)
         
-        # 主数据导入按钮 - 使用统一的按钮创建方法
-        self.load_data_button = LayoutManager.create_button_with_style(
+        # 主要操作按钮
+        self.primary_action_button = LayoutManager.create_button_with_style(
             text="数据导入与配置", 
             button_type="primary", 
             size="default", 
-            min_height=40
+            min_height=36
         )
-        button_layout.addWidget(self.load_data_button)
+        button_layout.addWidget(self.primary_action_button)
         
-        # 数据管理下拉按钮（当有数据时显示）
-        self.data_management_button = LayoutManager.create_button_with_style(
-            text="⋮", 
+        # 次要操作按钮（通常用于数据管理）
+        self.secondary_action_button = LayoutManager.create_button_with_style(
+            text="管理", 
             button_type="secondary", 
             size="default", 
-            min_height=40
+            min_height=36
         )
-        self.data_management_button.setMaximumWidth(50)
-        self.data_management_button.setVisible(False)  # 初始隐藏
-        self.data_management_button.setToolTip("数据管理选项")
-        button_layout.addWidget(self.data_management_button)
+        self.secondary_action_button.setMaximumWidth(60)
+        self.secondary_action_button.setVisible(False)  # 初始隐藏
+        button_layout.addWidget(self.secondary_action_button)
         
         # 创建数据管理菜单
-        self.data_management_menu = qt.QMenu(self.data_management_button)
+        self.data_management_menu = qt.QMenu(self.secondary_action_button)
         self.reimport_action = self.data_management_menu.addAction("🔄 重新导入数据")
         self.data_management_menu.addSeparator()
         self.clear_data_action = self.data_management_menu.addAction("🗑️ 清除所有数据")
         self.refresh_status_action = self.data_management_menu.addAction("🔍 刷新状态")
         
-        self.data_management_button.setMenu(self.data_management_menu)
+        self.secondary_action_button.setMenu(self.data_management_menu)
         
         import_layout.addWidget(button_container)
         
-        parent_layout.addWidget(import_group, 0)  # 固定大小
+        parent_layout.addWidget(import_group, 0)  # 固定大小，不拉伸
         
     def _create_action_buttons_section(self, parent_layout):
-        """创建操作按钮区域 - 聚焦主要流程"""
+        """创建分析流程操作区域 - 简洁版本"""
         actions_group = LayoutManager.create_section_frame("分析流程", LayoutType.BUTTON_GROUP)
         actions_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, actions_group)
         
-        # 主CTA：开始全自动分析（突出显示）
+        # 设置紧凑的size policy
+        actions_group.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
+        
+        # 主CTA：开始全自动分析
         self.next_module_button = LayoutManager.create_button_with_style(
             text="开始全自动分析", 
             button_type="primary", 
             size="default", 
-            min_height=45
+            min_height=40
         )
         self.next_module_button.setEnabled(False)
         actions_layout.addWidget(self.next_module_button)
 
-        # 进度提示（小字）
-        self.next_progress_label = qt.QLabel("")
-        self.next_progress_label.setStyleSheet(StyleManager.get_label_style("muted"))
-        actions_layout.addWidget(self.next_progress_label)
-        
-        # 分隔线
-        separator = qt.QFrame()
-        separator.setFrameShape(qt.QFrame.HLine)
-        separator.setFrameShadow(qt.QFrame.Sunken)
-        separator.setStyleSheet("color: #e0e0e0; margin: 10px 0;")
-        actions_layout.addWidget(separator)
-        
-        # 状态信息标签
-        self.status_info_label = qt.QLabel("准备就绪后即可开始分析")
-        self.status_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
+        # 状态提示标签
+        self.status_info_label = qt.QLabel("请先完成数据导入和时相标记")
+        self.status_info_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 12px; text-align: center; padding: 8px; }"
+        )
         self.status_info_label.setAlignment(qt.Qt.AlignCenter)
         actions_layout.addWidget(self.status_info_label)
         
@@ -268,7 +238,7 @@ class Module1Widget(qt.QWidget):
     def _setup_connections(self):
         """设置信号连接"""
         # 主按钮连接
-        self.load_data_button.clicked.connect(self._on_load_data_clicked)
+        self.primary_action_button.clicked.connect(self._on_primary_action_clicked)
         self.next_module_button.clicked.connect(self._on_next_module_clicked)
         
         # 数据管理菜单连接
@@ -359,6 +329,10 @@ class Module1Widget(qt.QWidget):
             
         except Exception as e:
             logging.error(f"检查现有数据时发生错误: {str(e)}")
+            
+    def _on_primary_action_clicked(self):
+        """处理主要操作按钮点击（导入数据或重新导入）"""
+        self._on_load_data_clicked()
             
     def _on_load_data_clicked(self):
         """处理数据导入按钮点击"""
@@ -509,13 +483,10 @@ class Module1Widget(qt.QWidget):
             except Exception as e:
                 logging.debug(f"重新绑定观察者时发生问题: {e}")
             
-            # 刷新状态显示
-            self.status_display_widget.update_status()
-            
             # 刷新心动周期显示
             self.cardiac_cycle_widget.refresh_display()
             
-            # 更新界面状态（含步骤清单、CTA）
+            # 更新界面状态
             self._update_interface_state()
             
             # 显示成功提示
@@ -644,11 +615,8 @@ class Module1Widget(qt.QWidget):
         return status
 
     def _update_interface_state(self):
-        """更新界面状态 - 智能适应数据状态"""
+        """更新界面状态 - 简化版本"""
         try:
-            # 统一由状态组件内部更新状态与进度
-            self.status_display_widget.update_status()
-            
             # 检查数据状态
             has_data = self.session.is_ready()
             
@@ -658,79 +626,94 @@ class Module1Widget(qt.QWidget):
             # CTA可用性
             ready_for_next = self._check_ready_for_next_module()
             self.next_module_button.setEnabled(ready_for_next)
-            self.next_module_button.setText("开始全自动分析")
 
-            # 样式与提示
+            # 状态提示和按钮样式
             if ready_for_next:
                 self._update_button_style(self.next_module_button, "primary", "default")
                 self.next_module_button.setToolTip("启动全自动分析流程")
                 self.status_info_label.setText("✅ 准备就绪，可以开始分析")
-                self.status_info_label.setStyleSheet(StyleManager.get_label_style("success"))
+                self.status_info_label.setStyleSheet(
+                    "QLabel { color: #2d5a3d; font-size: 12px; text-align: center; padding: 8px; "
+                    "background-color: #e8f5e8; border-radius: 4px; }"
+                )
             else:
                 self._update_button_style(self.next_module_button, "secondary", "default")
                 missing_items = self._get_missing_requirements()
                 self.next_module_button.setToolTip("需要完成：\n" + "\n".join(missing_items))
                 if has_data:
                     self.status_info_label.setText("⏳ 请完成心脏时相标记")
-                    self.status_info_label.setStyleSheet(StyleManager.get_label_style("warning"))
+                    self.status_info_label.setStyleSheet(
+                        "QLabel { color: #8a6d3b; font-size: 12px; text-align: center; padding: 8px; "
+                        "background-color: #fcf8e3; border-radius: 4px; }"
+                    )
                 else:
                     self.status_info_label.setText("📂 请先导入4D心脏CT数据")
-                    self.status_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
+                    self.status_info_label.setStyleSheet(
+                        "QLabel { color: #666; font-size: 12px; text-align: center; padding: 8px; }"
+                    )
                 
         except Exception as e:
             logging.error(f"更新界面状态时发生错误: {str(e)}")
             
     def _update_data_import_section(self, has_data: bool):
-        """根据数据状态更新数据导入区域"""
+        """根据数据状态更新数据导入区域 - 使用统一的UI组件设计"""
         try:
             if has_data:
-                # 有数据：显示为重新导入模式
-                self.load_data_button.setText("重新导入数据")
-                self._update_button_style(self.load_data_button, "secondary", "default")
-                self.load_data_button.setToolTip("重新导入4D心脏CT数据")
-                
-                # 显示数据管理按钮
-                self.data_management_button.setVisible(True)
-                
-                # 更新说明文本
+                # 有数据状态
                 sequence_node = self.session.get_volume_sequence_node()
                 if sequence_node:
                     num_frames = sequence_node.GetNumberOfDataNodes()
                     node_name = sequence_node.GetName()
-                    self.instruction_label.setText(
-                        f"✅ 已导入序列：{node_name} ({num_frames} 帧)\n"
-                        "如需更换数据，请点击下方按钮重新导入。"
+                    
+                    # 更新状态显示
+                    self.status_icon_label.setText("✅")
+                    self.status_text_label.setText(f"已导入：{node_name} ({num_frames} 帧)")
+                    self.status_text_label.setStyleSheet(
+                        "QLabel { color: #2d5a3d; font-size: 12px; padding-left: 8px; "
+                        "background-color: #e8f5e8; padding: 4px 8px; border-radius: 3px; }"
                     )
-                    self.instruction_label.setStyleSheet(
-                        "QLabel { color: #2d5a3d; background-color: #e8f5e8; "
-                        "padding: 12px; border: 1px solid #4CAF50; border-radius: 6px; "
-                        "font-size: 13px; line-height: 1.4; }"
-                    )
+                    
+                    # 更新按钮
+                    self.primary_action_button.setText("重新导入")
+                    self._update_button_style(self.primary_action_button, "secondary", "default")
+                    self.primary_action_button.setToolTip("重新导入4D心脏CT数据")
+                    
+                    # 显示管理按钮
+                    self.secondary_action_button.setVisible(True)
+                    self.secondary_action_button.setToolTip("数据管理选项")
+                    
                 else:
-                    self.instruction_label.setText(
-                        "⚠️ 数据状态异常，建议重新导入数据。"
+                    # 数据异常状态
+                    self.status_icon_label.setText("⚠️")
+                    self.status_text_label.setText("数据状态异常，建议重新导入")
+                    self.status_text_label.setStyleSheet(
+                        "QLabel { color: #8a6d3b; font-size: 12px; padding-left: 8px; "
+                        "background-color: #fcf8e3; padding: 4px 8px; border-radius: 3px; }"
                     )
-                    self.instruction_label.setStyleSheet(
-                        "QLabel { color: #8a6d3b; background-color: #fcf8e3; "
-                        "padding: 12px; border: 1px solid #faebcc; border-radius: 6px; "
-                        "font-size: 13px; line-height: 1.4; }"
-                    )
+                    
+                    # 更新按钮
+                    self.primary_action_button.setText("重新导入")
+                    self._update_button_style(self.primary_action_button, "primary", "default")
+                    self.primary_action_button.setToolTip("重新导入4D心脏CT数据")
+                    
+                    # 显示管理按钮
+                    self.secondary_action_button.setVisible(True)
+                    
             else:
-                # 无数据：显示为初始导入模式
-                self.load_data_button.setText("数据导入与配置")
-                self._update_button_style(self.load_data_button, "primary", "default")
-                self.load_data_button.setToolTip("导入4D心脏CT数据并配置患者信息")
-                
-                # 隐藏数据管理按钮
-                self.data_management_button.setVisible(False)
-                
-                # 恢复原始说明文本
-                self.instruction_label.setText(
-                    "请点击下方按钮导入4D心脏CT数据并配置患者信息。"
-                    "支持从DICOM浏览器加载或从现有场景数据创建序列。"
+                # 无数据状态
+                self.status_icon_label.setText("📂")
+                self.status_text_label.setText("请导入4D心脏CT数据")
+                self.status_text_label.setStyleSheet(
+                    "QLabel { color: #666; font-size: 12px; padding-left: 8px; }"
                 )
-                styles = ComponentStyleFactory.get_module1_styles()
-                self.instruction_label.setStyleSheet(styles["instruction_label"])
+                
+                # 更新按钮
+                self.primary_action_button.setText("数据导入与配置")
+                self._update_button_style(self.primary_action_button, "primary", "default")
+                self.primary_action_button.setToolTip("导入4D心脏CT数据并配置患者信息")
+                
+                # 隐藏管理按钮
+                self.secondary_action_button.setVisible(False)
                 
         except Exception as e:
             logging.error(f"更新数据导入区域时发生错误: {str(e)}")
@@ -810,14 +793,6 @@ class Module1Widget(qt.QWidget):
             心动周期管理组件
         """
         return self.cardiac_cycle_widget
-        
-    def get_status_display_widget(self) -> StatusDisplayWidget:
-        """获取状态显示组件
-        
-        Returns:
-            状态显示组件
-        """
-        return self.status_display_widget
         
     def is_ready_for_next_module(self) -> bool:
         """检查是否准备好进入下一模块

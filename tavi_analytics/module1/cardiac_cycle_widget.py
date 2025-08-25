@@ -32,7 +32,7 @@ except ImportError:
     from ui.styles import ComponentStyleFactory
 
 
-class CardiacCycleWidget(qt.QGroupBox):
+class CardiacCycleWidget(qt.QWidget):
     """心动周期管理组件
     
     提供4D心脏CT序列的时间轴管理和关键时相标记功能
@@ -48,9 +48,9 @@ class CardiacCycleWidget(qt.QGroupBox):
             session: TAVR研究会话对象
             parent: 父窗口对象
         """
-        super().__init__("心动周期管理", parent)
+        super().__init__(parent)
         self.session = session
-        self.setVisible(False)  # 初始隐藏
+        self.setVisible(True)  # 默认显示
         
         # 设置大小策略 - 使用标准化布局管理器
         LayoutManager.setup_widget_size_policy(self, LayoutType.CONTROL_PANEL, SizePolicy.EXPANDING)
@@ -65,10 +65,29 @@ class CardiacCycleWidget(qt.QGroupBox):
     def _init_ui(self):
         """初始化用户界面"""
         # 主布局 - 使用标准化布局管理器
-        layout = LayoutManager.create_layout(LayoutType.CONTROL_PANEL, self)
+        layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
+        try:
+            # 去除外边距，保证与其它 section 宽度一致
+            layout.setContentsMargins(0, 0, 0, 0)
+        except Exception:
+            pass
+        
+        # 创建心动周期管理section
+        self._create_cardiac_cycle_section(layout)
+    
+    def _create_cardiac_cycle_section(self, parent_layout):
+        """创建心动周期管理section"""
+        # 使用和数据导入相同的section样式
+        cycle_group = LayoutManager.create_section_frame("心动周期管理", LayoutType.BUTTON_GROUP)
+        cycle_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, cycle_group)
+        
+        # 设置紧凑且等宽的 size policy（水平扩展）
+        cycle_group.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
         
         # 创建紧凑的心动周期控制界面
-        self._create_compact_cardiac_cycle_ui(layout)
+        self._create_compact_cardiac_cycle_ui(cycle_layout)
+        
+        parent_layout.addWidget(cycle_group, 0)  # 固定大小，不拉伸
     
     def _create_compact_cardiac_cycle_ui(self, parent_layout):
         """创建紧凑的心动周期控制界面"""
@@ -82,19 +101,24 @@ class CardiacCycleWidget(qt.QGroupBox):
         # 帧信息（左侧）
         self.frame_info_label = qt.QLabel("帧: 0/0")
         self.frame_info_label.setAlignment(qt.Qt.AlignCenter)
-        self.frame_info_label.setStyleSheet(styles["frame_info_label"])
-        self.frame_info_label.setMinimumWidth(80)
+        self.frame_info_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 12px; font-weight: bold; "
+            "background-color: #f5f5f5; padding: 4px 8px; border-radius: 3px; }"
+        )
+        self.frame_info_label.setMinimumWidth(70)
         info_layout.addWidget(self.frame_info_label, 0)
         
         # 序列描述（右侧，可伸缩）
         self.series_description_label = qt.QLabel("序列: 未加载")
         self.series_description_label.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
-        self.series_description_label.setStyleSheet(styles["series_description_label"])
+        self.series_description_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 12px; padding: 4px 8px; }"
+        )
         self.series_description_label.setWordWrap(True)
         self.series_description_label.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred)
         info_layout.addWidget(self.series_description_label, 1)
         
-        parent_layout.addLayout(info_layout, 0)
+        parent_layout.addLayout(info_layout)
         
         # === 第二行：时间轴滑块 ===
         timeline_layout = LayoutManager.create_horizontal_layout(LayoutType.SECTION_CONTAINER)
@@ -102,83 +126,101 @@ class CardiacCycleWidget(qt.QGroupBox):
         # 上一帧按钮
         self.prev_button = qt.QPushButton("◀")
         self.prev_button.setEnabled(False)
-        self.prev_button.setFixedSize(30, 30)
-        self.prev_button.setStyleSheet(styles["control_button"])
+        self.prev_button.setFixedSize(28, 28)
+        self.prev_button.setStyleSheet(
+            "QPushButton { background-color: #f0f0f0; border: 1px solid #ddd; "
+            "border-radius: 4px; font-size: 12px; } "
+            "QPushButton:hover { background-color: #e0e0e0; } "
+            "QPushButton:disabled { background-color: #f8f8f8; color: #ccc; }"
+        )
         self.prev_button.setToolTip("上一帧")
         timeline_layout.addWidget(self.prev_button, 0)
         
         # 时间轴滑块（主要部分）
         self.timeline_slider = qt.QSlider(qt.Qt.Horizontal)
         self.timeline_slider.setEnabled(False)
-        self.timeline_slider.setMinimumHeight(25)
+        self.timeline_slider.setMinimumHeight(20)
         self.timeline_slider.setStyleSheet(styles["slider"])
         timeline_layout.addWidget(self.timeline_slider, 1)
         
         # 下一帧按钮
         self.next_button = qt.QPushButton("▶")
         self.next_button.setEnabled(False)
-        self.next_button.setFixedSize(30, 30)
-        self.next_button.setStyleSheet(styles["control_button"])
+        self.next_button.setFixedSize(28, 28)
+        self.next_button.setStyleSheet(
+            "QPushButton { background-color: #f0f0f0; border: 1px solid #ddd; "
+            "border-radius: 4px; font-size: 12px; } "
+            "QPushButton:hover { background-color: #e0e0e0; } "
+            "QPushButton:disabled { background-color: #f8f8f8; color: #ccc; }"
+        )
         self.next_button.setToolTip("下一帧")
         timeline_layout.addWidget(self.next_button, 0)
         
-        parent_layout.addLayout(timeline_layout, 0)
+        parent_layout.addLayout(timeline_layout)
         
-        # === 第三行：时相标记和已标记时相（合并显示）===
+        # === 第三行：时相标记按钮（合并显示）===
         phase_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
         
-        # 左侧：舒张末期
-        diastole_container = qt.QVBoxLayout()
-        diastole_container.setSpacing(4)
-        
+        # 舒张末期按钮
         self.mark_end_diastole_button = qt.QPushButton("标记舒张末期")
         self.mark_end_diastole_button.setEnabled(False)
-        self.mark_end_diastole_button.setMinimumHeight(35)
-        self.mark_end_diastole_button.setStyleSheet(styles["mark_button"])
-        diastole_container.addWidget(self.mark_end_diastole_button)
+        self.mark_end_diastole_button.setMinimumHeight(32)
+        self.mark_end_diastole_button.setStyleSheet(
+            "QPushButton { background-color: #e3f2fd; border: 1px solid #2196f3; "
+            "border-radius: 4px; color: #1976d2; font-size: 12px; } "
+            "QPushButton:hover { background-color: #bbdefb; } "
+            "QPushButton:disabled { background-color: #f8f8f8; color: #ccc; border-color: #ddd; }"
+        )
+        phase_layout.addWidget(self.mark_end_diastole_button, 1)
         
+        # 收缩末期按钮
+        self.mark_end_systole_button = qt.QPushButton("标记收缩末期")
+        self.mark_end_systole_button.setEnabled(False)
+        self.mark_end_systole_button.setMinimumHeight(32)
+        self.mark_end_systole_button.setStyleSheet(
+            "QPushButton { background-color: #fff3e0; border: 1px solid #ff9800; "
+            "border-radius: 4px; color: #f57c00; font-size: 12px; } "
+            "QPushButton:hover { background-color: #ffe0b2; } "
+            "QPushButton:disabled { background-color: #f8f8f8; color: #ccc; border-color: #ddd; }"
+        )
+        phase_layout.addWidget(self.mark_end_systole_button, 1)
+        
+        parent_layout.addLayout(phase_layout)
+        
+        # === 第四行：已标记时相状态 ===
+        marked_phases_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP)
+        
+        # 舒张末期状态
         self.end_diastole_label = qt.QLabel("舒张末期: 未标记")
-        self.end_diastole_label.setStyleSheet(styles["marked_phase_label"])
+        self.end_diastole_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 11px; padding: 4px 8px; "
+            "background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 3px; }"
+        )
         self.end_diastole_label.setWordWrap(True)
         self.end_diastole_label.setCursor(qt.Qt.PointingHandCursor)
         self.end_diastole_label.setToolTip("双击跳转到舒张末期")
-        diastole_container.addWidget(self.end_diastole_label)
+        marked_phases_layout.addWidget(self.end_diastole_label, 1)
         
-        phase_layout.addLayout(diastole_container, 1)
-        
-        # 中间：分隔符
-        separator = qt.QFrame()
-        separator.setFrameShape(qt.QFrame.VLine)
-        separator.setFrameShadow(qt.QFrame.Sunken)
-        separator.setStyleSheet(styles["section_separator"])
-        phase_layout.addWidget(separator, 0)
-        
-        # 右侧：收缩末期
-        systole_container = qt.QVBoxLayout()
-        systole_container.setSpacing(4)
-        
-        self.mark_end_systole_button = qt.QPushButton("标记收缩末期")
-        self.mark_end_systole_button.setEnabled(False)
-        self.mark_end_systole_button.setMinimumHeight(35)
-        self.mark_end_systole_button.setStyleSheet(styles["mark_button"])
-        systole_container.addWidget(self.mark_end_systole_button)
-        
+        # 收缩末期状态
         self.end_systole_label = qt.QLabel("收缩末期: 未标记")
-        self.end_systole_label.setStyleSheet(styles["marked_phase_label"])
+        self.end_systole_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 11px; padding: 4px 8px; "
+            "background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 3px; }"
+        )
         self.end_systole_label.setWordWrap(True)
         self.end_systole_label.setCursor(qt.Qt.PointingHandCursor)
         self.end_systole_label.setToolTip("双击跳转到收缩末期")
-        systole_container.addWidget(self.end_systole_label)
+        marked_phases_layout.addWidget(self.end_systole_label, 1)
         
-        phase_layout.addLayout(systole_container, 1)
+        parent_layout.addLayout(marked_phases_layout)
         
-        parent_layout.addLayout(phase_layout, 0)
-        
-        # === 第三行：滑块范围信息 ===
+        # === 第五行：滑块范围信息 ===
         self.slider_range_label = qt.QLabel("范围: 0 - 0 (0 帧)")
         self.slider_range_label.setAlignment(qt.Qt.AlignCenter)
-        self.slider_range_label.setStyleSheet(styles["range_label"])
-        parent_layout.addWidget(self.slider_range_label, 0)
+        self.slider_range_label.setStyleSheet(
+            "QLabel { color: #999; font-size: 11px; padding: 2px; }"
+        )
+        parent_layout.addWidget(self.slider_range_label)
         
     def _setup_connections(self):
         """设置信号连接"""
@@ -284,7 +326,8 @@ class CardiacCycleWidget(qt.QGroupBox):
         self.mark_end_systole_button.setEnabled(False)
         self.prev_button.setEnabled(False)
         self.next_button.setEnabled(False)
-        self.setVisible(False)
+        # 不再隐藏组件，保持可见以与其它 section 对齐
+        self.setVisible(True)
         
         # 重置显示
         self.frame_info_label.setText("帧: 0/0")
@@ -367,16 +410,32 @@ class CardiacCycleWidget(qt.QGroupBox):
             frame_idx = end_diastole['frame_index']
             phase_pct = end_diastole['phase_percent']
             self.end_diastole_label.setText(f"舒张末期: 帧{frame_idx + 1} ({phase_pct:.1f}%)")
+            self.end_diastole_label.setStyleSheet(
+                "QLabel { color: #1976d2; font-size: 11px; padding: 4px 8px; "
+                "background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 3px; }"
+            )
         else:
             self.end_diastole_label.setText("舒张末期: 未标记")
+            self.end_diastole_label.setStyleSheet(
+                "QLabel { color: #666; font-size: 11px; padding: 4px 8px; "
+                "background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 3px; }"
+            )
             
         # 更新收缩末期显示
         if end_systole and end_systole['frame_index'] is not None:
             frame_idx = end_systole['frame_index']
             phase_pct = end_systole['phase_percent']
             self.end_systole_label.setText(f"收缩末期: 帧{frame_idx + 1} ({phase_pct:.1f}%)")
+            self.end_systole_label.setStyleSheet(
+                "QLabel { color: #f57c00; font-size: 11px; padding: 4px 8px; "
+                "background-color: #fff3e0; border: 1px solid #ff9800; border-radius: 3px; }"
+            )
         else:
             self.end_systole_label.setText("收缩末期: 未标记")
+            self.end_systole_label.setStyleSheet(
+                "QLabel { color: #666; font-size: 11px; padding: 4px 8px; "
+                "background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 3px; }"
+            )
             
     def refresh_display(self):
         """刷新显示内容
