@@ -30,6 +30,7 @@ try:
     from ..utils.qt_utils import QtUtils
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..ui.styles import ComponentStyleFactory, StyleManager
+    from ..widgets import SectionCard
 except ImportError:
     import sys
     import os
@@ -41,6 +42,7 @@ except ImportError:
     from core.data_models import PatientData
     from core.enums import ImageQuality, FollowUpTimepoint
     from ui.styles import ComponentStyleFactory, StyleManager
+    from widgets import SectionCard
     # 使用当前目录导入
     current_module_dir = os.path.dirname(__file__)
     if current_module_dir not in sys.path:
@@ -142,76 +144,103 @@ class Module1Widget(qt.QWidget):
 
 
     def _create_data_import_section(self, parent_layout):
-        """创建数据导入区域"""
-        import_group = LayoutManager.create_section_frame("数据导入", LayoutType.BUTTON_GROUP)
-        import_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, import_group)
-        try:
-            import_layout.setContentsMargins(0, 0, 0, 0)
-        except Exception:
-            pass
-        
-        # 设置紧凑且等宽的 size policy（水平扩展，与其它 section 一致）
-        import_group.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
-        
-        # 数据状态显示区域
-        self.data_status_container = qt.QWidget()
-        status_layout = LayoutManager.create_horizontal_layout(LayoutType.INFO_DISPLAY, self.data_status_container)
-        
-        # 状态图标
-        self.status_icon_label = qt.QLabel("📂")
-        self.status_icon_label.setFixedSize(24, 24)
-        self.status_icon_label.setAlignment(qt.Qt.AlignCenter)
-        self.status_icon_label.setStyleSheet(
-            "QLabel { font-size: 16px; }"
+        """创建数据导入区域 - 使用通用SectionCard (蓝色主题)"""
+        section = SectionCard(title="1. 数据加载与验证", icon_text="📁", variant="blue", parent=self)
+        main_layout = section.body_layout
+
+        # 描述文本
+        self.description_label = qt.QLabel("选择TAVR术后4D心脏CT DICOM数据序列")
+        self.description_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 14px;
+                color: #424242;
+                background: transparent;
+                padding: 0px;
+                margin-left: 4px;
+            }
+            """
         )
-        status_layout.addWidget(self.status_icon_label, 0)
-        
-        # 状态文本
-        self.status_text_label = qt.QLabel("请导入4D心脏CT数据")
-        self.status_text_label.setWordWrap(True)
-        self.status_text_label.setStyleSheet(
-            "QLabel { color: #666; font-size: 12px; padding-left: 8px; }"
-        )
-        status_layout.addWidget(self.status_text_label, 1)
-        
-        import_layout.addWidget(self.data_status_container)
-        
-        # 按钮区域
+        self.description_label.setWordWrap(True)
+        main_layout.addWidget(self.description_label)
+
+        # 按钮容器
         button_container = qt.QWidget()
-        button_layout = LayoutManager.create_horizontal_layout(LayoutType.BUTTON_GROUP, button_container)
-        
-        # 主要操作按钮
-        self.primary_action_button = LayoutManager.create_button_with_style(
-            text="数据导入与配置", 
-            button_type="primary", 
-            size="default", 
-            min_height=36
+        button_layout = qt.QHBoxLayout(button_container)
+        button_layout.setContentsMargins(0, 8, 0, 0)
+        button_layout.setSpacing(12)
+
+        # 主要操作按钮 - 蓝色风格
+        self.primary_action_button = qt.QPushButton("📁 加载4D DICOM序列")
+        self.primary_action_button.setStyleSheet(
+            """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2196f3, stop:1 #1976d2);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-size: 14px;
+                font-weight: bold;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #42a5f5, stop:1 #1e88e5);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1976d2, stop:1 #1565c0);
+            }
+            QPushButton:disabled {
+                background: #e0e0e0;
+                color: #9e9e9e;
+            }
+            """
         )
         button_layout.addWidget(self.primary_action_button)
-        
-        # 次要操作按钮（通常用于数据管理）
-        self.secondary_action_button = LayoutManager.create_button_with_style(
-            text="管理", 
-            button_type="secondary", 
-            size="default", 
-            min_height=36
+        button_layout.addStretch()
+        main_layout.addWidget(button_container)
+
+        # 状态指示区域（初始隐藏）
+        self.status_container = qt.QWidget()
+        self.status_container.setVisible(False)
+        status_layout = qt.QHBoxLayout(self.status_container)
+        status_layout.setContentsMargins(4, 8, 4, 0)
+        status_layout.setSpacing(8)
+
+        # 状态图标
+        self.status_icon_label = qt.QLabel("")
+        self.status_icon_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 16px;
+                color: #4caf50;
+                background: transparent;
+            }
+            """
         )
-        self.secondary_action_button.setMaximumWidth(60)
-        self.secondary_action_button.setVisible(False)  # 初始隐藏
-        button_layout.addWidget(self.secondary_action_button)
-        
-        # 创建数据管理菜单
-        self.data_management_menu = qt.QMenu(self.secondary_action_button)
-        self.reimport_action = self.data_management_menu.addAction("🔄 重新导入数据")
-        self.data_management_menu.addSeparator()
-        self.clear_data_action = self.data_management_menu.addAction("🗑️ 清除所有数据")
-        self.refresh_status_action = self.data_management_menu.addAction("🔍 刷新状态")
-        
-        self.secondary_action_button.setMenu(self.data_management_menu)
-        
-        import_layout.addWidget(button_container)
-        
-        parent_layout.addWidget(import_group, 0)  # 固定大小，不拉伸
+        status_layout.addWidget(self.status_icon_label)
+
+        # 状态文本
+        self.status_text_label = qt.QLabel("")
+        self.status_text_label.setStyleSheet(
+            """
+            QLabel {
+                font-size: 12px;
+                color: #2e7d32;
+                background: transparent;
+                font-weight: 500;
+            }
+            """
+        )
+        self.status_text_label.setWordWrap(True)
+        status_layout.addWidget(self.status_text_label, 1)
+
+        main_layout.addWidget(self.status_container)
+
+        parent_layout.addWidget(section, 0)  # 固定大小，不拉伸
         
     def _create_action_buttons_section(self, parent_layout):
         """创建分析流程操作区域 - 简洁版本"""
@@ -246,11 +275,6 @@ class Module1Widget(qt.QWidget):
         # 主按钮连接
         self.primary_action_button.clicked.connect(self._on_primary_action_clicked)
         self.next_module_button.clicked.connect(self._on_next_module_clicked)
-        
-        # 数据管理菜单连接
-        self.reimport_action.triggered.connect(self._on_reimport_data_clicked)
-        self.clear_data_action.triggered.connect(self._on_clear_data_clicked)
-        self.refresh_status_action.triggered.connect(self._on_refresh_status_clicked)
         
     def _init_auto_refresh(self):
         """初始化MRML场景与关键节点的自动刷新监听"""
@@ -662,7 +686,7 @@ class Module1Widget(qt.QWidget):
             logging.error(f"更新界面状态时发生错误: {str(e)}")
             
     def _update_data_import_section(self, has_data: bool):
-        """根据数据状态更新数据导入区域 - 使用统一的UI组件设计"""
+        """根据数据状态更新数据导入区域 - 适配新的蓝色卡片风格"""
         try:
             if has_data:
                 # 有数据状态
@@ -671,55 +695,135 @@ class Module1Widget(qt.QWidget):
                     num_frames = sequence_node.GetNumberOfDataNodes()
                     node_name = sequence_node.GetName()
                     
-                    # 更新状态显示
+                    # 更新描述文本
+                    self.description_label.setText(f"✅ 已成功导入4D序列数据")
+                    self.description_label.setStyleSheet("""
+                        QLabel {
+                            font-size: 14px;
+                            color: #2e7d32;
+                            background: transparent;
+                            padding: 0px;
+                            margin-left: 4px;
+                            font-weight: 500;
+                        }
+                    """)
+                    
+                    # 显示状态容器
+                    self.status_container.setVisible(True)
                     self.status_icon_label.setText("✅")
-                    self.status_text_label.setText(f"已导入：{node_name} ({num_frames} 帧)")
-                    self.status_text_label.setStyleSheet(
-                        "QLabel { color: #2d5a3d; font-size: 12px; padding-left: 8px; "
-                        "background-color: #e8f5e8; padding: 4px 8px; border-radius: 3px; }"
-                    )
+                    self.status_text_label.setText(f"序列名称：{node_name} | 帧数：{num_frames}")
                     
                     # 更新按钮
-                    self.primary_action_button.setText("重新导入")
-                    self._update_button_style(self.primary_action_button, "secondary", "default")
+                    self.primary_action_button.setText("🔄 重新导入序列")
+                    self.primary_action_button.setStyleSheet("""
+                        QPushButton {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #66bb6a, stop:1 #4caf50);
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 12px 24px;
+                            font-size: 14px;
+                            font-weight: bold;
+                            min-height: 20px;
+                        }
+                        QPushButton:hover {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #81c784, stop:1 #66bb6a);
+                        }
+                        QPushButton:pressed {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #4caf50, stop:1 #43a047);
+                        }
+                    """)
                     self.primary_action_button.setToolTip("重新导入4D心脏CT数据")
-                    
-                    # 显示管理按钮
-                    self.secondary_action_button.setVisible(True)
-                    self.secondary_action_button.setToolTip("数据管理选项")
                     
                 else:
                     # 数据异常状态
-                    self.status_icon_label.setText("⚠️")
-                    self.status_text_label.setText("数据状态异常，建议重新导入")
-                    self.status_text_label.setStyleSheet(
-                        "QLabel { color: #8a6d3b; font-size: 12px; padding-left: 8px; "
-                        "background-color: #fcf8e3; padding: 4px 8px; border-radius: 3px; }"
-                    )
+                    self.description_label.setText("⚠️ 数据状态异常，建议重新导入")
+                    self.description_label.setStyleSheet("""
+                        QLabel {
+                            font-size: 14px;
+                            color: #f57c00;
+                            background: transparent;
+                            padding: 0px;
+                            margin-left: 4px;
+                            font-weight: 500;
+                        }
+                    """)
                     
-                    # 更新按钮
-                    self.primary_action_button.setText("重新导入")
-                    self._update_button_style(self.primary_action_button, "primary", "default")
+                    self.status_container.setVisible(False)
+                    
+                    # 更新按钮为重新导入状态
+                    self.primary_action_button.setText("🔄 重新导入序列")
+                    self.primary_action_button.setStyleSheet("""
+                        QPushButton {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #ff9800, stop:1 #f57c00);
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 12px 24px;
+                            font-size: 14px;
+                            font-weight: bold;
+                            min-height: 20px;
+                        }
+                        QPushButton:hover {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #ffb74d, stop:1 #ff9800);
+                        }
+                        QPushButton:pressed {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                                stop:0 #f57c00, stop:1 #ef6c00);
+                        }
+                    """)
                     self.primary_action_button.setToolTip("重新导入4D心脏CT数据")
                     
-                    # 显示管理按钮
-                    self.secondary_action_button.setVisible(True)
                     
             else:
                 # 无数据状态
-                self.status_icon_label.setText("📂")
-                self.status_text_label.setText("请导入4D心脏CT数据")
-                self.status_text_label.setStyleSheet(
-                    "QLabel { color: #666; font-size: 12px; padding-left: 8px; }"
-                )
+                self.description_label.setText("选择TAVR术后4D心脏CT DICOM数据序列")
+                self.description_label.setStyleSheet("""
+                    QLabel {
+                        font-size: 14px;
+                        color: #424242;
+                        background: transparent;
+                        padding: 0px;
+                        margin-left: 4px;
+                    }
+                """)
                 
-                # 更新按钮
-                self.primary_action_button.setText("数据导入与配置")
-                self._update_button_style(self.primary_action_button, "primary", "default")
+                # 隐藏状态容器
+                self.status_container.setVisible(False)
+                
+                # 更新按钮为初始状态
+                self.primary_action_button.setText("📁 加载4D DICOM序列")
+                self.primary_action_button.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                            stop:0 #2196f3, stop:1 #1976d2);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 12px 24px;
+                        font-size: 14px;
+                        font-weight: bold;
+                        min-height: 20px;
+                    }
+                    QPushButton:hover {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                            stop:0 #42a5f5, stop:1 #1e88e5);
+                    }
+                    QPushButton:pressed {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                            stop:0 #1976d2, stop:1 #1565c0);
+                    }
+                    QPushButton:disabled {
+                        background: #e0e0e0;
+                        color: #9e9e9e;
+                    }
+                """)
                 self.primary_action_button.setToolTip("导入4D心脏CT数据并配置患者信息")
-                
-                # 隐藏管理按钮
-                self.secondary_action_button.setVisible(False)
                 
         except Exception as e:
             logging.error(f"更新数据导入区域时发生错误: {str(e)}")
@@ -827,3 +931,4 @@ class Module1Widget(qt.QWidget):
             
         except Exception as e:
             logging.error(f"清理模块一界面时发生错误: {str(e)}")
+
