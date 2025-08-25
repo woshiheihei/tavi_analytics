@@ -13,7 +13,7 @@ import slicer
 try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
-    from ..utils.layout_manager import LayoutManager
+    from ..utils.layout_manager import LayoutManager, LayoutType
     from .module2_logic import Module2Logic
 except ImportError:
     import os
@@ -25,7 +25,7 @@ except ImportError:
     
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
-    from utils.layout_manager import LayoutManager
+    from utils.layout_manager import LayoutManager, LayoutType
     from module2.module2_logic import Module2Logic
 
 
@@ -87,60 +87,57 @@ class Module2Widget(qt.QWidget):
 
     # 已移除期像切换组件相关回调与状态恢复逻辑
 
-    def _update_status(self, message: str):
-        """更新状态显示"""
-        if hasattr(self, 'status_label'):
-            self.status_label.setText(message)
-            logging.info(f"状态更新: {message}")
-
     def _setup_ui(self):
         """设置用户界面"""
-        # 创建主布局
-        layout = qt.QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
+        # 创建主布局 - 与模块一保持一致的布局管理器
+        layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 添加标题
-        self._create_title_section(layout)
-
-        # 添加全自动分析区域 (Auto Analysis)
+        # 全自动分析区域 - 主要功能区
         self._create_auto_analysis_section(layout)
+        
+        # 添加间隔
+        layout.addSpacing(20)
 
-        # 添加进度状态区域 (Progress Status)
-        self._create_progress_section(layout)
-
-        # 添加导航按钮：进入分析页面（module3）
+        # 导航按钮区域 - 进入下一步
         self._create_navigation_section(layout)
 
-        # 添加弹性空间
-        layout.addStretch()
-
-    def _create_title_section(self, layout):
-        """创建标题区域"""
-        title_label = qt.QLabel("模块二：全自动分析")
-        title_label.setAlignment(qt.Qt.AlignCenter)
-        title_label.setStyleSheet(StyleManager.get_label_style("large"))
-        layout.addWidget(title_label)
-        
-        # 去除冗长描述，保持页面简洁
-    # 期像切换组件已移除
+        # 弹性空间，将内容推到顶部
+        layout.addStretch(1)
 
     def _create_auto_analysis_section(self, layout):
-        """创建全自动分析区域"""
-        # 使用标准化的section_frame替代直接创建QGroupBox - 与模块一保持一致
-        analysis_group = LayoutManager.create_section_frame("全自动分析 (Auto Analysis)")
-        analysis_layout = qt.QVBoxLayout(analysis_group)
+        """创建全自动分析区域 - 合并进度显示到主功能区"""
+        # 使用标准化的section_frame - 与模块一保持一致
+        analysis_group = LayoutManager.create_section_frame("全自动分析", LayoutType.BUTTON_GROUP)
+        analysis_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, analysis_group)
         
-        # 移除冗长提示，直接提供操作按钮
+        # 设置紧凑的size policy - 与模块一保持一致
+        analysis_group.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
         
-        # 一键分析按钮 - 主要操作（支持自动启动时的状态显示）
-        self.auto_analysis_button = LayoutManager.create_button_with_style(
-            text="🚀 开始全自动分析",
-            button_type="primary",
-            size="large",
-            min_height=50
-        )
+        # 一键分析按钮 - 主要操作，使用绿色风格
+        self.auto_analysis_button = qt.QPushButton("🚀 开始全自动分析")
         self.auto_analysis_button.setObjectName("autoAnalysisButton")
+        self.auto_analysis_button.setMinimumHeight(40)
+        self.auto_analysis_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                color: #ffffff;
+            }
+        """)
         self.auto_analysis_button.clicked.connect(self._on_start_auto_analysis)
         analysis_layout.addWidget(self.auto_analysis_button)
         
@@ -154,7 +151,7 @@ class Module2Widget(qt.QWidget):
                 border: 1px solid #e9ecef;
                 border-radius: 4px;
                 padding: 8px;
-                font-size: 13px;
+                font-size: 12px;
                 margin: 4px 0px;
             }
         """)
@@ -162,59 +159,106 @@ class Module2Widget(qt.QWidget):
         self.analysis_status_label.setVisible(False)
         analysis_layout.addWidget(self.analysis_status_label)
         
-        # 停止分析按钮 - 危险操作，初始隐藏
-        self.stop_analysis_button = LayoutManager.create_button_with_style(
-            text="⏹ 停止分析",
-            button_type="destructive",
-            size="default",
-            min_height=35
-        )
+        # 进度条 - 集成到主功能区，使用绿色主题
+        self.progress_bar = qt.QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setMinimumHeight(20)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #28a745;
+                border-radius: 4px;
+                text-align: center;
+                font-size: 11px;
+                background-color: #f8f9fa;
+                color: #333;
+            }
+            QProgressBar::chunk {
+                background-color: #28a745;
+                border-radius: 3px;
+            }
+        """)
+        self.progress_bar.setVisible(False)  # 初始隐藏
+        analysis_layout.addWidget(self.progress_bar)
+        
+        # 停止分析按钮 - 危险操作，初始隐藏，使用红色风格
+        self.stop_analysis_button = qt.QPushButton("⏹ 停止分析")
         self.stop_analysis_button.setObjectName("stopAnalysisButton")
+        self.stop_analysis_button.setMinimumHeight(32)
+        self.stop_analysis_button.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+            QPushButton:pressed {
+                background-color: #bd2130;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                color: #ffffff;
+            }
+        """)
         self.stop_analysis_button.clicked.connect(self._on_stop_analysis)
         self.stop_analysis_button.setVisible(False)  # 初始隐藏
         analysis_layout.addWidget(self.stop_analysis_button)
         
-        layout.addWidget(analysis_group)
+        layout.addWidget(analysis_group, 0)  # 固定大小，不拉伸
 
-    def _create_progress_section(self, layout):
-        """创建进度状态区域"""
-        # 使用标准化的section_frame替代直接创建QGroupBox - 与模块一保持一致
-        progress_group = LayoutManager.create_section_frame("进度状态")
-        progress_layout = qt.QVBoxLayout(progress_group)
-        
-        # 进度条
-        self.progress_bar = qt.QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet(StyleManager.get_input_style())
-        self.progress_bar.setMinimumHeight(25)
-        progress_layout.addWidget(self.progress_bar)
-        
-        # 状态文本标签
-        self.status_label = qt.QLabel("准备开始全自动分析...")
-        self.status_label.setAlignment(qt.Qt.AlignCenter)
-        self.status_label.setStyleSheet(StyleManager.get_label_style("muted"))
-        self.status_label.setMinimumHeight(30)
-        progress_layout.addWidget(self.status_label)
-        
-        layout.addWidget(progress_group)
+
 
     def _create_navigation_section(self, layout):
-        """创建进入分析页面的导航按钮"""
-        nav_group = LayoutManager.create_section_frame("前往分析页面")
-        nav_layout = qt.QHBoxLayout(nav_group)
+        """创建进入分析页面的导航按钮 - 与模块一风格保持一致"""
+        nav_group = LayoutManager.create_section_frame("下一步操作", LayoutType.BUTTON_GROUP)
+        nav_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, nav_group)
+        
+        # 设置紧凑的size policy - 与模块一保持一致
+        nav_group.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
 
-        go_button = LayoutManager.create_button_with_style(
-            text="➡ 进入分析页面",
-            button_type="primary",
-            size="default",
-            min_height=40
+        # 进入分析页面按钮，使用绿色风格
+        self.go_to_analysis_button = qt.QPushButton("进入分析页面")
+        self.go_to_analysis_button.setObjectName("enterAnalysisPageButton")
+        self.go_to_analysis_button.setMinimumHeight(40)
+        self.go_to_analysis_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+                color: #ffffff;
+            }
+        """)
+        self.go_to_analysis_button.clicked.connect(self._on_enter_analysis_page)
+        nav_layout.addWidget(self.go_to_analysis_button)
+
+        # 状态提示标签 - 与模块一风格保持一致
+        self.nav_status_label = qt.QLabel("全自动分析完成后可进入详细分析页面")
+        self.nav_status_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 12px; text-align: center; padding: 8px; }"
         )
-        go_button.setObjectName("enterAnalysisPageButton")
-        go_button.clicked.connect(self._on_enter_analysis_page)
-        nav_layout.addWidget(go_button)
+        self.nav_status_label.setAlignment(qt.Qt.AlignCenter)
+        nav_layout.addWidget(self.nav_status_label)
 
-        layout.addWidget(nav_group)
+        layout.addWidget(nav_group, 0)  # 固定大小，不拉伸
 
     def _on_enter_analysis_page(self):
         """跳转到 module3（瓣叶功能评估）标签页"""
@@ -462,6 +506,7 @@ class Module2Widget(qt.QWidget):
         if hasattr(self, 'analysis_status_label'):
             self.analysis_status_label.setText(message)
             self.analysis_status_label.setVisible(True)
+            
             # 根据状态类型设置不同的样式
             if status_type == "error":
                 style = """
@@ -471,7 +516,7 @@ class Module2Widget(qt.QWidget):
                         border: 1px solid #f5c6cb;
                         border-radius: 4px;
                         padding: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         margin: 4px 0px;
                     }
                 """
@@ -483,7 +528,7 @@ class Module2Widget(qt.QWidget):
                         border: 1px solid #c3e6cb;
                         border-radius: 4px;
                         padding: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         margin: 4px 0px;
                     }
                 """
@@ -495,7 +540,7 @@ class Module2Widget(qt.QWidget):
                         border: 1px solid #bee5eb;
                         border-radius: 4px;
                         padding: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         margin: 4px 0px;
                     }
                 """
@@ -507,7 +552,7 @@ class Module2Widget(qt.QWidget):
                         border: 1px solid #ffeeba;
                         border-radius: 4px;
                         padding: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         margin: 4px 0px;
                     }
                 """
@@ -519,13 +564,20 @@ class Module2Widget(qt.QWidget):
                         border: 1px solid #e9ecef;
                         border-radius: 4px;
                         padding: 8px;
-                        font-size: 13px;
+                        font-size: 12px;
                         margin: 4px 0px;
                     }
                 """
 
             self.analysis_status_label.setStyleSheet(style)
             logging.debug(f"分析状态更新: {message}")
+            
+        # 同时显示进度条（如果正在处理）
+        if status_type == "processing" and hasattr(self, 'progress_bar'):
+            self.progress_bar.setVisible(True)
+        elif status_type in ["success", "error"] and hasattr(self, 'progress_bar'):
+            # 完成或失败时可以选择隐藏进度条
+            pass
 
     def _disable_analysis_button(self):
         """禁用分析按钮"""
