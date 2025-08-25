@@ -12,6 +12,7 @@ from core.session import TAVRStudySession
 from core.module_manager import ModuleManager
 from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
 from ui.styles import ComponentStyleFactory
+from ui.navigation_bar import NavigationBar
 from utils.dev_utils import DevUtils
 
 
@@ -49,11 +50,8 @@ class MainUI(qt.QWidget):
         self._module_widgets = {}  # 缓存模块组件
         self._dev_panel = None     # 开发者面板（可隐藏）
         self._main_layout = None   # 主布局引用，便于动态插入开发者面板
-        # 新的导航栏引用
-        self._nav_frame = None
-        self._nav_scroll = None
-        self._nav_scroll_content = None
-        self._nav_buttons_layout = None
+        # 导航栏组件引用
+        self._navigation_bar = None
 
         # 设置主界面
         self._setup_ui()
@@ -70,11 +68,14 @@ class MainUI(qt.QWidget):
         # 设置主界面响应式布局
         LayoutManager.apply_responsive_layout(self, min_width=400, min_height=700)
         
-        # 创建导航区域（模块切换和状态显示）
-        self._create_navigation_area(main_layout)
+        # 创建导航栏组件
+        self._create_navigation_bar(main_layout)
         
         # 创建内容区域（模块内容）- 使用可滚动容器
         self._create_content_area(main_layout)
+        
+        # 设置导航栏连接（必须在导航栏创建后进行）
+        self._setup_navigation_connections()
 
         # 开发者面板：按偏好/环境显示（可用快捷键随时切换）
         try:
@@ -92,111 +93,10 @@ class MainUI(qt.QWidget):
         except Exception as e:
             logging.warning(f"检查开发者模式失败: {e}")
     
-    def _create_navigation_area(self, parent_layout):
-        """创建导航区域（专业导航页风格的顶栏）"""
-        # 顶部导航条（非标准section，自定义样式）
-        nav_frame = qt.QFrame()
-        nav_frame.setObjectName("TopNav")
-        nav_frame.setFixedHeight(72)
-        self._nav_frame = nav_frame
-
-        # 轻微阴影，提升分层感
-        try:
-            shadow = qt.QGraphicsDropShadowEffect()
-            shadow.setBlurRadius(16)
-            shadow.setOffset(0, 1)
-            try:
-                # QColor 可能在不同绑定下放在 qt.QColor
-                shadow.setColor(qt.QColor(0, 0, 0, 40))
-            except Exception:
-                pass
-            nav_frame.setGraphicsEffect(shadow)
-        except Exception:
-            pass
-
-        # 顶栏布局
-        nav_layout = qt.QHBoxLayout(nav_frame)
-        nav_layout.setContentsMargins(16, 8, 16, 8)
-        nav_layout.setSpacing(12)
-
-    # 左侧品牌区域已移除
-
-        # 中间模块按钮（可横向滚动）
-        self._nav_scroll = qt.QScrollArea()
-        self._nav_scroll.setFrameShape(qt.QFrame.NoFrame)
-        self._nav_scroll.setWidgetResizable(True)
-        self._nav_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAsNeeded)
-        self._nav_scroll.setVerticalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
-
-        self._nav_scroll_content = qt.QWidget()
-        self._nav_buttons_layout = qt.QHBoxLayout(self._nav_scroll_content)
-        self._nav_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        self._nav_buttons_layout.setSpacing(8)
-        self._nav_scroll.setWidget(self._nav_scroll_content)
-        nav_layout.addWidget(self._nav_scroll, 1)
-
-    # 右侧操作区已移除（按需后续可添加其他操作控件）
-
-        # 模块切换按钮组
-        self._module_buttons = qt.QButtonGroup()
-        self._module_buttons.setExclusive(True)
-
-        # 获取可用模块并创建按钮
-        available_modules = self._module_manager.get_available_modules()
-        logging.info(f"MainUI 可用模块: {available_modules}")
-
-        # 数字表情图标映射
-        number_icons = {1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩"}
-
-        for index, module_name in enumerate(available_modules, 1):
-            module_info = self._module_manager.get_module_info(module_name)
-            if module_info:
-                # 添加数字图标到显示名称
-                icon = number_icons.get(index, f"{index}.")
-                display_text = f"{icon} {module_info.display_name}"
-                btn = qt.QPushButton(display_text)
-                btn.setObjectName("NavButton")
-                btn.setCheckable(True)
-                btn.setMinimumHeight(40)
-                btn.setProperty("module_name", module_name)
-                btn.setCursor(qt.Qt.PointingHandCursor)
-                self._module_buttons.addButton(btn)
-                self._nav_buttons_layout.addWidget(btn)
-
-        # 填充剩余空间，避免按钮紧贴右侧
-        self._nav_buttons_layout.addStretch(1)
-
-    # 自定义样式（专业导航条）
-        try:
-            nav_frame.setStyleSheet("""
-                /* 顶栏 */
-                QFrame#TopNav {
-                    background: #ffffff;
-                    border-bottom: 1px solid #e5e7eb; /* neutral-200 */
-                }
-                /* 模块导航按钮（胶囊风格） */
-                QFrame#TopNav QPushButton#NavButton {
-                    background: #f3f4f6; /* gray-100 */
-                    border: 1px solid #e5e7eb; /* gray-200 */
-                    color: #111827; /* gray-900 */
-                    border-radius: 20px;
-                    padding: 8px 14px;
-                    font-weight: bold;
-                }
-                QFrame#TopNav QPushButton#NavButton:hover {
-                    background: #e5e7eb; /* gray-200 */
-                }
-                QFrame#TopNav QPushButton#NavButton:checked {
-                    background: #2563eb; /* indigo-600 */
-                    border: 1px solid #1d4ed8; /* indigo-700 */
-                    color: #ffffff;
-                }
-            """)
-        except Exception:
-            pass
-
-        # 添加到主布局（固定高度）
-        parent_layout.addWidget(nav_frame, 0)
+    def _create_navigation_bar(self, parent_layout):
+        """创建导航栏组件"""
+        self._navigation_bar = NavigationBar(self._module_manager, self)
+        parent_layout.addWidget(self._navigation_bar, 0)
     
     def _create_content_area(self, parent_layout):
         """创建内容区域"""
@@ -362,7 +262,8 @@ class MainUI(qt.QWidget):
                 if self._content_stack and self._content_stack.count > 0:
                     self._content_stack.setCurrentIndex(0)
                 self._current_module = None
-                self._update_module_button_state(None)
+                if self._navigation_bar:
+                    self._navigation_bar.set_current_module(None)
                 self.update_status("会话已加载，UI已刷新", "success")
                 self._show_info_message("加载成功", f"已加载会话: {name}")
             else:
@@ -394,12 +295,17 @@ class MainUI(qt.QWidget):
         
         return default_widget
     
+    def _setup_navigation_connections(self):
+        """设置导航栏信号连接"""
+        if self._navigation_bar:
+            self._navigation_bar.moduleRequested.connect(self.switch_to_module)
+            self._navigation_bar.moduleInfoRequested.connect(self._show_module_info)
+            self._navigation_bar.moduleRefreshRequested.connect(
+                lambda module_name: self.switch_to_module(module_name, force=True)
+            )
+    
     def _setup_connections(self):
         """设置信号连接"""
-        # <--- START: 用下面这行代码替换掉之前删除的 for 循环
-        self._module_buttons.buttonClicked.connect(self._on_module_button_clicked)
-        # <--- END: 完成替换
-
         # 开发者面板快捷键（Ctrl+Alt+D）
         try:
             self._dev_toggle_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+Alt+D"), self)
@@ -409,51 +315,6 @@ class MainUI(qt.QWidget):
         
         # 监听会话变化（如果需要的话）
         # TODO: 实现会话状态监听
-        
-        # 设置工具提示
-        self._setup_tooltips()
-        
-        # 设置右键菜单
-        self._setup_context_menus()
-    
-    def _setup_context_menus(self):
-        """设置右键菜单"""
-        try:
-            # 为模块按钮设置右键菜单
-            for button in self._module_buttons.buttons():
-                button.setContextMenuPolicy(qt.Qt.CustomContextMenu)
-                button.customContextMenuRequested.connect(
-                    lambda pos, btn=button: self._show_module_context_menu(btn, pos)
-                )
-        except Exception as e:
-            logging.warning(f"设置右键菜单时出错: {e}")
-    
-    def _show_module_context_menu(self, button, pos):
-        """显示模块右键菜单"""
-        try:
-            module_name = button.property("module_name")
-            menu = qt.QMenu(self)
-            
-            # 激活模块
-            activate_action = menu.addAction(f"激活 {button.text()}")
-            activate_action.triggered.connect(lambda: self.switch_to_module(module_name))
-            
-            # 模块信息
-            info_action = menu.addAction("模块信息")
-            info_action.triggered.connect(lambda: self._show_module_info(module_name))
-            
-            menu.addSeparator()
-            
-            # 如果是当前模块，添加刷新选项
-            if module_name == self._current_module:
-                refresh_action = menu.addAction("刷新模块")
-                refresh_action.triggered.connect(lambda: self.switch_to_module(module_name, force=True))
-            
-            # 显示菜单
-            menu.exec_(button.mapToGlobal(pos))
-            
-        except Exception as e:
-            logging.error(f"显示右键菜单时出错: {e}")
     
     def _reset_interface(self):
         """重置界面"""
@@ -470,7 +331,8 @@ class MainUI(qt.QWidget):
                 # 重置到默认页面
                 self._content_stack.setCurrentIndex(0)
                 self._current_module = None
-                self._update_module_button_state(None)
+                if self._navigation_bar:
+                    self._navigation_bar.set_current_module(None)
                 
                 # 重置状态
                 self.update_status("界面已重置", "success")
@@ -510,30 +372,6 @@ TAVR Analytics 帮助
         else:
             self._show_info_message("模块信息", f"无法获取模块 {module_name} 的信息")
     
-    def _setup_tooltips(self):
-        """设置工具提示"""
-        try:
-            # 为模块按钮添加工具提示
-            for button in self._module_buttons.buttons():
-                module_name = button.property("module_name")
-                module_info = self._module_manager.get_module_info(module_name)
-                if module_info:
-                    tooltip = f"{module_info.display_name}\n点击切换到此模块"
-                    if module_info.dependencies:
-                        tooltip += f"\n依赖: {', '.join(module_info.dependencies)}"
-                    button.setToolTip(tooltip)
-                
-        except Exception as e:
-            logging.warning(f"设置工具提示时出错: {e}")
-    
-    # <--- START: 修改这个方法的定义
-    def _on_module_button_clicked(self, button):
-        """处理模块按钮点击"""
-        if button:
-            module_name = button.property("module_name")
-            if module_name:
-                self.switch_to_module(module_name)
-    # <--- END: 方法修改完成
     
     def switch_to_module(self, module_name: str, force: bool = False, auto_start_analysis: bool = False):
         """
@@ -593,7 +431,8 @@ TAVR Analytics 帮助
             
             self._hide_loading_state()
             self.update_status(f"已加载: {display_name}", "success")
-            self._update_module_button_state(module_name)
+            if self._navigation_bar:
+                self._navigation_bar.set_current_module(module_name)
             
             # 发送用户友好的通知
             self._show_success_notification(f"已切换到: {display_name}")
@@ -681,14 +520,14 @@ TAVR Analytics 帮助
         """显示加载状态"""
         logging.info(f"加载状态: {message}")
         # 禁用按钮防止重复操作
-        for button in self._module_buttons.buttons():
-            button.setEnabled(False)
+        if self._navigation_bar:
+            self._navigation_bar.set_buttons_enabled(False)
     
     def _hide_loading_state(self):
         """隐藏加载状态"""
         # 重新启用按钮
-        for button in self._module_buttons.buttons():
-            button.setEnabled(True)
+        if self._navigation_bar:
+            self._navigation_bar.set_buttons_enabled(True)
     
     def _show_error_message(self, title: str, message: str):
         """显示错误消息"""
@@ -780,12 +619,6 @@ TAVR Analytics 帮助
         
         return None
     
-    def _update_module_button_state(self, active_module: str):
-        """更新模块按钮状态"""
-        for button in self._module_buttons.buttons():
-            module_name = button.property("module_name")
-            button.setChecked(module_name == active_module)
-    
     def update_status(self, message: str, status_type: str = "normal"):
         """
         记录状态到控制台日志
@@ -818,63 +651,13 @@ TAVR Analytics 帮助
     def auto_activate_default_module(self):
         """自动激活默认模块（模块一）"""
         if "module1" in self._module_manager.get_available_modules():
-            # 设置按钮状态
-            for button in self._module_buttons.buttons():
-                if button.property("module_name") == "module1":
-                    button.setChecked(True)
-                    break
-            
             # 切换到模块一
             self.switch_to_module("module1")
     
     def refresh_navigation(self):
         """刷新导航区域（当模块注册状态改变时）"""
-        try:
-            # 清除现有按钮
-            for button in list(self._module_buttons.buttons()):
-                self._module_buttons.removeButton(button)
-                if self._nav_buttons_layout is not None:
-                    self._nav_buttons_layout.removeWidget(button)
-                button.setParent(None)
-                button.deleteLater()
-
-            # 获取当前可用模块
-            available_modules = self._module_manager.get_available_modules()
-
-            # 重新创建按钮并插入到导航滚动区
-            if self._nav_buttons_layout is not None:
-                # 数字表情图标映射
-                number_icons = {1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩"}
-                
-                # 在末尾保留一个 stretch，因此在 stretch 之前插入
-                insert_index = max(0, self._nav_buttons_layout.count() - 1)
-                for module_name in available_modules:
-                    module_info = self._module_manager.get_module_info(module_name)
-                    if module_info:
-                        # 添加数字图标到显示名称 (重新创建时需要重新计算索引)
-                        module_index = available_modules.index(module_name) + 1
-                        icon = number_icons.get(module_index, f"{module_index}.")
-                        display_text = f"{icon} {module_info.display_name}"
-                        btn = qt.QPushButton(display_text)
-                        btn.setObjectName("NavButton")
-                        btn.setCheckable(True)
-                        btn.setMinimumHeight(40)
-                        btn.setProperty("module_name", module_name)
-                        btn.setCursor(qt.Qt.PointingHandCursor)
-                        self._module_buttons.addButton(btn)
-                        self._nav_buttons_layout.insertWidget(insert_index, btn)
-                        insert_index += 1
-
-                # 重新应用工具提示与右键菜单
-                self._setup_tooltips()
-                self._setup_context_menus()
-
-            logging.info(f"导航区域刷新后的可用模块: {available_modules}")
-            
-            logging.info("导航区域已刷新")
-            
-        except Exception as e:
-            logging.error(f"刷新导航区域失败: {e}")
+        if self._navigation_bar:
+            self._navigation_bar.refresh_navigation()
     
     def enable_module_button(self, module_name: str, enabled: bool = True):
         """
@@ -884,12 +667,8 @@ TAVR Analytics 帮助
             module_name: 模块名称
             enabled: 是否启用
         """
-        for button in self._module_buttons.buttons():
-            if button.property("module_name") == module_name:
-                button.setEnabled(enabled)
-                if not enabled:
-                    button.setChecked(False)
-                break
+        if self._navigation_bar:
+            self._navigation_bar.enable_module_button(module_name, enabled)
     
     def get_current_module(self) -> Optional[str]:
         """获取当前激活的模块名称"""
