@@ -120,15 +120,15 @@ class Module1Widget(qt.QWidget):
         # 数据导入section
         self._create_data_import_section(main_layout)
 
-        # 添加间隔
-        main_layout.addSpacing(20)
+        # 添加间隔（更紧凑）
+        main_layout.addSpacing(8)
 
         # 心动周期管理section
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
         main_layout.addWidget(self.cardiac_cycle_widget, 0)  # 固定大小
 
-        # 添加间隔
-        main_layout.addSpacing(20)
+        # 添加间隔（更紧凑）
+        main_layout.addSpacing(8)
 
         # 先添加弹性空间，将上方内容推到顶部
         main_layout.addStretch(1)
@@ -145,20 +145,14 @@ class Module1Widget(qt.QWidget):
 
     def _create_data_import_section(self, parent_layout):
         """创建数据导入区域 - 使用通用SectionCard (蓝色主题)"""
-        section = SectionCard(title="1. 数据加载与验证", icon_text="📁", variant="blue", parent=self)
+        section = SectionCard(title="数据加载与验证", icon_text="📁", variant="blue", parent=self)
         main_layout = section.body_layout
 
         # 描述文本
         self.description_label = qt.QLabel("选择TAVR术后4D心脏CT DICOM数据序列")
         self.description_label.setStyleSheet(
             """
-            QLabel {
-                font-size: 14px;
-                color: #424242;
-                background: transparent;
-                padding: 0px;
-                margin-left: 4px;
-            }
+            QLabel { font-size: 11px; color: #424242; background: transparent; padding: 0px; margin-left: 3px; }
             """
         )
         self.description_label.setWordWrap(True)
@@ -167,38 +161,26 @@ class Module1Widget(qt.QWidget):
         # 按钮容器
         button_container = qt.QWidget()
         button_layout = qt.QHBoxLayout(button_container)
-        button_layout.setContentsMargins(0, 8, 0, 0)
-        button_layout.setSpacing(12)
+        button_layout.setContentsMargins(0, 3, 0, 0)
+        button_layout.setSpacing(6)
 
-        # 主要操作按钮 - 蓝色风格
+        # 主要操作按钮 - 蓝色风格（紧凑）
         self.primary_action_button = qt.QPushButton("📁 加载4D DICOM序列")
         self.primary_action_button.setStyleSheet(
             """
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2196f3, stop:1 #1976d2);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: bold;
-                min-height: 20px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2196f3, stop:1 #1976d2);
+                color: white; border: none; border-radius: 5px; padding: 6px 10px; font-size: 11px; font-weight: 600; min-height: 0px;
             }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #42a5f5, stop:1 #1e88e5);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #1976d2, stop:1 #1565c0);
-            }
-            QPushButton:disabled {
-                background: #e0e0e0;
-                color: #9e9e9e;
-            }
+            QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #42a5f5, stop:1 #1e88e5); }
+            QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1976d2, stop:1 #1565c0); }
+            QPushButton:disabled { background: #e0e0e0; color: #9e9e9e; }
             """
         )
+        try:
+            self.primary_action_button.setFixedHeight(28)
+        except Exception:
+            pass
         button_layout.addWidget(self.primary_action_button)
         button_layout.addStretch()
         main_layout.addWidget(button_container)
@@ -207,18 +189,14 @@ class Module1Widget(qt.QWidget):
         self.status_container = qt.QWidget()
         self.status_container.setVisible(False)
         status_layout = qt.QHBoxLayout(self.status_container)
-        status_layout.setContentsMargins(4, 8, 4, 0)
-        status_layout.setSpacing(8)
+        status_layout.setContentsMargins(3, 6, 3, 0)
+        status_layout.setSpacing(6)
 
         # 状态图标
         self.status_icon_label = qt.QLabel("")
         self.status_icon_label.setStyleSheet(
             """
-            QLabel {
-                font-size: 16px;
-                color: #4caf50;
-                background: transparent;
-            }
+            QLabel { font-size: 12px; color: #4caf50; background: transparent; }
             """
         )
         status_layout.addWidget(self.status_icon_label)
@@ -227,12 +205,7 @@ class Module1Widget(qt.QWidget):
         self.status_text_label = qt.QLabel("")
         self.status_text_label.setStyleSheet(
             """
-            QLabel {
-                font-size: 12px;
-                color: #2e7d32;
-                background: transparent;
-                font-weight: 500;
-            }
+            QLabel { font-size: 10px; color: #2e7d32; background: transparent; font-weight: 500; }
             """
         )
         self.status_text_label.setWordWrap(True)
@@ -713,9 +686,9 @@ class Module1Widget(qt.QWidget):
                         background: #52c41a;
                         color: white;
                         border: none;
-                        border-radius: 8px;
-                        font-size: 14px;
-                        font-weight: 500;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: 600;
                     }
                     QPushButton:hover {
                         background: #73d13d;
@@ -747,7 +720,7 @@ class Module1Widget(qt.QWidget):
                         border: none;
                         border-radius: 6px;
                         font-size: 12px;
-                        font-weight: 500;
+                        font-weight: 600;
                     }
                 """)
                 missing_items = self._get_missing_requirements()
@@ -800,12 +773,12 @@ class Module1Widget(qt.QWidget):
                     self.description_label.setText(f"✅ 已成功导入4D序列数据")
                     self.description_label.setStyleSheet("""
                         QLabel {
-                            font-size: 14px;
+                            font-size: 12px;
                             color: #2e7d32;
                             background: transparent;
                             padding: 0px;
                             margin-left: 4px;
-                            font-weight: 500;
+                            font-weight: 600;
                         }
                     """)
                     
@@ -822,11 +795,11 @@ class Module1Widget(qt.QWidget):
                                 stop:0 #66bb6a, stop:1 #4caf50);
                             color: white;
                             border: none;
-                            border-radius: 8px;
-                            padding: 12px 24px;
-                            font-size: 14px;
-                            font-weight: bold;
-                            min-height: 20px;
+                            border-radius: 6px;
+                            padding: 8px 14px;
+                            font-size: 12px;
+                            font-weight: 600;
+                            min-height: 0px;
                         }
                         QPushButton:hover {
                             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
@@ -844,12 +817,12 @@ class Module1Widget(qt.QWidget):
                     self.description_label.setText("⚠️ 数据状态异常，建议重新导入")
                     self.description_label.setStyleSheet("""
                         QLabel {
-                            font-size: 14px;
+                            font-size: 12px;
                             color: #f57c00;
                             background: transparent;
                             padding: 0px;
                             margin-left: 4px;
-                            font-weight: 500;
+                            font-weight: 600;
                         }
                     """)
                     
@@ -863,11 +836,11 @@ class Module1Widget(qt.QWidget):
                                 stop:0 #ff9800, stop:1 #f57c00);
                             color: white;
                             border: none;
-                            border-radius: 8px;
-                            padding: 12px 24px;
-                            font-size: 14px;
-                            font-weight: bold;
-                            min-height: 20px;
+                            border-radius: 6px;
+                            padding: 8px 14px;
+                            font-size: 12px;
+                            font-weight: 600;
+                            min-height: 0px;
                         }
                         QPushButton:hover {
                             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
@@ -886,7 +859,7 @@ class Module1Widget(qt.QWidget):
                 self.description_label.setText("选择TAVR术后4D心脏CT DICOM数据序列")
                 self.description_label.setStyleSheet("""
                     QLabel {
-                        font-size: 14px;
+                        font-size: 12px;
                         color: #424242;
                         background: transparent;
                         padding: 0px;
@@ -905,11 +878,11 @@ class Module1Widget(qt.QWidget):
                             stop:0 #2196f3, stop:1 #1976d2);
                         color: white;
                         border: none;
-                        border-radius: 8px;
-                        padding: 12px 24px;
-                        font-size: 14px;
-                        font-weight: bold;
-                        min-height: 20px;
+                        border-radius: 6px;
+                        padding: 8px 14px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        min-height: 0px;
                     }
                     QPushButton:hover {
                         background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 

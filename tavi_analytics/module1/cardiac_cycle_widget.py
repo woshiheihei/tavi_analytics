@@ -79,7 +79,7 @@ class CardiacCycleWidget(qt.QWidget):
     
     def _create_cardiac_cycle_section(self, parent_layout):
         """创建心动周期管理section - 使用通用SectionCard (紫色主题)"""
-        section = SectionCard(title="4. 心动周期管理", icon_text="⏱️", variant="purple", parent=self)
+        section = SectionCard(title="心动周期管理", icon_text="⏱️", variant="purple", parent=self)
         main_layout = section.body_layout
 
         # 创建紧凑的心动周期控制界面
@@ -89,236 +89,168 @@ class CardiacCycleWidget(qt.QWidget):
     
     def _create_compact_cardiac_cycle_ui(self, parent_layout):
         """创建紧凑的心动周期控制界面 - 紫色卡片风格"""
-        
+
         # 内容区域 - 白色背景，无边框
         content_container = qt.QWidget()
-        content_container.setStyleSheet("""
-            QWidget {
-                background: #ffffff;
-                border-radius: 12px;
-                border: none;
-            }
-        """)
+        content_container.setStyleSheet(
+            """
+            QWidget { background: #ffffff; border-radius: 12px; border: none; }
+            """
+        )
         content_layout = qt.QVBoxLayout(content_container)
-        content_layout.setContentsMargins(20, 16, 20, 20)
-        content_layout.setSpacing(16)
-        
+        content_layout.setContentsMargins(12, 8, 12, 10)
+        content_layout.setSpacing(8)
+
         # === 当前时相显示 ===
         phase_info_layout = qt.QHBoxLayout()
         phase_info_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # 左侧：当前时相标签
         current_phase_label = qt.QLabel("当前时相:")
-        current_phase_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #424242;
-                font-weight: 500;
-                background: transparent;
-                border: none;
-            }
-        """)
+        current_phase_label.setStyleSheet(
+            """
+            QLabel { font-size: 11px; color: #424242; font-weight: 500; background: transparent; border: none; }
+            """
+        )
         phase_info_layout.addWidget(current_phase_label)
-        
+
         # 中央：时相百分比显示
         self.phase_percentage_label = qt.QLabel("0.0% R-R间期")
         self.phase_percentage_label.setAlignment(qt.Qt.AlignCenter)
-        self.phase_percentage_label.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
-                font-weight: bold;
-                color: #1976d2;
-                background: transparent;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 8px;
-            }
-        """)
+        self.phase_percentage_label.setStyleSheet(
+            """
+            QLabel { font-size: 14px; font-weight: bold; color: #1976d2; background: transparent; border: none; padding: 4px 8px; border-radius: 5px; }
+            """
+        )
         phase_info_layout.addWidget(self.phase_percentage_label, 1)
-        
+
         content_layout.addLayout(phase_info_layout)
-        
+
         # === 时间轴滑块区域 ===
         slider_container = qt.QWidget()
-        slider_container.setStyleSheet("""
-            QWidget {
-                background: transparent;
-                border: none;
-            }
-        """)
+        slider_container.setStyleSheet(
+            """
+            QWidget { background: transparent; border: none; }
+            """
+        )
         slider_layout = qt.QVBoxLayout(slider_container)
-        slider_layout.setContentsMargins(0, 8, 0, 8)
-        slider_layout.setSpacing(8)
-        
+        slider_layout.setContentsMargins(0, 6, 0, 6)
+        slider_layout.setSpacing(6)
+
         # 滑块
         self.timeline_slider = qt.QSlider(qt.Qt.Horizontal)
         self.timeline_slider.setEnabled(False)
-        self.timeline_slider.setMinimumHeight(24)
-        self.timeline_slider.setStyleSheet("""
+        # 为了避免手柄被裁剪，最小高度需要大于手柄总高度（包含边框）
+        self.timeline_slider.setMinimumHeight(26)
+        self.timeline_slider.setStyleSheet(
+            """
             QSlider::groove:horizontal {
                 border: none;
                 height: 6px;
                 background: #e0e0e0;
                 border-radius: 3px;
             }
+            /* 圆形手柄：直径18px，半径9px，居中对齐6px槽 */
             QSlider::handle:horizontal {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #2196f3, stop:1 #1976d2);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2196f3, stop:1 #1976d2);
                 border: 2px solid #ffffff;
                 width: 18px;
                 height: 18px;
-                margin: -7px 0;
+                margin: -6px 0; /* (手柄直径18 - 槽高6) / 2 */
                 border-radius: 9px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             QSlider::handle:horizontal:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #42a5f5, stop:1 #2196f3);
-                border-radius: 9px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #42a5f5, stop:1 #2196f3);
             }
             QSlider::handle:horizontal:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #1976d2, stop:1 #1565c0);
-                border-radius: 9px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1976d2, stop:1 #1565c0);
             }
             QSlider::handle:horizontal:disabled {
                 background: #bdbdbd;
                 border: 2px solid #ffffff;
-                border-radius: 9px;
             }
-        """)
+            """
+        )
         slider_layout.addWidget(self.timeline_slider)
-        
+
         # 滑块标签
         labels_layout = qt.QHBoxLayout()
-        labels_layout.setContentsMargins(0, 4, 0, 0)
-        
+        labels_layout.setContentsMargins(0, 2, 0, 0)
+
         start_label = qt.QLabel("0% (舒张期开始)")
-        start_label.setStyleSheet("""
-            QLabel { 
-                font-size: 11px; 
-                color: #999; 
-                background: transparent;
-                border: none;
-                padding: 2px;
-            }
-        """)
+        start_label.setStyleSheet(
+            """
+            QLabel { font-size: 10px; color: #999; background: transparent; border: none; padding: 2px; }
+            """
+        )
         labels_layout.addWidget(start_label)
-        
+
         mid_label = qt.QLabel("50% (收缩期)")
         mid_label.setAlignment(qt.Qt.AlignCenter)
-        mid_label.setStyleSheet("""
-            QLabel { 
-                font-size: 11px; 
-                color: #999; 
-                background: transparent;
-                border: none;
-                padding: 2px;
-            }
-        """)
+        mid_label.setStyleSheet(
+            """
+            QLabel { font-size: 10px; color: #999; background: transparent; border: none; padding: 2px; }
+            """
+        )
         labels_layout.addWidget(mid_label)
-        
+
         end_label = qt.QLabel("100% (舒张期结束)")
         end_label.setAlignment(qt.Qt.AlignRight)
-        end_label.setStyleSheet("""
-            QLabel { 
-                font-size: 11px; 
-                color: #999; 
-                background: transparent;
-                border: none;
-                padding: 2px;
-            }
-        """)
+        end_label.setStyleSheet(
+            """
+            QLabel { font-size: 10px; color: #999; background: transparent; border: none; padding: 2px; }
+            """
+        )
         labels_layout.addWidget(end_label)
-        
+
         slider_layout.addLayout(labels_layout)
         content_layout.addWidget(slider_container)
-        
+
         # === 标记按钮区域 ===
         buttons_layout = qt.QHBoxLayout()
-        buttons_layout.setSpacing(16)
-        
+        buttons_layout.setSpacing(8)
+
         # 舒张末期按钮
         self.mark_end_diastole_button = qt.QPushButton("✓ 标记舒张末期")
         self.mark_end_diastole_button.setEnabled(False)
-        self.mark_end_diastole_button.setMinimumHeight(44)
-        self.mark_end_diastole_button.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #4caf50, stop:1 #2e7d32);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 13px;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #66bb6a, stop:1 #4caf50);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #2e7d32, stop:1 #1b5e20);
-            }
-            QPushButton:disabled {
-                background: #f5f5f5;
-                color: #bdbdbd;
-                border: 1px solid #e0e0e0;
-            }
-        """)
-        
+        self.mark_end_diastole_button.setMinimumHeight(30)
+        self.mark_end_diastole_button.setStyleSheet(
+            """
+            QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); color: white; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 5px 10px; }
+            QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66bb6a, stop:1 #4caf50); }
+            QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2e7d32, stop:1 #1b5e20); }
+            QPushButton:disabled { background: #f5f5f5; color: #bdbdbd; border: 1px solid #e0e0e0; }
+            """
+        )
+
         # 收缩末期按钮
         self.mark_end_systole_button = qt.QPushButton("✓ 标记收缩末期")
         self.mark_end_systole_button.setEnabled(False)
-        self.mark_end_systole_button.setMinimumHeight(44)
-        self.mark_end_systole_button.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #4caf50, stop:1 #2e7d32);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                font-size: 13px;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #66bb6a, stop:1 #4caf50);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 #2e7d32, stop:1 #1b5e20);
-            }
-            QPushButton:disabled {
-                background: #f5f5f5;
-                color: #bdbdbd;
-                border: 1px solid #e0e0e0;
-            }
-        """)
-        
+        self.mark_end_systole_button.setMinimumHeight(30)
+        self.mark_end_systole_button.setStyleSheet(
+            """
+            QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); color: white; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 5px 10px; }
+            QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66bb6a, stop:1 #4caf50); }
+            QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2e7d32, stop:1 #1b5e20); }
+            QPushButton:disabled { background: #f5f5f5; color: #bdbdbd; border: 1px solid #e0e0e0; }
+            """
+        )
+
         buttons_layout.addWidget(self.mark_end_diastole_button)
         buttons_layout.addWidget(self.mark_end_systole_button)
         content_layout.addLayout(buttons_layout)
-        
+
         # 提示信息
         tip_label = qt.QLabel("💡 拖动滑块查看整个心动周期，点击按钮标记关键时相用于后续测量")
-        tip_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #ff9800;
-                background: #fff8e1;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 16px;
-                text-align: center;
-            }
-        """)
+        tip_label.setStyleSheet(
+            """
+            QLabel { font-size: 11px; color: #ff9800; background: #fff8e1; border: none; border-radius: 6px; padding: 8px 12px; text-align: center; }
+            """
+        )
         tip_label.setAlignment(qt.Qt.AlignCenter)
         tip_label.setWordWrap(True)
         content_layout.addWidget(tip_label)
-        
+
         parent_layout.addWidget(content_container)
         
         # 保持原有的帧信息标签（隐藏，仅用于兼容性）
