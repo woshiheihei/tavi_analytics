@@ -111,15 +111,7 @@ class Module4Widget(qt.QWidget):
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()
 
-        # 分析区域 - 选项卡
-        analysis_frame = LayoutManager.create_section_frame("瓣膜支架几何形态分析")
-        analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
-        try:
-            analysis_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-            analysis_frame.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
-        except Exception:
-            pass
-
+        # 分析区域 - 选项卡（去除外层"瓣膜支架几何形态分析"Section，直接使用Tab）
         self.analysis_tabs = qt.QTabWidget()
         try:
             self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
@@ -138,11 +130,11 @@ class Module4Widget(qt.QWidget):
         self.analysis_tabs.addTab(self.inflow_analysis, "Inflow")
         self.analysis_tabs.addTab(self.nadir_analysis, "Nadir")
         self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure Level")
-        analysis_layout.addWidget(self.analysis_tabs)
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
-        main_layout.addWidget(analysis_frame)
+        # 直接将选项卡添加到主布局
+        main_layout.addWidget(self.analysis_tabs)
         main_layout.addStretch()
 
     def set_session(self, session: TAVRStudySession):

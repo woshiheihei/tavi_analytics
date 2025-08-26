@@ -311,15 +311,7 @@ class Module3Widget(qt.QWidget):
         buttons_layout.addWidget(self.switch_to_sinus_plane_btn, 0, 1)
         plane_control_layout.addWidget(buttons_widget)
 
-        # 分析区域 - 选项卡
-        analysis_frame = LayoutManager.create_section_frame("瓣叶功能评估")
-        analysis_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, analysis_frame)
-        try:
-            analysis_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-            analysis_frame.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
-        except Exception:
-            pass
-
+        # 分析区域 - 选项卡（去除外层"瓣叶功能评估"Section，直接使用Tab）
         self.analysis_tabs = qt.QTabWidget()
         try:
             self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
@@ -342,11 +334,11 @@ class Module3Widget(qt.QWidget):
         self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
         self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
         self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
-        analysis_layout.addWidget(self.analysis_tabs)
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
-        main_layout.addWidget(analysis_frame)
+        # 直接将选项卡添加到主布局
+        main_layout.addWidget(self.analysis_tabs)
         main_layout.addWidget(plane_control_frame)
         main_layout.addStretch()
 
