@@ -96,18 +96,15 @@ class Module2Widget(qt.QWidget):
         """设置用户界面"""
         # 创建主布局 - 与模块一保持一致的布局管理器
         layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
-
+        
         # 全自动分析区域 - 主要功能区
         self._create_auto_analysis_section(layout)
         
-        # 添加间隔
-        layout.addSpacing(20)
-
-        # 导航按钮区域 - 进入下一步
-        self._create_navigation_section(layout)
-
-        # 弹性空间，将内容推到顶部
+        # 弹性空间：将上方内容推到顶部，以便底部区域固定在最下方
         layout.addStretch(1)
+
+        # 底部导航和操作区域 - 固定在容器底部
+        self._create_navigation_section(layout)
 
     def _create_auto_analysis_section(self, layout):
         """创建全自动分析区域 - 使用通用SectionCard (绿色主题)"""

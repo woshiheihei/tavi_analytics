@@ -119,22 +119,22 @@ class Module1Widget(qt.QWidget):
 
         # 数据导入section
         self._create_data_import_section(main_layout)
-        
+
         # 添加间隔
         main_layout.addSpacing(20)
 
         # 心动周期管理section
         self.cardiac_cycle_widget = CardiacCycleWidget(self.session, self)
         main_layout.addWidget(self.cardiac_cycle_widget, 0)  # 固定大小
-        
+
         # 添加间隔
         main_layout.addSpacing(20)
 
-        # 分析流程section
-        self._create_action_buttons_section(main_layout)
-
-        # 弹性空间，将内容推到顶部
+        # 先添加弹性空间，将上方内容推到顶部
         main_layout.addStretch(1)
+
+        # 再添加底部区域，确保固定在容器底部
+        self._create_action_buttons_section(main_layout)
 
         # 连接相位标记信号以实时刷新
         try:
