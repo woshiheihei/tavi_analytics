@@ -230,7 +230,7 @@ class HaltAnalysisWidget(qt.QWidget):
         self._update_analysis_control_visibility()
     
     def _create_analysis_control_section(self, parent_layout):
-        """创建分析控制区域（简化版）"""
+        """创建分析控制区域（仅保留开始按钮）"""
         self.control_frame = qt.QFrame()
         self.control_frame.setStyleSheet("""
             QFrame {
@@ -240,17 +240,12 @@ class HaltAnalysisWidget(qt.QWidget):
                 padding: 6px;
             }
         """)
-        
+
         control_layout = qt.QHBoxLayout(self.control_frame)
-        control_layout.setSpacing(6)  # 减小间距
-        control_layout.setContentsMargins(6, 6, 6, 6)  # 减小边距
-        
-        # 简化的说明
-        instruction_label = qt.QLabel("💡 准备分析环境")
-        instruction_label.setStyleSheet("font-size: 10px; color: #495057; font-weight: 500;")
-        control_layout.addWidget(instruction_label)
-        
-        # 开始分析按钮（更紧凑版）
+        control_layout.setSpacing(6)
+        control_layout.setContentsMargins(6, 6, 6, 6)
+
+        # 开始分析按钮
         self.start_analysis_btn = qt.QPushButton("开始分析")
         self.start_analysis_btn.setStyleSheet("""
             QPushButton {
@@ -272,33 +267,9 @@ class HaltAnalysisWidget(qt.QWidget):
         """)
         self.start_analysis_btn.clicked.connect(self._on_start_analysis)
         control_layout.addWidget(self.start_analysis_btn)
-        
-        # 跳过按钮（更小）
-        self.skip_analysis_btn = qt.QPushButton("跳过")
-        self.skip_analysis_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 6px;
-                font-size: 10px;
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                min-width: 40px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        self.skip_analysis_btn.clicked.connect(self._on_skip_analysis)
-        control_layout.addWidget(self.skip_analysis_btn)
-        
-        # 状态显示（内联）
-        self.analysis_status_label = qt.QLabel("等待开始")
-        self.analysis_status_label.setStyleSheet("font-size: 9px; color: #868e96; font-style: italic;")
-        control_layout.addWidget(self.analysis_status_label)
-        
+
         control_layout.addStretch()
-        
+
         parent_layout.addWidget(self.control_frame)
     
     def _create_halt_status_and_grading_section(self, parent_layout):
@@ -555,15 +526,11 @@ class HaltAnalysisWidget(qt.QWidget):
         """开始HALT分析"""
         try:
             logging.info("用户开始HALT分析")
-            
-            # 更新状态
-            self.analysis_status_label.setText("准备中...")
+            # 禁用开始按钮以避免重复点击
             self.start_analysis_btn.setEnabled(False)
-            self.skip_analysis_btn.setEnabled(False)
             qt.QApplication.processEvents()
             
             # 1. 切换到舒张末期
-            self.analysis_status_label.setText("切换期相...")
             qt.QApplication.processEvents()
             
             # 检查是否有舒张末期标记
@@ -590,7 +557,6 @@ class HaltAnalysisWidget(qt.QWidget):
                 return
             
             # 2. MPR定位到支架底部平面
-            self.analysis_status_label.setText("定位平面...")
             qt.QApplication.processEvents()
             
             success = self._position_to_stent_bottom()
@@ -615,24 +581,11 @@ class HaltAnalysisWidget(qt.QWidget):
                 f"分析启动失败：\n{e}"
             )
             self._reset_analysis_buttons()
-    
-    def _on_skip_analysis(self):
-        """跳过自动分析，直接进入评估"""
-        reply = qt.QMessageBox.question(
-            self,
-            "跳过自动分析",
-            "跳过自动分析，直接开始评估？",
-            qt.QMessageBox.Yes | qt.QMessageBox.No
-        )
-        
-        if reply == qt.QMessageBox.Yes:
-            self._complete_analysis_preparation()
-            logging.info("用户选择跳过自动分析")
+            
     
     def _complete_analysis_preparation(self):
         """完成分析准备"""
         self.analysis_started = True
-        self.analysis_status_label.setText("已就绪")
         
         # 隐藏分析控制区域
         self.control_frame.setVisible(False)
@@ -648,8 +601,6 @@ class HaltAnalysisWidget(qt.QWidget):
     def _reset_analysis_buttons(self):
         """重置分析按钮状态"""
         self.start_analysis_btn.setEnabled(True)
-        self.skip_analysis_btn.setEnabled(True)
-        self.analysis_status_label.setText("等待开始")
     
     def _switch_to_end_diastole(self) -> bool:
         """切换到舒张末期 - 使用集中化期像管理服务"""
@@ -901,8 +852,6 @@ class HaltAnalysisWidget(qt.QWidget):
             if hasattr(self, 'control_frame'):
                 self.control_frame.setVisible(True)
                 self.start_analysis_btn.setEnabled(True)
-                self.skip_analysis_btn.setEnabled(True)
-                self.analysis_status_label.setText("等待开始")
             
             # 更新界面
             self._update_visibility()
