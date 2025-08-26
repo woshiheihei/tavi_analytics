@@ -243,32 +243,91 @@ class Module1Widget(qt.QWidget):
         parent_layout.addWidget(section, 0)  # 固定大小，不拉伸
         
     def _create_action_buttons_section(self, parent_layout):
-        """创建分析流程操作区域 - 简洁版本"""
-        actions_group = LayoutManager.create_section_frame("分析流程", LayoutType.BUTTON_GROUP)
-        actions_layout = LayoutManager.create_layout(LayoutType.BUTTON_GROUP, actions_group)
+        """创建底部状态和操作区域 - 像素级还原设计稿"""
+        # 添加分割线
+        separator = qt.QFrame()
+        separator.setFrameShape(qt.QFrame.HLine)
+        separator.setFrameShadow(qt.QFrame.Sunken)
+        separator.setStyleSheet("""
+            QFrame {
+                color: #d0d0d0;
+                background-color: #d0d0d0;
+                border: none;
+                margin: 20px 0px 16px 0px;
+                max-height: 1px;
+            }
+        """)
+        parent_layout.addWidget(separator)
         
-        # 设置紧凑的size policy
-        actions_group.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Maximum)
+        # 底部状态和操作容器
+        bottom_container = qt.QWidget()
+        bottom_container.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Fixed)
+        bottom_layout = qt.QHBoxLayout(bottom_container)
+        bottom_layout.setContentsMargins(0, 0, 0, 20)
+        bottom_layout.setSpacing(32)
         
-        # 主CTA：开始全自动分析
-        self.next_module_button = LayoutManager.create_button_with_style(
-            text="开始全自动分析", 
-            button_type="primary", 
-            size="default", 
-            min_height=40
-        )
-        self.next_module_button.setEnabled(False)
-        actions_layout.addWidget(self.next_module_button)
-
-        # 状态提示标签
+        # 左侧：模块状态显示区域
+        status_container = qt.QWidget()
+        status_container.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Fixed)
+        status_layout = qt.QVBoxLayout(status_container)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(0)
+        
+        # 状态卡片（去除标题）
         self.status_info_label = qt.QLabel("请先完成数据导入和时相标记")
-        self.status_info_label.setStyleSheet(
-            "QLabel { color: #666; font-size: 12px; text-align: center; padding: 8px; }"
-        )
-        self.status_info_label.setAlignment(qt.Qt.AlignCenter)
-        actions_layout.addWidget(self.status_info_label)
+        self.status_info_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #666;
+                padding: 12px 16px;
+                background-color: #f8f9fa;
+                border-radius: 6px;
+                border-left: 4px solid #6c757d;
+                margin: 0px;
+            }
+        """)
+        self.status_info_label.setWordWrap(True)
+        self.status_info_label.setFixedHeight(44)
+        status_layout.addWidget(self.status_info_label)
         
-        parent_layout.addWidget(actions_group, 0)  # 固定大小
+        bottom_layout.addWidget(status_container, 1)
+        
+        # 右侧：操作按钮区域
+        action_container = qt.QWidget()
+        action_container.setSizePolicy(qt.QSizePolicy.Fixed, qt.QSizePolicy.Fixed)
+        action_layout = qt.QVBoxLayout(action_container)
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(0)
+        
+        # 主要操作按钮 - 调整尺寸与上面组件保持一致
+        self.next_module_button = qt.QPushButton("开始全自动分析")
+        self.next_module_button.setEnabled(False)
+        self.next_module_button.setFixedSize(160, 44)
+        self.next_module_button.setStyleSheet("""
+            QPushButton {
+                background: #52c41a;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: #73d13d;
+            }
+            QPushButton:pressed {
+                background: #389e0d;
+            }
+            QPushButton:disabled {
+                background: #d9d9d9;
+                color: #bfbfbf;
+            }
+        """)
+        action_layout.addWidget(self.next_module_button)
+        
+        bottom_layout.addWidget(action_container, 0)
+        
+        parent_layout.addWidget(bottom_container, 0)  # 固定大小
         
     def _setup_connections(self):
         """设置信号连接"""
@@ -609,17 +668,6 @@ class Module1Widget(qt.QWidget):
             except Exception:
                 pass
             
-    def _update_button_style(self, button: qt.QPushButton, button_type: str, size: str = "default"):
-        """更新按钮样式的辅助方法
-        
-        Args:
-            button: 要更新样式的按钮
-            button_type: 按钮类型
-            size: 按钮大小
-        """
-        # 使用LayoutManager提供的统一样式更新接口
-        LayoutManager.update_button_style(button, button_type, size)
-    
     def _get_step_status(self) -> dict:
         """计算步骤清单状态"""
         status = {"data_imported": False, "patient_info": False, "phase_ed": False, "phase_es": False}
@@ -659,28 +707,81 @@ class Module1Widget(qt.QWidget):
 
             # 状态提示和按钮样式
             if ready_for_next:
-                self._update_button_style(self.next_module_button, "primary", "default")
+                self.next_module_button.setEnabled(True)
+                self.next_module_button.setStyleSheet("""
+                    QPushButton {
+                        background: #52c41a;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        font-weight: 500;
+                    }
+                    QPushButton:hover {
+                        background: #73d13d;
+                    }
+                    QPushButton:pressed {
+                        background: #389e0d;
+                    }
+                """)
                 self.next_module_button.setToolTip("启动全自动分析流程")
-                self.status_info_label.setText("✅ 准备就绪，可以开始分析")
-                self.status_info_label.setStyleSheet(
-                    "QLabel { color: #2d5a3d; font-size: 12px; text-align: center; padding: 8px; "
-                    "background-color: #e8f5e8; border-radius: 4px; }"
-                )
+                self.status_info_label.setText("✅ 模块一设置完成，准备开始分析")
+                self.status_info_label.setStyleSheet("""
+                    QLabel {
+                        font-size: 12px;
+                        color: #52c41a;
+                        padding: 12px 16px;
+                        background-color: #f6ffed;
+                        border-radius: 6px;
+                        border-left: 4px solid #52c41a;
+                        margin: 0px;
+                    }
+                """)
+                # 移除按钮提示的更新
             else:
-                self._update_button_style(self.next_module_button, "secondary", "default")
+                self.next_module_button.setEnabled(False)
+                self.next_module_button.setStyleSheet("""
+                    QPushButton {
+                        background: #d9d9d9;
+                        color: #bfbfbf;
+                        border: none;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: 500;
+                    }
+                """)
                 missing_items = self._get_missing_requirements()
                 self.next_module_button.setToolTip("需要完成：\n" + "\n".join(missing_items))
                 if has_data:
-                    self.status_info_label.setText("⏳ 请完成心脏时相标记")
-                    self.status_info_label.setStyleSheet(
-                        "QLabel { color: #8a6d3b; font-size: 12px; text-align: center; padding: 8px; "
-                        "background-color: #fcf8e3; border-radius: 4px; }"
-                    )
+                    self.status_info_label.setText("⏳ 数据已导入，请完成心动周期时相标记")
+                    self.status_info_label.setStyleSheet("""
+                        QLabel {
+                            font-size: 12px;
+                            color: #fa8c16;
+                            padding: 12px 16px;
+                            background-color: #fff7e6;
+                            border-radius: 6px;
+                            border-left: 4px solid #fa8c16;
+                            margin: 0px;
+                        }
+                    """)
                 else:
                     self.status_info_label.setText("📂 请先导入4D心脏CT数据")
                     self.status_info_label.setStyleSheet(
                         "QLabel { color: #666; font-size: 12px; text-align: center; padding: 8px; }"
                     )
+
+                    self.status_info_label.setStyleSheet("""
+                        QLabel {
+                            font-size: 12px;
+                            color: #6c757d;
+                            padding: 12px 16px;
+                            background-color: #f8f9fa;
+                            border-radius: 6px;
+                            border-left: 4px solid #6c757d;
+                            margin: 0px;
+                        }
+                    """)
                 
         except Exception as e:
             logging.error(f"更新界面状态时发生错误: {str(e)}")
