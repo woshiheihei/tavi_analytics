@@ -74,6 +74,13 @@ class SectionCard(qt.QWidget):
             border = "#2196f3"
             title_color = "#1565c0"
             icon_color = "#1976d2"
+        elif variant == "green":
+            # 参考: border-color: #10b981; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            # 使用 Qt 的 qlineargradient 近似 135deg 的方向
+            card_bg = "qlineargradient(x1:1, y1:0, x2:0, y2:1, stop:0 #d1fae5, stop:1 #a7f3d0)"
+            border = "#10b981"
+            title_color = "#065f46"
+            icon_color = "#10b981"
         elif variant == "purple":
             card_bg = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f3e5f5, stop:1 #e1bee7)"
             border = "#9c27b0"
