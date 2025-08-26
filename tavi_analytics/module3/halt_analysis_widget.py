@@ -64,10 +64,10 @@ class LeafletGradeRow(qt.QWidget):
     def _setup_ui(self):
         """设置瓣叶分级行界面"""
         layout = qt.QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)  # 增加水平边距，保持垂直紧凑
-        layout.setSpacing(8)  # 增加组件间距
+        layout.setContentsMargins(0, 4, 0, 4)  # 统一边距
+        layout.setSpacing(6)  # 统一间距
         
-        # 瓣叶名称标签 - 极简版本
+        # 瓣叶名称标签 - 固定宽度确保对齐
         name_label = qt.QLabel(f"{self.leaflet_name}")
         name_label.setStyleSheet("""
             QLabel {
@@ -78,11 +78,13 @@ class LeafletGradeRow(qt.QWidget):
                 border: 1px solid #dee2e6;
                 border-radius: 3px;
                 padding: 4px 8px;
-                min-width: 32px;
+                min-width: 40px;
+                max-width: 40px;
                 text-align: center;
             }
         """)
         name_label.setAlignment(qt.Qt.AlignCenter)
+        name_label.setFixedWidth(48)  # 固定宽度确保对齐
         layout.addWidget(name_label)
         
         # 分级按钮组
@@ -101,7 +103,7 @@ class LeafletGradeRow(qt.QWidget):
         for i, (grade_value, bg_color, border_color) in enumerate(grade_configs):
             button = qt.QRadioButton(grade_value)
             
-            # 设置按钮样式 - 动态弹性布局
+            # 设置按钮样式 - 固定宽度确保对齐
             button.setStyleSheet(f"""
                 QRadioButton {{
                     background-color: {bg_color};
@@ -111,8 +113,9 @@ class LeafletGradeRow(qt.QWidget):
                     font-size: 9px;
                     font-weight: 500;
                     text-align: center;
-                    min-width: 48px;
-                    min-height: 26px;
+                    min-width: 60px;
+                    max-width: 60px;
+                    min-height: 28px;
                     color: #2c3e50;
                 }}
                 QRadioButton:checked {{
@@ -131,6 +134,7 @@ class LeafletGradeRow(qt.QWidget):
                 }}
             """)
             
+            button.setFixedWidth(66)  # 固定宽度确保对齐
             self.grade_group.addButton(button, i)
             self.grade_buttons[grade_value] = button
             layout.addWidget(button)
@@ -211,35 +215,14 @@ class HaltAnalysisWidget(qt.QWidget):
         # 0. 分析控制区域（开始HALT分析）
         self._create_analysis_control_section(main_layout)
 
-        # 主要内容区域 - 与其他模块保持一致的框架样式
-        content_frame = qt.QFrame()
-        content_frame.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 12px;
-            }
-        """)
-        
-        content_layout = qt.QVBoxLayout(content_frame)
-        content_layout.setSpacing(10)
+        # 主要内容区域 - HALT状态与分级合并到一个section
+        # 1. HALT状态与分级（统一section，方案C）
+        self._create_halt_status_and_grading_section(main_layout)
 
-        # 1. 整体HALT状态选择
-        self._create_overall_status_section(content_layout)
-
-        # 2. 瓣叶分级表格（条件显示）
-        self._create_grading_section(content_layout)
-
-        # 3. 统计信息（条件显示）
-        self._create_summary_section(content_layout)
-        
-        main_layout.addWidget(content_frame)
-
-        # 4. 关键视图管理 - 使用公共组件
+        # 2. 关键视图管理 - 使用公共组件
         self._create_key_view_section(main_layout)
 
-        # 5. 操作按钮 - 固定在底部
+        # 3. 操作按钮 - 固定在底部
         self._create_action_buttons_section(main_layout)
         
         # 初始状态更新
@@ -318,10 +301,11 @@ class HaltAnalysisWidget(qt.QWidget):
         
         parent_layout.addWidget(self.control_frame)
     
-    def _create_overall_status_section(self, parent_layout):
-        """创建整体HALT状态选择区域"""
-        status_frame = qt.QFrame()
-        status_frame.setStyleSheet("""
+    def _create_halt_status_and_grading_section(self, parent_layout):
+        """创建合并的HALT状态与分级区域（方案C）"""
+        # 主容器 - 统一的白色背景框
+        main_status_frame = qt.QFrame()
+        main_status_frame.setStyleSheet("""
             QFrame {
                 background-color: #ffffff;
                 border: 1px solid #dee2e6;
@@ -330,21 +314,22 @@ class HaltAnalysisWidget(qt.QWidget):
             }
         """)
         
-        status_layout = qt.QVBoxLayout(status_frame)
-        status_layout.setSpacing(6)  # 减小间距
+        main_status_layout = qt.QVBoxLayout(main_status_frame)
+        main_status_layout.setSpacing(8)  # 内部间距
         
-        # 标题 - 更紧凑
-        status_title = qt.QLabel("1. HALT状态")
+        # === 第一部分：HALT状态选择 ===
+        # 标题
+        status_title = qt.QLabel("HALT状态与分级")
         status_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
-        status_layout.addWidget(status_title)
+        main_status_layout.addWidget(status_title)
         
-        # 选项按钮 - 更紧凑布局
+        # 状态选择按钮
         buttons_layout = qt.QHBoxLayout()
-        buttons_layout.setSpacing(6)  # 减小间距
+        buttons_layout.setSpacing(6)
         
         self.overall_status_group = qt.QButtonGroup()
         
-        # 样式定义 - 更简洁的设计
+        # 样式定义
         button_configs = [
             ("无", "#d4f6d4", "#28a745"),
             ("有", "#fdeaea", "#dc3545"),
@@ -385,34 +370,36 @@ class HaltAnalysisWidget(qt.QWidget):
         self.overall_status_group.buttonClicked.connect(self._on_overall_status_changed)
         
         buttons_layout.addStretch()
-        status_layout.addLayout(buttons_layout)
+        main_status_layout.addLayout(buttons_layout)
         
-        parent_layout.addWidget(status_frame)
-    
-    def _create_grading_section(self, parent_layout):
-        """创建瓣叶分级区域"""
-        self.grading_frame = qt.QFrame()
-        self.grading_frame.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 2px solid #007bff;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 2px;
+        # === 分隔线（虚线，仅在"有"时显示）===
+        self.dashed_separator = qt.QLabel()
+        self.dashed_separator.setFixedHeight(1)
+        self.dashed_separator.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border-top: 1px dashed #007bff;
+                margin: 4px 0px;
             }
         """)
+        self.dashed_separator.setVisible(False)  # 初始隐藏
+        main_status_layout.addWidget(self.dashed_separator)
         
-        grading_layout = qt.QVBoxLayout(self.grading_frame)
-        grading_layout.setSpacing(4)  # 更小间距
+        # === 第二部分：分级区域（条件显示）===
+        # 分级容器 - 不额外套QFrame，直接在主容器内布局
+        self.grading_container = qt.QWidget()
+        grading_layout = qt.QVBoxLayout(self.grading_container)
+        grading_layout.setContentsMargins(0, 0, 0, 0)  # 无额外边距
+        grading_layout.setSpacing(4)
         
-        # 紧凑的标题和说明 - 合并到一行
+        # 分级标题和说明
         header_layout = qt.QHBoxLayout()
         header_layout.setSpacing(8)
         
-        grading_title = qt.QLabel("2. HALT分级")
+        grading_title = qt.QLabel("HALT分级")
         grading_title.setStyleSheet("""
             QLabel {
-                font-size: 12px; 
+                font-size: 11px; 
                 font-weight: bold; 
                 color: #2c3e50; 
                 padding: 2px 0px;
@@ -434,7 +421,7 @@ class HaltAnalysisWidget(qt.QWidget):
         
         grading_layout.addLayout(header_layout)
         
-        # 分级表格 - 更紧凑布局
+        # 分级表格
         self.leaflet_grade_rows = {}
         for leaflet in ["LC", "RC", "NC"]:
             row = LeafletGradeRow(leaflet)
@@ -442,37 +429,31 @@ class HaltAnalysisWidget(qt.QWidget):
             self.leaflet_grade_rows[leaflet] = row
             grading_layout.addWidget(row)
         
-        parent_layout.addWidget(self.grading_frame)
-    
-    def _create_summary_section(self, parent_layout):
-        """创建统计信息区域"""
-        self.summary_frame = qt.QFrame()
-        self.summary_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 6px 8px;
-            }
-        """)
+        # === 第三部分：统计信息（简洁版，显示修复）===
+        # 简洁的统计信息 - 与瓣叶名称标签左对齐
+        summary_layout = qt.QHBoxLayout()
+        summary_layout.setContentsMargins(0, 6, 0, 2)  # 左边距为0，与瓣叶名称标签左对齐
+        summary_layout.setSpacing(6)  # 与瓣叶行间距一致
         
-        summary_layout = qt.QHBoxLayout(self.summary_frame)
-        summary_layout.setContentsMargins(6, 3, 6, 3)  # 减小边距
-        summary_layout.setSpacing(12)  # 减小间距
-        
-        # 受累瓣叶个数 - 更紧凑
+        # 受累瓣叶个数 - 自适应宽度显示完整文字
         self.affected_count_label = qt.QLabel("受累瓣叶: 0个")
-        self.affected_count_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #28a745;")
+        self.affected_count_label.setStyleSheet("font-size: 10px; font-weight: bold; color: #28a745;")
         summary_layout.addWidget(self.affected_count_label)
+        
+        # 最高分级 - 自适应宽度显示完整文字
+        self.max_grade_label = qt.QLabel("最高分级: 0")
+        self.max_grade_label.setStyleSheet("font-size: 10px; color: #6c757d; font-weight: 500;")
+        summary_layout.addWidget(self.max_grade_label)
         
         summary_layout.addStretch()
         
-        # 最高分级 - 更紧凑
-        self.max_grade_label = qt.QLabel("最高分级: 0")
-        self.max_grade_label.setStyleSheet("font-size: 10px; color: #495057; font-weight: 500;")
-        summary_layout.addWidget(self.max_grade_label)
+        grading_layout.addLayout(summary_layout)
         
-        parent_layout.addWidget(self.summary_frame)
+        # 初始状态：隐藏分级区域
+        self.grading_container.setVisible(False)
+        main_status_layout.addWidget(self.grading_container)
+        
+        parent_layout.addWidget(main_status_frame)
     
     def _create_key_view_section(self, parent_layout):
         """创建关键视图管理区域 - 使用公共组件"""
@@ -847,11 +828,12 @@ class HaltAnalysisWidget(qt.QWidget):
         logging.info(f"瓣叶 {leaflet_name} 分级更新为: {grade}")
     
     def _update_visibility(self):
-        """根据整体HALT状态更新界面可见性"""
+        """根据整体HALT状态更新界面可见性（合并section版本）"""
         has_halt = self.overall_halt_status == "有"
         
-        self.grading_frame.setVisible(has_halt)
-        self.summary_frame.setVisible(has_halt)
+        # 控制分级区域和虚线分隔线的可见性（统计信息已包含在grading_container中）
+        self.grading_container.setVisible(has_halt)
+        self.dashed_separator.setVisible(has_halt)
         
         if not has_halt:
             # 重置所有瓣叶分级为0
