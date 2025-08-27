@@ -176,7 +176,10 @@ class PhaseSelectionWidget(qt.QWidget):
     
     def set_current_phase(self, phase: str):
         """
-        设置当前期像并更新按钮状态以及节点可视化
+        设置当前期像并更新按钮状态
+        
+        重构后：只负责UI状态更新，不处理数据可视化
+        数据可视化由PhaseManagementService统一管理
         
         Args:
             phase: 期像类型 ('diastole' 或 'systole')
@@ -186,10 +189,7 @@ class PhaseSelectionWidget(qt.QWidget):
             self.current_phase = phase
             self._update_phase_button_states(active_phase=phase)
             
-            # 管理节点可视化：隐藏旧期像，显示新期像
-            self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
-            
-            logging.info(f"期像设置为: {phase}")
+            logging.info(f"期像设置为: {phase} (数据可视化由服务层管理)")
     
     def _manage_phase_visibility(self, active_phase: str, inactive_phase: Optional[str] = None):
         """
@@ -832,7 +832,8 @@ class PhaseSelectionWidget(qt.QWidget):
         """
         同步期像UI状态
         
-        更新按钮状态和当前期像，但不触发期像切换操作
+        重构后：只负责UI状态同步，不处理数据可视化
+        数据可视化由PhaseManagementService统一管理
         
         Args:
             phase: 期像类型 ('diastole' 或 'systole')
@@ -849,14 +850,11 @@ class PhaseSelectionWidget(qt.QWidget):
             # 更新按钮状态
             self._update_phase_button_states(active_phase=phase)
             
-            # 管理节点可视化
-            self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
-            
             # 如果不是从外部同步，发出期像改变信号
             if not self._is_syncing_from_external:
                 self.phaseChanged.emit(phase)
             
-            logging.info(f"PhaseSelectionWidget UI已同步到期像: {phase}")
+            logging.info(f"PhaseSelectionWidget UI已同步到期像: {phase} (数据可视化由服务层统一管理)")
             
         except Exception as e:
             logging.error(f"同步期像UI失败: {e}")

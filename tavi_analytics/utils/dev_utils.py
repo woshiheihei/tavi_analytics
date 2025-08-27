@@ -113,11 +113,10 @@ class DevUtils:
             "volume_sequence_node_id": safe_node_to_id(session.volume_sequence_node_id),
             "sequence_browser_node_id": safe_node_to_id(session.sequence_browser_node_id),
             "marked_phases": session.marked_phases,
-            "segmentation_node_id": safe_node_to_id(session.segmentation_node_id),
             "landmark_node_ids": safe_dict_conversion(session.landmark_node_ids),
             "reconstructed_planes": safe_dict_conversion(session.reconstructed_planes),
             "contour_data": contour_data,  # 修正：使用contour_data而不是空的plane_data
-            # 添加分期分割节点数据
+            # 分期分割节点数据（使用新API）
             "phase_segmentation_node_ids": safe_dict_conversion(
                 getattr(session, 'phase_segmentation_node_ids', {})
             ),
@@ -180,11 +179,10 @@ class DevUtils:
         session.volume_sequence_node_id = data.get("volume_sequence_node_id")
         session.sequence_browser_node_id = data.get("sequence_browser_node_id")
         session.marked_phases = data.get("marked_phases") or session.marked_phases
-        session.segmentation_node_id = data.get("segmentation_node_id")
         session.landmark_node_ids = data.get("landmark_node_ids") or {}
         session.reconstructed_planes = data.get("reconstructed_planes") or {}
 
-        # 恢复分期分割节点数据
+        # 恢复分期分割节点数据（使用新API）
         phase_seg_ids = data.get("phase_segmentation_node_ids", {})
         if hasattr(session, 'phase_segmentation_node_ids'):
             session.phase_segmentation_node_ids.update(phase_seg_ids)

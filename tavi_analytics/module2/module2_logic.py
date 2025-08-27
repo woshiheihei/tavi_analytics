@@ -786,24 +786,16 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     num_segments = seg_node.GetSegmentation().GetNumberOfSegments()
                     logging.info(f"分割文件已导入为分割节点，包含 {num_segments} 个分段")
                     
-                    # 将分割节点存储到会话中（兼容+分期）
+                    # 使用新的统一注册API将分割节点注册到对应期像
                     node_id = seg_node.GetID()
-                    self.session.set_segmentation_node(node_id)
-                    # 从文件名解析期像信息，而不是依赖当前选择的期像
                     phase_key = self._extract_phase_from_filename(file_path)
-                    try:
-                        # 先检查是否已经有该期像的节点注册
-                        existing_node_id = self.session.get_phase_segmentation_node(phase_key)
-                        if existing_node_id:
-                            existing_node = slicer.mrmlScene.GetNodeByID(existing_node_id.GetID() if hasattr(existing_node_id, 'GetID') else existing_node_id)
-                            if existing_node and existing_node.GetName() != seg_node.GetName():
-                                logging.info(f"替换已注册的分割节点: {existing_node.GetName()} -> {seg_node.GetName()}")
-                        
-                        self.session.set_phase_segmentation_node(phase_key, node_id)
-                        logging.info(f"分割节点已注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
-                    except Exception as e:
-                        logging.warning(f"注册分割节点到期像失败: {e}")
-                        pass
+                    
+                    # 使用新的统一API注册分割节点（自动处理验证和一致性检查）
+                    success = self.session.set_phase_segmentation_node(phase_key, node_id)
+                    if success:
+                        logging.info(f"分割节点已成功注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
+                    else:
+                        logging.error(f"分割节点注册失败: {phase_key} -> {seg_node.GetName()} ({node_id})")
                     
                     # 设置分段显示属性
                     self._configure_segmentation_display(seg_node)
@@ -835,24 +827,16 @@ class Module2Logic(ScriptedLoadableModuleLogic):
                     num_segments = seg_node.GetSegmentation().GetNumberOfSegments()
                     logging.info(f"通过体积转换成功导入分割节点，包含 {num_segments} 个分段")
                     
-                    # 将分割节点存储到会话中（兼容+分期）
+                    # 使用新的统一注册API将分割节点注册到对应期像
                     node_id = seg_node.GetID()
-                    self.session.set_segmentation_node(node_id)
-                    # 从文件名解析期像信息，而不是依赖当前选择的期像
                     phase_key = self._extract_phase_from_filename(file_path)
-                    try:
-                        # 先检查是否已经有该期像的节点注册
-                        existing_node_id = self.session.get_phase_segmentation_node(phase_key)
-                        if existing_node_id:
-                            existing_node = slicer.mrmlScene.GetNodeByID(existing_node_id.GetID() if hasattr(existing_node_id, 'GetID') else existing_node_id)
-                            if existing_node and existing_node.GetName() != seg_node.GetName():
-                                logging.info(f"替换已注册的分割节点: {existing_node.GetName()} -> {seg_node.GetName()}")
-                        
-                        self.session.set_phase_segmentation_node(phase_key, node_id)
-                        logging.info(f"分割节点已注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
-                    except Exception as e:
-                        logging.warning(f"注册分割节点到期像失败: {e}")
-                        pass
+                    
+                    # 使用新的统一API注册分割节点（自动处理验证和一致性检查）
+                    success = self.session.set_phase_segmentation_node(phase_key, node_id)
+                    if success:
+                        logging.info(f"分割节点已成功注册到期像: {phase_key} -> {seg_node.GetName()} ({node_id})")
+                    else:
+                        logging.error(f"分割节点注册失败: {phase_key} -> {seg_node.GetName()} ({node_id})")
                     
                     # 设置分段显示属性
                     self._configure_segmentation_display(seg_node)

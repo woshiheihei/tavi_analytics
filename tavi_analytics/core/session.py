@@ -106,12 +106,11 @@ class TAVRStudySession:
                 }
             }
             
-            # 几何数据存储（总览）
-            self.segmentation_node_id = None  # 主分割节点ID（兼容旧逻辑，默认指向舒张末期导入的分割）
+            # 几何数据存储
             self.landmark_node_ids = {}  # 标志点节点ID字典
             self.reconstructed_planes = {}  # 重建平面存储
             
-            # 分期分割节点与测量（新增）
+            # 分期分割节点与测量
             # 期像 -> 分割节点ID
             self.phase_segmentation_node_ids: Dict[str, Optional[str]] = {
                 CardiacPhase.END_DIASTOLE.value: None,
@@ -121,11 +120,11 @@ class TAVRStudySession:
             # 分期轮廓仓库（各期像一个ContourDataManager）
             self.phase_contour_repo: PhaseContourRepository = PhaseContourRepository.create_default()
 
-            # 轮廓数据管理器（兼容旧API，默认返回舒张末期管理器）
-            self.contour_data_manager = self.phase_contour_repo.diastole
+            # 轮廓数据管理器（向后兼容）
+            self.contour_data_manager = None
             
-            # 兼容性属性 - 指向同一个管理器
-            self.contour_manager = self.contour_data_manager
+            # 兼容性属性
+            self.contour_manager = None
             
             # 期像管理服务（延迟加载，避免循环导入）
             self._phase_management_service = None
@@ -199,42 +198,52 @@ class TAVRStudySession:
             'model': self.patient_data.valveModel
         }
     
-    def set_segmentation_node(self, node_id: str):
+    # ====== 分期分割节点API ======
+    def set_phase_segmentation_node(self, phase: str, node_id: Optional[str], force_validate: bool = True) -> bool:
         """
-        设置主分割节点ID
+        设置期像分割节点（统一入口）
         
         Args:
-            node_id (str): 分割节点ID
-        """
-        # 兼容旧API：写入总览segmentation，并默认记作舒张末期分割
-        self.segmentation_node_id = node_id
-        self.phase_segmentation_node_ids[CardiacPhase.END_DIASTOLE.value] = node_id
-        self.logger.info(f"设置分割节点(兼容): {node_id} -> 归为 {CardiacPhase.END_DIASTOLE.value}")
-    
-    def get_segmentation_node(self):
-        """
-        获取主分割节点
-        
+            phase: 期像类型
+            node_id: 节点ID
+            force_validate: 是否强制验证节点名称匹配
+            
         Returns:
-            vtkMRMLSegmentationNode: 分割节点，如果不存在返回None
+            bool: 注册成功返回True，失败返回False
         """
-        if self.segmentation_node_id:
-            node = slicer.mrmlScene.GetNodeByID(self.segmentation_node_id)
-            if node is None:
-                self.logger.warning(f"分割节点不存在: {self.segmentation_node_id}")
-            return node
-        return None
-
-    # ====== 分期分割节点API ======
-    def set_phase_segmentation_node(self, phase: str, node_id: Optional[str]):
-        """设置某期像的分割节点ID"""
-        if phase not in (CardiacPhase.END_DIASTOLE.value, CardiacPhase.END_SYSTOLE.value):
-            raise ValueError(f"无效的期像: {phase}")
-        self.phase_segmentation_node_ids[phase] = node_id
-        # 约定：舒张末期作为默认总览分割
-        if phase == CardiacPhase.END_DIASTOLE.value:
-            self.segmentation_node_id = node_id
-        self.logger.info(f"设置{phase}分割节点: {node_id}")
+        try:
+            if phase not in (CardiacPhase.END_DIASTOLE.value, CardiacPhase.END_SYSTOLE.value):
+                self.logger.error(f"无效的期像: {phase}")
+                return False
+            
+            # 节点验证
+            if force_validate and node_id:
+                node = slicer.mrmlScene.GetNodeByID(node_id)
+                if not node:
+                    self.logger.error(f"节点不存在: {node_id}")
+                    return False
+                if not self._validate_node_phase_match(node, phase):
+                    self.logger.warning(f"节点 {node.GetName()} 与期像 {phase} 不匹配，但仍继续注册")
+            
+            # 清理可能的重复注册
+            if node_id:
+                self._cleanup_duplicate_registrations(phase, node_id)
+            
+            # 设置期像节点
+            self.phase_segmentation_node_ids[phase] = node_id
+                
+            self.logger.info(f"统一注册{phase}分割节点: {node_id}")
+            
+            # 自动检查注册后的一致性
+            consistency_report = self.validate_segmentation_consistency()
+            if not consistency_report["consistent"]:
+                self.logger.warning(f"分割注册后发现一致性问题: {consistency_report['issues']}")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"注册分割节点失败: {e}")
+            return False
 
     def get_phase_segmentation_node(self, phase: str):
         """获取某期像的分割节点对象"""
@@ -248,6 +257,178 @@ class TAVRStudySession:
 
     def get_all_phase_segmentation_ids(self) -> Dict[str, Optional[str]]:
         return dict(self.phase_segmentation_node_ids)
+    
+    def _validate_node_phase_match(self, node, phase: str) -> bool:
+        """
+        验证节点名称与期像是否匹配
+        
+        Args:
+            node: MRML节点
+            phase: 期像类型
+            
+        Returns:
+            bool: 匹配返回True
+        """
+        if not node:
+            return False
+        
+        node_name = node.GetName().lower()
+        phase_suffixes = {
+            CardiacPhase.END_DIASTOLE.value: ["end_diastole", "diastole"],
+            CardiacPhase.END_SYSTOLE.value: ["end_systole", "systole"]
+        }
+        
+        expected_suffixes = phase_suffixes.get(phase, [])
+        return any(suffix in node_name for suffix in expected_suffixes)
+    
+    def _cleanup_duplicate_registrations(self, target_phase: str, target_node_id: str):
+        """
+        清理重复的节点注册
+        
+        Args:
+            target_phase: 目标期像
+            target_node_id: 目标节点ID
+        """
+        if not target_node_id:
+            return
+        
+        cleaned_phases = []
+        for phase, node_id in list(self.phase_segmentation_node_ids.items()):
+            if phase != target_phase and node_id == target_node_id:
+                self.logger.warning(f"发现重复注册：{phase} 和 {target_phase} 都注册了节点 {target_node_id}")
+                self.phase_segmentation_node_ids[phase] = None
+                cleaned_phases.append(phase)
+        
+        if cleaned_phases:
+            self.logger.info(f"已清理重复注册的期像: {cleaned_phases}")
+    
+    def validate_segmentation_consistency(self) -> Dict[str, Any]:
+        """
+        验证分割节点注册的一致性
+        
+        Returns:
+            dict: 一致性检查报告
+        """
+        report = {
+            "consistent": True,
+            "issues": [],
+            "suggestions": [],
+            "details": {}
+        }
+        
+        try:
+            # 检查重复注册
+            node_ids = [nid for nid in self.phase_segmentation_node_ids.values() if nid]
+            unique_node_ids = set(node_ids)
+            
+            if len(node_ids) != len(unique_node_ids):
+                duplicate_ids = [nid for nid in unique_node_ids if node_ids.count(nid) > 1]
+                report["consistent"] = False
+                report["issues"].append(f"存在重复的节点注册: {duplicate_ids}")
+                report["suggestions"].append("调用 fix_segmentation_registrations() 自动修复")
+            
+            # 检查节点名称匹配
+            for phase, node_id in self.phase_segmentation_node_ids.items():
+                if node_id:
+                    node = slicer.mrmlScene.GetNodeByID(node_id)
+                    if node:
+                        matches = self._validate_node_phase_match(node, phase)
+                        report["details"][phase] = {
+                            "node_name": node.GetName(),
+                            "node_id": node_id,
+                            "name_matches_phase": matches
+                        }
+                        
+                        if not matches:
+                            report["consistent"] = False
+                            report["issues"].append(f"期像 {phase} 注册的节点名称不匹配: {node.GetName()}")
+                    else:
+                        report["consistent"] = False
+                        report["issues"].append(f"期像 {phase} 注册的节点不存在: {node_id}")
+                        report["details"][phase] = {
+                            "node_name": "不存在",
+                            "node_id": node_id,
+                            "name_matches_phase": False
+                        }
+                else:
+                    report["details"][phase] = {
+                        "node_name": "未注册",
+                        "node_id": None,
+                        "name_matches_phase": None
+                    }
+                
+        except Exception as e:
+            report["consistent"] = False
+            report["issues"].append(f"一致性检查异常: {e}")
+        
+        return report
+    
+    def fix_segmentation_registrations(self) -> bool:
+        """
+        自动修复分割节点注册问题
+        
+        Returns:
+            bool: 修复是否成功
+        """
+        try:
+            self.logger.info("开始自动修复分割节点注册...")
+            
+            # 1. 扫描所有分割节点
+            all_seg_nodes = []
+            for i in range(slicer.mrmlScene.GetNumberOfNodes()):
+                node = slicer.mrmlScene.GetNthNode(i)
+                if node and node.GetClassName() == 'vtkMRMLSegmentationNode':
+                    all_seg_nodes.append(node)
+            
+            self.logger.info(f"发现 {len(all_seg_nodes)} 个分割节点")
+            
+            # 2. 按期像重新分类
+            phase_nodes = {
+                CardiacPhase.END_DIASTOLE.value: [],
+                CardiacPhase.END_SYSTOLE.value: []
+            }
+            
+            for node in all_seg_nodes:
+                node_name = node.GetName().lower()
+                if "end_diastole" in node_name or "diastole" in node_name:
+                    phase_nodes[CardiacPhase.END_DIASTOLE.value].append(node)
+                    self.logger.info(f"分类为舒张末期: {node.GetName()}")
+                elif "end_systole" in node_name or "systole" in node_name:
+                    phase_nodes[CardiacPhase.END_SYSTOLE.value].append(node)
+                    self.logger.info(f"分类为收缩末期: {node.GetName()}")
+                else:
+                    self.logger.warning(f"无法分类的节点: {node.GetName()}")
+            
+            # 3. 重新注册（选择最新的节点）
+            for phase, nodes in phase_nodes.items():
+                if nodes:
+                    # 选择最新创建的节点（按ID排序）
+                    try:
+                        latest_node = max(nodes, key=lambda n: int(n.GetID().split('Node')[-1]) 
+                                         if 'Node' in n.GetID() and n.GetID().split('Node')[-1].isdigit() else 0)
+                        self.phase_segmentation_node_ids[phase] = latest_node.GetID()
+                        self.logger.info(f"自动修复：{phase} -> {latest_node.GetName()} ({latest_node.GetID()})")
+                    except Exception as e:
+                        # 如果ID解析失败，选择第一个
+                        latest_node = nodes[0]
+                        self.phase_segmentation_node_ids[phase] = latest_node.GetID()
+                        self.logger.warning(f"ID解析失败，选择第一个节点：{phase} -> {latest_node.GetName()}")
+                else:
+                    self.phase_segmentation_node_ids[phase] = None
+                    self.logger.warning(f"未找到 {phase} 对应的分割节点")
+            
+            # 验证修复结果
+            consistency_report = self.validate_segmentation_consistency()
+            if consistency_report["consistent"]:
+                self.logger.info("✅ 分割节点注册修复成功，一致性检查通过")
+                return True
+            else:
+                self.logger.warning(f"⚠️ 修复后仍存在问题: {consistency_report['issues']}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"自动修复失败: {e}")
+            return False
     
     def set_landmark_node(self, landmark_name: str, node_id: str):
         """
@@ -325,8 +506,8 @@ class TAVRStudySession:
         Returns:
             bool: 如果所有必需的几何数据都已定义返回True
         """
-        # 检查是否有分割节点
-        has_segmentation = self.segmentation_node_id is not None
+        # 检查是否有分割节点（任一期像）
+        has_segmentation = any(node_id is not None for node_id in self.phase_segmentation_node_ids.values())
         
         # 检查是否有原生瓣环平面
         has_native_annulus_plane = 'native_annulus' in self.reconstructed_planes
@@ -706,7 +887,6 @@ class TAVRStudySession:
         }
         
         # 重置几何数据
-        self.segmentation_node_id = None
         self.landmark_node_ids = {}
         self.reconstructed_planes = {}
         
@@ -725,9 +905,9 @@ class TAVRStudySession:
             self.phase_contour_repo.clear()
         except Exception:
             self.phase_contour_repo = PhaseContourRepository.create_default()
-        # 兼容默认指向舒张末期
-        self.contour_data_manager = self.phase_contour_repo.diastole
-        self.contour_manager = self.contour_data_manager
+        # 重置兼容性引用
+        self.contour_data_manager = None
+        self.contour_manager = None
         
         self.logger.info("会话重置完成")
 
@@ -759,7 +939,6 @@ class TAVRStudySession:
         }
         
         # 重置几何数据
-        self.segmentation_node_id = None
         self.landmark_node_ids = {}
         self.reconstructed_planes = {}
         
@@ -778,9 +957,9 @@ class TAVRStudySession:
             self.phase_contour_repo.clear()
         except Exception:
             self.phase_contour_repo = PhaseContourRepository.create_default()
-        # 兼容默认指向舒张末期
-        self.contour_data_manager = self.phase_contour_repo.diastole
-        self.contour_manager = self.contour_data_manager
+        # 重置兼容性引用
+        self.contour_data_manager = None
+        self.contour_manager = None
         
         self.logger.info("序列数据清除完成")
 
@@ -815,7 +994,7 @@ class TAVRStudySession:
         return cls()
     
     # ====== 平面数据管理方法 ======
-    # 兼容API：将传入的测量默认加载到舒张末期
+    # 兼容API：加载到contour_data_manager（需要先通过get_phase_contour_manager设置）
     def load_measurement_planes(self, measurement_data: Dict[str, Any]) -> bool:
         """
         从measurement.json数据中加载关键平面
@@ -825,8 +1004,15 @@ class TAVRStudySession:
             
         Returns:
             bool: 加载成功返回True
+            
+        Note:
+            此方法需要先通过set_active_contour_manager设置活动的contour_data_manager
         """
         try:
+            if self.contour_data_manager is None:
+                self.logger.error("contour_data_manager未设置，请先调用set_active_contour_manager")
+                return False
+                
             success = self.contour_data_manager.load_from_measurement_json(measurement_data)
             if success:
                 self.logger.info("关键平面数据已加载到会话中")
@@ -840,32 +1026,63 @@ class TAVRStudySession:
     
     def get_valve_stent_bottom_plane(self):
         """获取瓣膜支架底部平面"""
+        if self.contour_data_manager is None:
+            self.logger.warning("contour_data_manager未设置，请先调用set_active_contour_manager")
+            return None
         return self.contour_data_manager.get_valve_stent_bottom()
     
     def get_sinus_of_valsalva_plane(self):
         """获取Sinus Of Valsalva平面"""
+        if self.contour_data_manager is None:
+            self.logger.warning("contour_data_manager未设置，请先调用set_active_contour_manager")
+            return None
         return self.contour_data_manager.get_sinus_of_valsalva()
     
     def get_stent_best_fit_plane(self):
         """获取支架最佳拟合平面"""
+        if self.contour_data_manager is None:
+            self.logger.warning("contour_data_manager未设置，请先调用set_active_contour_manager")
+            return None
         return self.contour_data_manager.get_stent_best_fit()
     
     def has_critical_planes(self) -> bool:
         """检查是否已加载关键平面"""
+        if self.contour_data_manager is None:
+            return False
         return self.contour_data_manager.has_critical_contours()
     
     def get_planes_summary(self) -> Dict[str, bool]:
         """获取平面加载状态摘要"""
+        if self.contour_data_manager is None:
+            return {}
         return self.contour_data_manager.get_loaded_contours_summary()
     
     def get_all_plane_measurements(self) -> Dict[str, Any]:
         """获取所有平面的测量数据"""
+        if self.contour_data_manager is None:
+            return {}
         return self.contour_data_manager.get_all_measurements()
     
     def clear_plane_data(self):
         """清空平面数据"""
-        self.contour_data_manager.clear()
-        self.logger.info("已清空会话中的平面数据")
+        if self.contour_data_manager is not None:
+            self.contour_data_manager.clear()
+            self.logger.info("已清空会话中的平面数据")
+        else:
+            self.logger.warning("contour_data_manager未设置，无法清空数据")
+
+    def set_active_contour_manager(self, phase: Union[str, CardiacPhase]):
+        """
+        设置活动的contour_data_manager到指定期像
+        
+        Args:
+            phase: 期像类型 ('end_diastole' 或 'end_systole')
+        """
+        mgr = self.get_phase_contour_manager(phase)
+        self.contour_data_manager = mgr
+        self.contour_manager = mgr
+        phase_name = phase.value if isinstance(phase, CardiacPhase) else phase
+        self.logger.info(f"设置活动contour_data_manager为{phase_name}")
 
     # ====== 分期轮廓管理API（新增） ======
     def get_phase_contour_manager(self, phase: Union[str, CardiacPhase]) -> ContourDataManager:
@@ -878,27 +1095,10 @@ class TAVRStudySession:
         """将measurement.json加载到指定期像的ContourDataManager中"""
         mgr = self.get_phase_contour_manager(phase)
         ok = mgr.load_from_measurement_json(measurement_data)
-        # 同步兼容默认：若是舒张末期则刷新旧引用
-        if (phase.value if isinstance(phase, CardiacPhase) else phase) == CardiacPhase.END_DIASTOLE.value:
-            self.contour_data_manager = mgr
-            self.contour_manager = mgr
         return ok
 
     def get_phase_contours_summary(self) -> Dict[str, Any]:
         return self.phase_contour_repo.get_loaded_summary()
-
-    # Compatibility methods for old plane-based API
-    def load_measurement_planes_for_phase(self, phase: Union[str, CardiacPhase], measurement_data: Dict[str, Any]) -> bool:
-        """兼容方法：调用新的轮廓方法"""
-        return self.load_measurement_contours_for_phase(phase, measurement_data)
-
-    def get_phase_plane_manager(self, phase: Union[str, CardiacPhase]) -> 'ContourDataManager':
-        """兼容方法：调用新的轮廓管理器方法"""
-        return self.get_phase_contour_manager(phase)
-
-    def get_phase_planes_summary(self) -> Dict[str, Any]:
-        """兼容方法：调用新的轮廓方法"""
-        return self.get_phase_contours_summary()
 
     # ====== 多层级平面管理 (Module4) ======
     def load_multi_level_plane_data(self, measurement_data: Dict[str, Any]) -> bool:

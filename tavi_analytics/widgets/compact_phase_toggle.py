@@ -281,7 +281,12 @@ class CompactPhaseToggle(qt.QWidget):
             return False
     
     def set_current_phase(self, phase: str):
-        """设置当前期像并更新UI状态"""
+        """
+        设置当前期像并更新UI状态
+        
+        重构后：只负责UI状态更新，不处理数据可视化
+        数据可视化由PhaseManagementService统一管理
+        """
         if phase not in ['diastole', 'systole']:
             logging.warning(f"无效的期像类型: {phase}")
             return
@@ -295,10 +300,7 @@ class CompactPhaseToggle(qt.QWidget):
         # 更新状态指示器
         self._update_status_indicator(phase)
         
-        # 管理节点可视化
-        self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
-        
-        logging.info(f"CompactPhaseToggle 期像设置为: {phase}")
+        logging.info(f"CompactPhaseToggle 期像设置为: {phase} (数据可视化由服务层管理)")
     
     def _update_button_states(self, active_phase: str):
         """更新按钮状态"""
@@ -353,7 +355,19 @@ class CompactPhaseToggle(qt.QWidget):
             self.status_indicator.setToolTip("期像状态指示")
     
     def _manage_phase_visibility(self, active_phase: str, inactive_phase: Optional[str] = None):
-        """管理期像相关节点的可视化状态"""
+        """
+        管理期像相关节点的可视化状态
+        
+        ⚠️ 已废弃：此方法在重构后不再使用
+        数据可视化现在由PhaseManagementService统一管理
+        保留此方法仅为向后兼容，建议不要调用
+        
+        Args:
+            active_phase: 要显示的期像 ('diastole' 或 'systole')
+            inactive_phase: 要隐藏的期像 ('diastole' 或 'systole')，为None时隐藏所有其他期像
+        """
+        logging.warning("_manage_phase_visibility 已废弃，数据可视化现在由PhaseManagementService统一管理")
+        # 保留原实现以防万一需要回退
         try:
             # 复用原有的可视化管理逻辑
             phases_to_hide = []
@@ -373,7 +387,15 @@ class CompactPhaseToggle(qt.QWidget):
             logging.error(f"管理期像可视化失败: {e}")
     
     def _set_phase_nodes_visibility(self, phase: str, visible: bool):
-        """设置指定期像的所有节点的可视化状态 - 简化版本"""
+        """
+        设置指定期像的所有节点的可视化状态 - 简化版本
+        
+        ⚠️ 已废弃：此方法在重构后不再使用
+        数据可视化现在由PhaseManagementService统一管理
+        保留此方法仅为向后兼容，建议不要调用
+        """
+        logging.warning("_set_phase_nodes_visibility 已废弃，数据可视化现在由PhaseManagementService统一管理")
+        # 保留原实现以防万一需要回退
         try:
             import slicer
             phase_key = self.phase_domain_keys.get(phase)
@@ -461,11 +483,17 @@ class CompactPhaseToggle(qt.QWidget):
             self._is_syncing_from_external = False
     
     def _sync_phase_ui(self, phase: str):
-        """同步期像UI状态"""
+        """
+        同步期像UI状态
+        
+        重构后：只负责UI状态同步，不处理数据可视化
+        数据可视化由PhaseManagementService统一管理
+        """
         if phase not in ['diastole', 'systole']:
             return
         
         try:
+            # 更新内部状态
             old_phase = self.current_phase
             self.current_phase = phase
             
@@ -475,14 +503,11 @@ class CompactPhaseToggle(qt.QWidget):
             # 更新状态指示器
             self._update_status_indicator(phase)
             
-            # 管理节点可视化
-            self._manage_phase_visibility(active_phase=phase, inactive_phase=old_phase)
-            
             # 如果不是从外部同步，发出期像改变信号
             if not self._is_syncing_from_external:
                 self.phaseChanged.emit(phase)
             
-            logging.info(f"CompactPhaseToggle UI已同步到期像: {phase}")
+            logging.info(f"CompactPhaseToggle UI已同步到期像: {phase} (数据可视化由服务层统一管理)")
             
         except Exception as e:
             logging.error(f"同步期像UI失败: {e}")
