@@ -6,7 +6,7 @@
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import numpy as np
 
 # 导入底层的平面定位管理器
@@ -24,15 +24,17 @@ except ImportError:
 # 导入轮廓相关的领域模型
 try:
     from ..core.domain_models import (
-        CriticalContourType, 
+    CriticalContourType, 
         ContourBase,
-        ContourFactory
+    ContourFactory,
+    DynamicContourType
     )
 except ImportError:
     from core.domain_models import (
-        CriticalContourType, 
+    CriticalContourType, 
         ContourBase,
-        ContourFactory
+    ContourFactory,
+    DynamicContourType
     )
 
 
@@ -81,12 +83,14 @@ class ContourPositionService:
         """获取当前期像"""
         return self.current_phase
     
-    def switch_to_contour(self, contour_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> bool:
+    def switch_to_contour(self, contour_type: Union[str, DynamicContourType], node_name: Optional[str] = None, phase: Optional[str] = None) -> bool:
         """
         一键将当前MPR视图切换到指定轮廓
         
         Args:
-            contour_type: 轮廓类型，支持的类型见 SUPPORTED_CONTOURS
+            contour_type: 轮廓类型，可以是预置类型键（如 'valve_stent_bottom'）、
+                          动态多层级类型对象（DynamicContourType），
+                          或其字符串值（如 'Stent_Frame_base_up_0.5_plane'）
             node_name: 自定义节点名称，仅在 contour_type='custom' 时使用
             phase: 期像类型，如果为None则使用当前期像
             
@@ -131,13 +135,13 @@ class ContourPositionService:
             logging.error(f"切换到轮廓时出错: {e}")
             return False
     
-    def _get_contour_geometry(self, contour_type: str, node_name: Optional[str] = None, 
+    def _get_contour_geometry(self, contour_type: Union[str, DynamicContourType], node_name: Optional[str] = None, 
                             phase: Optional[str] = None) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
         获取轮廓的几何参数
         
         Args:
-            contour_type: 轮廓类型
+            contour_type: 轮廓类型（预置键/动态类型/动态类型字符串）
             node_name: 自定义节点名称
             phase: 期像类型
             
@@ -145,28 +149,41 @@ class ContourPositionService:
             tuple[Optional[np.ndarray], Optional[np.ndarray]]: (中心点, 法向量)
         """
         try:
-            if contour_type == 'custom':
+            # 统一获取类型键字符串
+            type_key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+
+            if type_key == 'custom':
                 if not node_name:
                     logging.error("自定义轮廓类型需要提供节点名称")
                     return None, None
                 return self._calculate_custom_contour_geometry(node_name)
             
-            elif contour_type in self.SUPPORTED_CONTOURS:
-                critical_contour_type = self.SUPPORTED_CONTOURS[contour_type]
+            elif type_key in self.SUPPORTED_CONTOURS:
+                critical_contour_type = self.SUPPORTED_CONTOURS[type_key]
                 if not critical_contour_type:
-                    logging.error(f"不支持的轮廓类型: {contour_type}")
+                    logging.error(f"不支持的轮廓类型: {type_key}")
                     return None, None
                 
                 # 创建轮廓实例并计算几何参数
                 contour = ContourFactory.create_contour(critical_contour_type, phase)
                 if not contour:
-                    logging.error(f"无法创建轮廓实例: {contour_type}")
+                    logging.error(f"无法创建轮廓实例: {type_key}")
                     return None, None
                 
                 return contour.calculate_plane_parameters()
             
+            # 兼容：动态多层级平面类型（例如 'Stent_Frame_base_up_0.5_plane'）
+            elif CriticalContourType.is_multi_level_plane_type(type_key):
+                # 单一路径：使用领域模型的动态轮廓，交由其自身实现计算逻辑
+                use_phase = phase or self.current_phase
+                contour = ContourFactory.create_contour(type_key, use_phase)
+                if not contour:
+                    logging.error(f"无法创建动态轮廓实例: {type_key}")
+                    return None, None
+                return contour.calculate_plane_parameters()
+            
             else:
-                logging.error(f"不支持的轮廓类型: {contour_type}")
+                logging.error(f"不支持的轮廓类型: {type_key}")
                 return None, None
                 
         except Exception as e:
@@ -248,6 +265,8 @@ class ContourPositionService:
         except Exception as e:
             logging.error(f"计算轮廓几何参数时出错: {e}")
             return None, None
+
+    # 删除兜底点集计算方法，统一由领域模型负责
     
     def _get_phase_aware_node_name(self, base_name: str, phase: Optional[str] = None) -> str:
         """

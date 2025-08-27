@@ -301,24 +301,28 @@ class ContourBase(ABC):
     def calculate_plane_parameters(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
         计算轮廓的平面参数（中心点和法向量）
-        
+
+        单一路径：严格基于场景中的节点进行计算；若节点不存在或不可用，则返回None。
+
         Returns:
             Tuple[Optional[np.ndarray], Optional[np.ndarray]]: (中心点, 法向量)
         """
+        node_name = None
         try:
-            # 查找对应的轮廓节点
             node_name = self.get_node_name()
-            import slicer
-            contour_node = slicer.mrmlScene.GetFirstNodeByName(node_name)
-            
-            if not contour_node:
-                logging.error(f"未找到轮廓节点: {node_name}")
+            try:
+                import slicer
+                contour_node = slicer.mrmlScene.GetFirstNodeByName(node_name)
+            except Exception:
+                contour_node = None
+
+            if contour_node:
+                return self._calculate_contour_geometry(contour_node)
+            else:
+                logging.error(f"未找到场景节点：{node_name}，无法计算平面参数")
                 return None, None
-            
-            return self._calculate_contour_geometry(contour_node)
-            
         except Exception as e:
-            logging.error(f"计算轮廓平面参数时出错: {e}")
+            logging.error(f"通过场景节点计算平面参数失败（{node_name}）：{e}")
             return None, None
     
     def _calculate_contour_geometry(self, contour_node) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
