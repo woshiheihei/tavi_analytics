@@ -872,6 +872,9 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         """激活时的回调"""
         logging.info(f"{self.level_type}几何形态分析界面激活")
         
+        # 显示axial切片在3D视图中（与模块三保持一致）
+        self._show_axial_slice_in_3d()
+        
         # 检查并更新瓣膜信息显示
         self._check_and_hide_temp_selector()
         self._update_valve_info()
@@ -884,6 +887,65 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         logging.info(f"{self.level_type}几何形态分析界面停用")
     
     # 已移除: 模拟平面数据创建逻辑（_create_mock_plane_data）
+    
+    def _show_axial_slice_in_3d(self):
+        """在3D视图中显示axial切片（与模块三保持一致）"""
+        try:
+            import slicer
+            
+            # 获取axial切片节点（Red切片）
+            axial_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeRed")
+            
+            if axial_slice_node:
+                # 设置axial切片在3D视图中可见
+                axial_slice_node.SetSliceVisible(True)
+                
+                # 确保其他切片在3D视图中不可见（保持focus在axial）
+                green_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeGreen")
+                yellow_slice_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSliceNodeYellow")
+                
+                if green_slice_node:
+                    green_slice_node.SetSliceVisible(False)
+                if yellow_slice_node:
+                    yellow_slice_node.SetSliceVisible(False)
+                
+                # 刷新3D视图以确保变更生效
+                self._refresh_3d_view()
+                
+                logging.info("模块四: 已在3D视图中显示axial切片")
+                
+            else:
+                logging.warning("模块四: 无法找到axial切片节点")
+                
+        except Exception as e:
+            logging.error(f"模块四: 在3D视图中显示axial切片失败: {e}")
+    
+    def _refresh_3d_view(self):
+        """刷新3D视图"""
+        try:
+            import slicer
+            
+            layout_manager = slicer.app.layoutManager()
+            if layout_manager:
+                # 刷新主3D视图
+                threeDWidget = layout_manager.threeDWidget(0)
+                if threeDWidget:
+                    threeDView = threeDWidget.threeDView()
+                    if threeDView:
+                        threeDView.forceRender()
+                
+                # 如果有多个3D视图，也一并刷新
+                for i in range(layout_manager.threeDViewCount):
+                    widget = layout_manager.threeDWidget(i)
+                    if widget:
+                        view = widget.threeDView()
+                        if view:
+                            view.forceRender()
+                
+                logging.debug("模块四: 3D视图刷新完成")
+                
+        except Exception as e:
+            logging.error(f"模块四: 刷新3D视图时出错: {e}")
     
     def cleanup(self):
         """清理资源"""
