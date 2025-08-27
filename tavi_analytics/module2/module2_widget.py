@@ -107,16 +107,28 @@ class Module2Widget(qt.QWidget):
         self._create_navigation_section(layout)
 
     def _create_auto_analysis_section(self, layout):
-        """创建全自动分析区域 - 使用通用SectionCard (绿色主题)"""
-        section = SectionCard(title="2. 全自动分析", icon_text="🚀", variant="green", parent=self)
+        """创建全自动分析区域 - 使用通用SectionCard (蓝色主题，与模块一保持一致)"""
+        # 改为蓝色主题，与模块一保持一致，提升整体协调性
+        section = SectionCard(title="全自动分析", icon_text="🚀", variant="blue", parent=self)
         main_layout = section.body_layout
+
+        # 内容容器 - 与模块一一致的白卡片风格
+        content_container = qt.QWidget()
+        content_container.setStyleSheet(
+            """
+            QWidget { background: #ffffff; border-radius: 12px; border: none; }
+            """
+        )
+        content_layout = qt.QVBoxLayout(content_container)
+        content_layout.setContentsMargins(12, 8, 12, 12)
+        content_layout.setSpacing(8)
 
         # 描述文本
         description_label = qt.QLabel("基于AI算法的一键式TAVR分析，包括瓣膜识别、测量计算等")
         description_label.setStyleSheet(
             """
             QLabel {
-                font-size: 14px;
+                font-size: 12px;
                 color: #424242;
                 background: transparent;
                 padding: 0px;
@@ -125,37 +137,37 @@ class Module2Widget(qt.QWidget):
             """
         )
         description_label.setWordWrap(True)
-        main_layout.addWidget(description_label)
+        content_layout.addWidget(description_label)
 
         # 按钮容器
         button_container = qt.QWidget()
         button_layout = qt.QVBoxLayout(button_container)
-        button_layout.setContentsMargins(0, 8, 0, 0)
-        button_layout.setSpacing(12)
+        button_layout.setContentsMargins(0, 6, 0, 0)
+        button_layout.setSpacing(8)
 
-        # 主要操作按钮 - 绿色风格，与模块一的蓝色按钮保持一致的设计
+        # 主要操作按钮 - 专业蓝色风格，与模块一保持一致
         self.auto_analysis_button = qt.QPushButton("🚀 开始全自动分析")
         self.auto_analysis_button.setObjectName("autoAnalysisButton")
         self.auto_analysis_button.setStyleSheet(
             """
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #4caf50, stop:1 #2e7d32);
+                    stop:0 #1976d2, stop:1 #1565c0);
                 color: white;
                 border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: bold;
-                min-height: 20px;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 600;
+                min-height: 30px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #66bb6a, stop:1 #4caf50);
+                    stop:0 #2196f3, stop:1 #1976d2);
             }
             QPushButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #2e7d32, stop:1 #1b5e20);
+                    stop:0 #1565c0, stop:1 #0d47a1);
             }
             QPushButton:disabled {
                 background: #e0e0e0;
@@ -166,29 +178,29 @@ class Module2Widget(qt.QWidget):
         self.auto_analysis_button.clicked.connect(self._on_start_auto_analysis)
         button_layout.addWidget(self.auto_analysis_button)
 
-        # 停止分析按钮 - 初始隐藏，红色风格
+        # 停止分析按钮 - 初始隐藏，温和的橙色风格（避免红绿冲突）
         self.stop_analysis_button = qt.QPushButton("⏹ 停止分析")
         self.stop_analysis_button.setObjectName("stopAnalysisButton")
         self.stop_analysis_button.setStyleSheet(
             """
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f44336, stop:1 #c62828);
+                    stop:0 #ff9800, stop:1 #f57c00);
                 color: white;
                 border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-size: 13px;
-                font-weight: bold;
-                min-height: 16px;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 11px;
+                font-weight: 600;
+                min-height: 30px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ef5350, stop:1 #d32f2f);
+                    stop:0 #ffb74d, stop:1 #ff9800);
             }
             QPushButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #c62828, stop:1 #b71c1c);
+                    stop:0 #f57c00, stop:1 #e65100);
             }
             QPushButton:disabled {
                 background: #e0e0e0;
@@ -200,28 +212,29 @@ class Module2Widget(qt.QWidget):
         self.stop_analysis_button.setVisible(False)  # 初始隐藏
         button_layout.addWidget(self.stop_analysis_button)
 
-        main_layout.addWidget(button_container)
+        content_layout.addWidget(button_container)
 
         # 状态指示区域（初始隐藏）
         self.status_container = qt.QWidget()
         self.status_container.setVisible(False)
         status_layout = qt.QVBoxLayout(self.status_container)
-        status_layout.setContentsMargins(4, 8, 4, 0)
-        status_layout.setSpacing(8)
+        status_layout.setContentsMargins(3, 6, 3, 0)
+        status_layout.setSpacing(6)
 
         # 状态文本
         self.analysis_status_label = qt.QLabel("")
+        # 初始使用中性信息样式，具体状态在更新时设置
         self.analysis_status_label.setStyleSheet(
             """
             QLabel {
                 font-size: 12px;
-                color: #2e7d32;
-                background: transparent;
+                color: #424242;
+                background-color: #f5f5f5;
                 font-weight: 500;
                 padding: 8px 12px;
                 border-radius: 6px;
-                border: 1px solid #c8e6c9;
-                background-color: #f1f8e9;
+                border: 1px solid #e0e0e0;
+                border-left: 4px solid #9e9e9e;
             }
             """
         )
@@ -233,19 +246,19 @@ class Module2Widget(qt.QWidget):
         self.progress_bar = qt.QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setMinimumHeight(20)
+        self.progress_bar.setMinimumHeight(18)
         self.progress_bar.setStyleSheet(
             """
             QProgressBar {
-                border: 1px solid #4caf50;
+                border: 1px solid #1976d2;
                 border-radius: 4px;
                 text-align: center;
-                font-size: 11px;
+                font-size: 10px;
                 background-color: #f8f9fa;
                 color: #333;
             }
             QProgressBar::chunk {
-                background-color: #4caf50;
+                background-color: #1976d2;
                 border-radius: 3px;
             }
             """
@@ -253,7 +266,10 @@ class Module2Widget(qt.QWidget):
         self.progress_bar.setVisible(False)  # 初始隐藏
         status_layout.addWidget(self.progress_bar)
 
-        main_layout.addWidget(self.status_container)
+        content_layout.addWidget(self.status_container)
+
+        # 将内容容器加入到 Section
+        main_layout.addWidget(content_container)
 
         layout.addWidget(section, 0)  # 固定大小，不拉伸
 
@@ -270,7 +286,7 @@ class Module2Widget(qt.QWidget):
                 color: #d0d0d0;
                 background-color: #d0d0d0;
                 border: none;
-                margin: 20px 0px 16px 0px;
+                margin: 16px 0px 12px 0px;
                 max-height: 1px;
             }
         """)
@@ -280,8 +296,8 @@ class Module2Widget(qt.QWidget):
         bottom_container = qt.QWidget()
         bottom_container.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Fixed)
         bottom_layout = qt.QHBoxLayout(bottom_container)
-        bottom_layout.setContentsMargins(0, 0, 0, 20)
-        bottom_layout.setSpacing(32)
+        bottom_layout.setContentsMargins(0, 0, 0, 16)
+        bottom_layout.setSpacing(24)
         
         # 左侧：模块状态显示区域
         status_container = qt.QWidget()
@@ -294,9 +310,9 @@ class Module2Widget(qt.QWidget):
         self.nav_status_label = qt.QLabel("全自动分析完成后可进入详细分析页面")
         self.nav_status_label.setStyleSheet("""
             QLabel {
-                font-size: 12px;
+                font-size: 11px;
                 color: #666;
-                padding: 12px 16px;
+                padding: 10px 14px;
                 background-color: #f8f9fa;
                 border-radius: 6px;
                 border-left: 4px solid #6c757d;
@@ -304,7 +320,7 @@ class Module2Widget(qt.QWidget):
             }
         """)
         self.nav_status_label.setWordWrap(True)
-        self.nav_status_label.setFixedHeight(44)
+        self.nav_status_label.setFixedHeight(38)
         status_layout.addWidget(self.nav_status_label)
         
         bottom_layout.addWidget(status_container, 1)
@@ -316,24 +332,24 @@ class Module2Widget(qt.QWidget):
         action_layout.setContentsMargins(0, 0, 0, 0)
         action_layout.setSpacing(0)
         
-        # 主要操作按钮 - 调整尺寸与模块一保持一致
+        # 主要操作按钮 - 调整尺寸与模块一保持一致，使用蓝色主题
         self.go_to_analysis_button = qt.QPushButton("进入分析页面")
         self.go_to_analysis_button.setObjectName("enterAnalysisPageButton")
-        self.go_to_analysis_button.setFixedSize(160, 44)
+        self.go_to_analysis_button.setFixedSize(148, 38)
         self.go_to_analysis_button.setStyleSheet("""
             QPushButton {
-                background: #52c41a;
+                background: #1976d2;
                 color: white;
                 border: none;
                 border-radius: 6px;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 500;
             }
             QPushButton:hover {
-                background: #73d13d;
+                background: #2196f3;
             }
             QPushButton:pressed {
-                background: #389e0d;
+                background: #1565c0;
             }
             QPushButton:disabled {
                 background: #d9d9d9;
@@ -614,12 +630,12 @@ class Module2Widget(qt.QWidget):
                 style = """
                     QLabel {
                         font-size: 12px;
-                        color: #2e7d32;
-                        background-color: #f1f8e9;
+                        color: #1976d2;
+                        background-color: #e3f2fd;
                         font-weight: 500;
                         padding: 8px 12px;
                         border-radius: 6px;
-                        border: 1px solid #c8e6c9;
+                        border: 1px solid #bbdefb;
                     }
                 """
             elif status_type == "processing":
