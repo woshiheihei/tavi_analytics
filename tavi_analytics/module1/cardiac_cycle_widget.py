@@ -112,19 +112,23 @@ class CardiacCycleWidget(qt.QWidget):
             QLabel { font-size: 11px; color: #424242; font-weight: 500; background: transparent; border: none; }
             """
         )
+        current_phase_label.setFixedWidth(60)  # 固定宽度确保居中对齐
         phase_info_layout.addWidget(current_phase_label)
 
-        # 中央：时相百分比显示（已在UI中隐藏，保留对象以兼容后续需要）
-        self.phase_percentage_label = qt.QLabel("")
+        # 中央：时相百分比显示
+        self.phase_percentage_label = qt.QLabel("0.0%")
         self.phase_percentage_label.setAlignment(qt.Qt.AlignCenter)
         self.phase_percentage_label.setStyleSheet(
             """
             QLabel { font-size: 14px; font-weight: bold; color: #1976d2; background: transparent; border: none; padding: 4px 8px; border-radius: 5px; }
             """
         )
-        # 隐藏R-R间期显示（仅移除UI展示，不影响内部相位百分比计算与存储）
-        self.phase_percentage_label.setVisible(False)
         phase_info_layout.addWidget(self.phase_percentage_label, 1)
+        
+        # 右侧：占位符保持平衡
+        spacer_label = qt.QLabel("")
+        spacer_label.setFixedWidth(60)  # 与左侧标签同宽
+        phase_info_layout.addWidget(spacer_label)
 
         content_layout.addLayout(phase_info_layout)
 
@@ -430,9 +434,9 @@ class CardiacCycleWidget(qt.QWidget):
             # 设置当前帧
             browser_node.SetSelectedItemNumber(value)
             
-            # 计算并（如需）显示R-R间期百分比
+            # 计算并显示当前时相百分比
             total_frames = sequence_node.GetNumberOfDataNodes()
-            if total_frames > 0 and self.phase_percentage_label.isVisible():
+            if total_frames > 0:
                 percentage = (value / (total_frames - 1)) * 100 if total_frames > 1 else 0
                 self.phase_percentage_label.setText(f"{percentage:.1f}%")
             
