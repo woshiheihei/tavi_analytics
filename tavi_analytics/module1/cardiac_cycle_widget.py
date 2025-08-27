@@ -114,14 +114,16 @@ class CardiacCycleWidget(qt.QWidget):
         )
         phase_info_layout.addWidget(current_phase_label)
 
-        # 中央：时相百分比显示
-        self.phase_percentage_label = qt.QLabel("0.0% R-R间期")
+        # 中央：时相百分比显示（已在UI中隐藏，保留对象以兼容后续需要）
+        self.phase_percentage_label = qt.QLabel("")
         self.phase_percentage_label.setAlignment(qt.Qt.AlignCenter)
         self.phase_percentage_label.setStyleSheet(
             """
             QLabel { font-size: 14px; font-weight: bold; color: #1976d2; background: transparent; border: none; padding: 4px 8px; border-radius: 5px; }
             """
         )
+        # 隐藏R-R间期显示（仅移除UI展示，不影响内部相位百分比计算与存储）
+        self.phase_percentage_label.setVisible(False)
         phase_info_layout.addWidget(self.phase_percentage_label, 1)
 
         content_layout.addLayout(phase_info_layout)
@@ -213,10 +215,20 @@ class CardiacCycleWidget(qt.QWidget):
         # 舒张末期按钮
         self.mark_end_diastole_button = qt.QPushButton("✓ 标记舒张末期")
         self.mark_end_diastole_button.setEnabled(False)
-        self.mark_end_diastole_button.setMinimumHeight(30)
+        self.mark_end_diastole_button.setMinimumHeight(50)  # 增加高度以容纳两行文本
+        self.mark_end_diastole_button.setMaximumHeight(60)  # 设置最大高度
         self.mark_end_diastole_button.setStyleSheet(
             """
-            QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); color: white; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 5px 10px; }
+            QPushButton { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); 
+                color: white; 
+                border: none; 
+                border-radius: 5px; 
+                font-size: 11px; 
+                font-weight: 600; 
+                padding: 8px 10px; 
+                text-align: center;
+            }
             QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66bb6a, stop:1 #4caf50); }
             QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2e7d32, stop:1 #1b5e20); }
             QPushButton:disabled { background: #f5f5f5; color: #bdbdbd; border: 1px solid #e0e0e0; }
@@ -226,10 +238,20 @@ class CardiacCycleWidget(qt.QWidget):
         # 收缩末期按钮
         self.mark_end_systole_button = qt.QPushButton("✓ 标记收缩末期")
         self.mark_end_systole_button.setEnabled(False)
-        self.mark_end_systole_button.setMinimumHeight(30)
+        self.mark_end_systole_button.setMinimumHeight(50)  # 增加高度以容纳两行文本
+        self.mark_end_systole_button.setMaximumHeight(60)  # 设置最大高度
         self.mark_end_systole_button.setStyleSheet(
             """
-            QPushButton { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); color: white; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; padding: 5px 10px; }
+            QPushButton { 
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4caf50, stop:1 #2e7d32); 
+                color: white; 
+                border: none; 
+                border-radius: 5px; 
+                font-size: 11px; 
+                font-weight: 600; 
+                padding: 8px 10px; 
+                text-align: center;
+            }
             QPushButton:hover { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66bb6a, stop:1 #4caf50); }
             QPushButton:pressed { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2e7d32, stop:1 #1b5e20); }
             QPushButton:disabled { background: #f5f5f5; color: #bdbdbd; border: 1px solid #e0e0e0; }
@@ -408,11 +430,11 @@ class CardiacCycleWidget(qt.QWidget):
             # 设置当前帧
             browser_node.SetSelectedItemNumber(value)
             
-            # 计算并显示R-R间期百分比
+            # 计算并（如需）显示R-R间期百分比
             total_frames = sequence_node.GetNumberOfDataNodes()
-            if total_frames > 0:
+            if total_frames > 0 and self.phase_percentage_label.isVisible():
                 percentage = (value / (total_frames - 1)) * 100 if total_frames > 1 else 0
-                self.phase_percentage_label.setText(f"{percentage:.1f}% R-R间期")
+                self.phase_percentage_label.setText(f"{percentage:.1f}%")
             
             # 显示帧信息（隐藏的标签，仅用于兼容性）
             self.frame_info_label.setText(f"帧: {value + 1}/{total_frames}")
