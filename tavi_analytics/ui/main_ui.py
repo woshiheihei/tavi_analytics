@@ -264,8 +264,7 @@ class MainUI(qt.QWidget):
                 self._current_module = None
                 if self._navigation_bar:
                     self._navigation_bar.set_current_module(None)
-                self.update_status("会话已加载，UI已刷新", "success")
-                self._show_info_message("加载成功", f"已加载会话: {name}")
+                self.update_status(f"会话已加载: {name}", "success")
             else:
                 self._show_error_message("加载失败", result.get("message", "未知错误"))
         except Exception as e:
