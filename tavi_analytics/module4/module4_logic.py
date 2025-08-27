@@ -2,13 +2,15 @@
 模块四业务逻辑层
 
 瓣膜支架几何形态评估的核心逻辑处理。
+重构后使用统一的ContourDataManager管理所有轮廓（包括多层级平面）。
 """
 import logging
 from typing import Optional, Dict, Any, List
 
 try:
-    from ..core.domain_models import MultiLevelPlaneManager, ValvePlaneLevel
+    from ..core.domain_models import ValvePlaneLevel, CriticalContourType, CardiacPhase
     from ..services.valve_plane_config_service import get_valve_plane_config_service
+    from ..services.contour_positioning_service import get_contour_position_service
     from ..core.session import TAVRStudySession
 except ImportError:
     import os
@@ -17,13 +19,14 @@ except ImportError:
     parent_dir = os.path.dirname(current_dir)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from core.domain_models import MultiLevelPlaneManager, ValvePlaneLevel
+    from core.domain_models import ValvePlaneLevel, CriticalContourType, CardiacPhase
     from services.valve_plane_config_service import get_valve_plane_config_service
+    from services.contour_positioning_service import get_contour_position_service
     from core.session import TAVRStudySession
 
 
 class Module4Logic:
-    """模块四业务逻辑类"""
+    """模块四业务逻辑类 - 使用统一的轮廓管理系统"""
 
     def __init__(self, session: Optional[TAVRStudySession] = None):
         """初始化模块四逻辑"""
@@ -31,18 +34,11 @@ class Module4Logic:
         self.session = session
         self.logger = logging.getLogger(__name__)
         
-        # 多层级平面管理器
-        self._plane_managers = {
-            'end_diastole': MultiLevelPlaneManager(cardiac_phase='end_diastole'),
-            'end_systole': MultiLevelPlaneManager(cardiac_phase='end_systole')
-        }
-        
         # 瓣膜平面配置服务
         self._valve_config_service = get_valve_plane_config_service()
         
-        # 为平面管理器注入配置服务
-        for manager in self._plane_managers.values():
-            manager.set_valve_config(self._valve_config_service)
+        # 轮廓定位服务
+        self.contour_service = get_contour_position_service()
         
         # 当前瓣膜信息
         self._current_valve_manufacturer = ""
@@ -51,7 +47,7 @@ class Module4Logic:
         # 注册期像切换监听
         self._setup_phase_listener()
         
-        logging.info("Module4Logic 初始化完成")
+        logging.info("Module4Logic 初始化完成（使用统一轮廓管理）")
 
     def _setup_phase_listener(self):
         """设置期像切换监听"""
@@ -68,6 +64,9 @@ class Module4Logic:
                 # 获取当前期像状态
                 current_service_phase = phase_service.get_current_phase()
                 self.logger.info(f"Module4Logic 当前服务期像: {current_service_phase}")
+                
+                # 同步期像到轮廓服务
+                self.contour_service.set_current_phase(current_service_phase)
                 
             except Exception as e:
                 self.logger.error(f"设置期像监听失败: {e}")
@@ -90,10 +89,11 @@ class Module4Logic:
             old_internal_phase = self._current_phase
             
             self.logger.info(f"Module4Logic 内部期像映射: {new_phase} -> {internal_phase}")
-            self.logger.info(f"Module4Logic 当前内部期像: {old_internal_phase}")
             
             if internal_phase != self._current_phase:
                 self._current_phase = internal_phase
+                # 同步到轮廓服务
+                self.contour_service.set_current_phase(internal_phase)
                 self.logger.info(f"Module4Logic 期像已切换: {old_internal_phase} -> {internal_phase}")
             else:
                 self.logger.info(f"Module4Logic 期像无变化，保持: {internal_phase}")
@@ -210,9 +210,11 @@ class Module4Logic:
             self._current_valve_manufacturer = manufacturer
             self._current_valve_model = model
             
-            # 为所有期像的平面管理器设置级别映射
-            for manager in self._plane_managers.values():
-                manager.set_level_mappings(manufacturer, model)
+            # 通过会话为所有期像的轮廓管理器设置级别映射
+            if self.session:
+                for phase in ['end_diastole', 'end_systole']:
+                    manager = self.session.get_phase_contour_manager(phase)
+                    manager.set_valve_level_mappings(manufacturer, model, self._valve_config_service)
             
             self.logger.info(f"已设置瓣膜信息: {manufacturer} {model}")
             
@@ -221,7 +223,7 @@ class Module4Logic:
     
     def load_measurement_data(self, measurement_data: Dict[str, Any]) -> bool:
         """
-        从measurement.json数据中加载多层级平面
+        从measurement.json数据中加载多层级平面轮廓
         
         Args:
             measurement_data: 测量数据字典
@@ -232,33 +234,44 @@ class Module4Logic:
         try:
             available_heights = self._valve_config_service.get_available_heights()
             success_count = 0
-            total_phases = len(self._plane_managers)
             
             self.logger.info(f"开始加载测量数据，可用高度: {available_heights}")
             self.logger.info(f"数据键: {list(measurement_data.keys()) if measurement_data else 'None'}")
             
-            # 为所有期像加载平面数据
-            for phase, manager in self._plane_managers.items():
-                loaded_count = manager.load_planes_from_measurement_data(
-                    measurement_data, available_heights
-                )
-                if loaded_count == 0:
-                    self.logger.warning(f"期像 {phase} 未加载到任何平面数据")
-                else:
-                    self.logger.info(f"期像 {phase} 成功加载 {loaded_count} 个平面")
-                    success_count += 1
+            if not self.session:
+                self.logger.error("无法加载数据：session未设置")
+                return False
+            
+            # 为所有期像加载轮廓数据（包括多层级平面）
+            for phase in ['end_diastole', 'end_systole']:
+                try:
+                    manager = self.session.get_phase_contour_manager(phase)
+                    
+                    # 使用新的统一加载方法（自动包含多层级平面）
+                    if manager.load_from_measurement_json(measurement_data):
+                        # 如果自动加载没有包含所有高度，尝试专门加载多层级平面
+                        loaded_plane_count = manager.load_multi_level_planes_from_measurement_data(
+                            measurement_data, available_heights
+                        )
+                        self.logger.info(f"期像 {phase} 加载了 {loaded_plane_count} 个多层级平面轮廓")
+                        success_count += 1
+                    else:
+                        self.logger.warning(f"期像 {phase} 数据加载失败")
+                        
+                except Exception as e:
+                    self.logger.error(f"期像 {phase} 加载失败: {e}")
             
             # 至少有一个期像成功加载即认为成功
             success = success_count > 0
             
             if success:
-                self.logger.info(f"数据加载完成，{success_count}/{total_phases} 个期像成功加载平面数据")
+                self.logger.info(f"数据加载完成，{success_count}/2 个期像成功加载数据")
                 
                 # 如果已设置瓣膜信息，应用级别映射
                 if self._current_valve_manufacturer and self._current_valve_model:
                     self.set_valve_info(self._current_valve_manufacturer, self._current_valve_model)
             else:
-                self.logger.error("所有期像都未能加载平面数据")
+                self.logger.error("所有期像都未能加载数据")
             
             return success
             
@@ -266,13 +279,15 @@ class Module4Logic:
             self.logger.error(f"加载测量数据失败: {e}")
             return False
     
-    def get_current_plane_manager(self) -> MultiLevelPlaneManager:
-        """获取当前期像的平面管理器"""
-        return self._plane_managers.get(self._current_phase)
+    def get_current_contour_manager(self):
+        """获取当前期像的轮廓管理器"""
+        if self.session:
+            return self.session.get_phase_contour_manager(self._current_phase)
+        return None
     
     def get_plane_by_level(self, level: str) -> Optional[Any]:
         """
-        根据级别获取当前期像的平面
+        根据级别获取当前期像的平面轮廓
         
         Args:
             level: 平面级别 ('inflow', 'nadir', 'commissure')
@@ -280,17 +295,58 @@ class Module4Logic:
         Returns:
             平面轮廓对象或None
         """
-        manager = self.get_current_plane_manager()
-        if manager:
-            return manager.get_plane_by_level(level)
-        return None
+        try:
+            manager = self.get_current_contour_manager()
+            if manager:
+                # 查找该级别对应的多层级平面轮廓
+                for plane in manager.get_multi_level_planes():
+                    if plane.level_type == level:
+                        return plane
+            return None
+        except Exception as e:
+            self.logger.error(f"获取级别平面失败: {e}")
+            return None
+    
+    def get_plane_by_height(self, height: float) -> Optional[Any]:
+        """
+        根据高度获取当前期像的平面轮廓
+        
+        Args:
+            height: 平面高度 (cm)
+            
+        Returns:
+            平面轮廓对象或None
+        """
+        try:
+            manager = self.get_current_contour_manager()
+            if manager:
+                return manager.get_multi_level_plane_by_height(height)
+            return None
+        except Exception as e:
+            self.logger.error(f"获取高度平面失败: {e}")
+            return None
     
     def get_level_planes(self) -> Dict[str, Any]:
         """获取当前期像的所有级别平面"""
-        manager = self.get_current_plane_manager()
-        if manager:
-            return manager.get_level_planes()
-        return {}
+        try:
+            manager = self.get_current_contour_manager()
+            if manager:
+                return manager.get_level_planes()
+            return {}
+        except Exception as e:
+            self.logger.error(f"获取级别平面失败: {e}")
+            return {}
+    
+    def get_available_plane_heights(self) -> List[float]:
+        """获取当前期像的所有可用平面高度"""
+        try:
+            manager = self.get_current_contour_manager()
+            if manager:
+                return manager.get_available_plane_heights()
+            return []
+        except Exception as e:
+            self.logger.error(f"获取可用高度失败: {e}")
+            return []
     
     def get_valve_mapping_summary(self) -> Dict[str, Any]:
         """获取瓣膜映射摘要信息"""
@@ -354,8 +410,8 @@ class Module4Logic:
         return False
     
     def create_all_visualizations(self) -> Dict[str, bool]:
-        """为当前期像的所有平面创建可视化"""
-        manager = self.get_current_plane_manager()
+        """为当前期像的所有轮廓创建可视化"""
+        manager = self.get_current_contour_manager()
         if manager:
             return manager.create_all_visualizations()
         return {}
@@ -368,12 +424,200 @@ class Module4Logic:
     
     def remove_all_visualizations(self):
         """移除所有可视化"""
-        manager = self.get_current_plane_manager()
+        manager = self.get_current_contour_manager()
         if manager:
             manager.remove_all_visualizations()
     
+    # ========== 新增：轮廓定位方法（参考module3） ==========
+    
+    def switch_to_multi_level_plane(self, height: float, phase: Optional[str] = None) -> bool:
+        """
+        切换到指定高度的多层级平面
+        
+        Args:
+            height: 平面高度 (cm)
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            use_phase = phase or self._current_phase
+            plane_type = CriticalContourType.create_multi_level_plane_type(height)
+            
+            self.logger.info(f"开始切换到多层级平面 {height}cm，期像: {use_phase}")
+            
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour(plane_type, phase=use_phase)
+            
+            if success:
+                self.logger.info(f"成功切换到多层级平面 {height}cm")
+            else:
+                self.logger.error(f"切换到多层级平面 {height}cm 失败")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"切换到多层级平面时出错: {e}")
+            return False
+    
+    def switch_to_level_plane(self, level: str, phase: Optional[str] = None) -> bool:
+        """
+        切换到指定级别的平面
+        
+        Args:
+            level: 平面级别 ('inflow', 'nadir', 'commissure')
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            # 首先获取该级别对应的高度
+            plane = self.get_plane_by_level(level)
+            if not plane:
+                self.logger.error(f"未找到级别 {level} 对应的平面")
+                return False
+            
+            # 使用高度进行切换
+            return self.switch_to_multi_level_plane(plane.height, phase)
+            
+        except Exception as e:
+            self.logger.error(f"切换到级别平面时出错: {e}")
+            return False
+    
+    def switch_to_valve_stent_bottom_contour(self, phase: Optional[str] = None) -> bool:
+        """
+        切换到瓣膜支架底部轮廓
+        
+        Args:
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            use_phase = phase or self._current_phase
+            self.logger.info(f"开始切换到瓣膜支架底部轮廓，期像: {use_phase}")
+            
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('valve_stent_bottom', phase=use_phase)
+            
+            if success:
+                self.logger.info("成功切换到瓣膜支架底部轮廓")
+            else:
+                self.logger.error("切换到瓣膜支架底部轮廓失败")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"切换到瓣膜支架底部轮廓时出错: {e}")
+            return False
+    
+    def switch_to_sinus_of_valsalva_contour(self, phase: Optional[str] = None) -> bool:
+        """
+        一键将当前MPR视图切换到SinusOfValsalva轮廓
+        
+        Args:
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            bool: 切换成功返回True
+        """
+        try:
+            use_phase = phase or self._current_phase
+            self.logger.info(f"开始切换到SinusOfValsalva轮廓，期像: {use_phase}")
+            
+            # 使用轮廓定位服务执行切换
+            success = self.contour_service.switch_to_contour('sinus_of_valsalva', phase=use_phase)
+            
+            if success:
+                self.logger.info("成功切换到SinusOfValsalva轮廓")
+            else:
+                self.logger.error("切换到SinusOfValsalva轮廓失败")
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"切换到SinusOfValsalva轮廓时出错: {e}")
+            return False
+    
+    # 兼容方法：与module3保持API一致
+    def switch_to_sinus_of_valsalva_plane(self, phase: Optional[str] = None) -> bool:
+        """兼容方法：调用新的轮廓方法"""
+        return self.switch_to_sinus_of_valsalva_contour(phase)
+    
+    def get_supported_contours(self) -> Dict[str, str]:
+        """
+        获取支持的轮廓类型列表
+        
+        Returns:
+            Dict[str, str]: 轮廓类型到期像感知节点名称的映射
+        """
+        return self.contour_service.get_phase_aware_supported_contours()
+    
+    def get_contour_info(self, contour_type: str, node_name: Optional[str] = None, phase: Optional[str] = None) -> Optional[Dict]:
+        """
+        获取指定轮廓的详细信息
+        
+        Args:
+            contour_type: 轮廓类型
+            node_name: 自定义节点名称（当contour_type='custom'时使用）
+            phase: 指定期像，如果为None则使用当前期像
+            
+        Returns:
+            Optional[Dict]: 轮廓信息字典，包含中心点、法向量等
+        """
+        use_phase = phase or self._current_phase
+        return self.contour_service.get_contour_info(contour_type, node_name, use_phase)
+    
+    def check_contour_availability(self, phase: Optional[str] = None) -> dict:
+        """
+        检查所有关键轮廓的可用性
+        
+        Args:
+            phase: 指定期像，如果为None则使用当前期像
+        
+        Returns:
+            dict: 各个轮廓的可用性状态
+        """
+        try:
+            use_phase = phase or self._current_phase
+            return self.contour_service.check_phase_contour_availability(use_phase)
+        except Exception as e:
+            self.logger.error(f"检查轮廓可用性时出错: {e}")
+            return {}
+    
+    def get_multi_level_plane_summary(self) -> Dict[str, Any]:
+        """获取多层级平面摘要信息"""
+        try:
+            manager = self.get_current_contour_manager()
+            if not manager:
+                return {'error': '无法获取轮廓管理器'}
+            
+            planes = manager.get_multi_level_planes()
+            available_heights = manager.get_available_plane_heights()
+            level_planes = manager.get_level_planes()
+            
+            return {
+                'phase': self._current_phase,
+                'total_planes': len(planes),
+                'available_heights': available_heights,
+                'level_mappings': {
+                    level: plane.height if plane else None 
+                    for level, plane in level_planes.items()
+                },
+                'valve_info': {
+                    'manufacturer': self._current_valve_manufacturer,
+                    'model': self._current_valve_model
+                }
+            }
+        except Exception as e:
+            self.logger.error(f"获取多层级平面摘要失败: {e}")
+            return {'error': str(e)}
+    
     def update_from_session(self):
-        """从会话更新瓣膜信息和平面数据"""
+        """从会话更新瓣膜信息和轮廓数据"""
         if self.session:
             try:
                 success = False
@@ -388,14 +632,22 @@ class Module4Logic:
                     self.logger.info("已从会话更新瓣膜信息")
                     success = True
                 
-                # 尝试加载多层级平面数据
-                plane_data = self.session.get_multi_level_plane_data()
-                if plane_data:
-                    if self.load_measurement_data(plane_data):
-                        self.logger.info("已从会话加载多层级平面数据")
-                        success = True
+                # 从会话的轮廓仓库获取多层级平面数据
+                try:
+                    contour_repository = self.session.get_contour_repository()
+                    if contour_repository:
+                        # 检查是否有多层级平面数据
+                        for phase in ['end_diastole', 'end_systole']:
+                            manager = contour_repository.get_manager(phase)
+                            planes = manager.get_multi_level_planes()
+                            if planes:
+                                self.logger.info(f"从会话获取到期像 {phase} 的 {len(planes)} 个多层级平面")
+                                success = True
                     else:
-                        self.logger.warning("从会话加载平面数据失败")
+                        self.logger.warning("会话中未找到轮廓仓库")
+                        
+                except Exception as e:
+                    self.logger.error(f"从会话获取轮廓数据失败: {e}")
                 
                 return success
                 
@@ -408,9 +660,8 @@ class Module4Logic:
         try:
             logging.info("清理模块四逻辑资源")
             
-            # 清理所有平面管理器
-            for manager in self._plane_managers.values():
-                manager.clear()
+            # 移除所有可视化
+            self.remove_all_visualizations()
             
             # 重置状态
             self._current_valve_manufacturer = ""

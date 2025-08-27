@@ -16,6 +16,59 @@ class CriticalContourType(Enum):
     VALVE_STENT_BOTTOM = "Stent_Frame_Base_plane"  # 瓣膜支架的最底端闭合轮廓
     SINUS_OF_VALSALVA = "SOV_plane"     # Sinus Of Valsalva的轮廓
     STENT_BEST_FIT = "Stent_Cross_Sectional_0_Plane"          # 支架的best fit轮廓
+    
+    # 动态轮廓类型支持
+    @classmethod
+    def create_multi_level_plane_type(cls, height: float) -> 'DynamicContourType':
+        """创建多层级平面轮廓类型"""
+        return DynamicContourType(f"Stent_Frame_base_up_{height}_plane", height)
+    
+    @classmethod
+    def is_multi_level_plane_type(cls, type_value: str) -> bool:
+        """检查是否为多层级平面类型"""
+        import re
+        pattern = r"^Stent_Frame_base_up_([0-9]+(?:\.[0-9]+)?)_plane$"
+        return bool(re.match(pattern, type_value))
+    
+    @classmethod
+    def parse_multi_level_height(cls, type_value: str) -> Optional[float]:
+        """从类型值中解析高度"""
+        import re
+        pattern = r"^Stent_Frame_base_up_([0-9]+(?:\.[0-9]+)?)_plane$"
+        match = re.match(pattern, type_value)
+        if match:
+            try:
+                return float(match.group(1))
+            except ValueError:
+                return None
+        return None
+
+
+class DynamicContourType:
+    """动态轮廓类型 - 用于支持运行时生成的轮廓类型（如多层级平面）"""
+    
+    def __init__(self, value: str, height: Optional[float] = None):
+        self.value = value
+        self.height = height
+        self.name = value  # 兼容Enum接口
+    
+    def __str__(self):
+        return self.value
+    
+    def __repr__(self):
+        return f"DynamicContourType('{self.value}')"
+    
+    def __eq__(self, other):
+        if isinstance(other, DynamicContourType):
+            return self.value == other.value
+        elif isinstance(other, CriticalContourType):
+            return self.value == other.value
+        elif isinstance(other, str):
+            return self.value == other
+        return False
+    
+    def __hash__(self):
+        return hash(self.value)
 
 
 class CardiacPhase(Enum):
@@ -335,36 +388,83 @@ class ContourBase(ABC):
 class ContourFactory:
     """轮廓工厂 - 负责创建和注册轮廓类型"""
     
-    _registry: Dict[CriticalContourType, Type[ContourBase]] = {}
+    _registry: Dict[Union[CriticalContourType, str], Type[ContourBase]] = {}
     
     @classmethod
-    def register(cls, contour_type: CriticalContourType, contour_class: Type[ContourBase]):
+    def register(cls, contour_type: Union[CriticalContourType, DynamicContourType, str], contour_class: Type[ContourBase]):
         """注册轮廓类型"""
-        cls._registry[contour_type] = contour_class
-        logging.info(f"注册轮廓类型: {contour_type.value} -> {contour_class.__name__}")
+        key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+        cls._registry[key] = contour_class
+        logging.info(f"注册轮廓类型: {key} -> {contour_class.__name__}")
     
     @classmethod
-    def create_contour(cls, contour_type: CriticalContourType, cardiac_phase: Optional[str] = None) -> Optional[ContourBase]:
+    def create_contour(cls, contour_type: Union[CriticalContourType, DynamicContourType, str], 
+                      cardiac_phase: Optional[str] = None, **kwargs) -> Optional[ContourBase]:
         """创建轮廓实例"""
-        if contour_type not in cls._registry:
-            logging.warning(f"未注册的轮廓类型: {contour_type}")
-            return None
+        key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
         
-        contour_class = cls._registry[contour_type]
-        return contour_class(cardiac_phase=cardiac_phase)
+        # 首先尝试直接查找注册的类型
+        if key in cls._registry:
+            contour_class = cls._registry[key]
+            return contour_class(cardiac_phase=cardiac_phase, **kwargs)
+        
+        # 如果是多层级平面类型，使用MultiLevelPlaneContour
+        if CriticalContourType.is_multi_level_plane_type(key):
+            height = CriticalContourType.parse_multi_level_height(key)
+            if height is not None:
+                return MultiLevelPlaneContour(height=height, cardiac_phase=cardiac_phase, **kwargs)
+        
+        logging.warning(f"未注册的轮廓类型: {key}")
+        return None
     
     @classmethod
-    def get_registered_types(cls) -> List[CriticalContourType]:
+    def get_registered_types(cls) -> List[Union[CriticalContourType, str]]:
         """获取所有已注册的轮廓类型"""
-        return list(cls._registry.keys())
+        result = []
+        for key in cls._registry.keys():
+            # 尝试找到对应的枚举值
+            for enum_type in CriticalContourType:
+                if enum_type.value == key:
+                    result.append(enum_type)
+                    break
+            else:
+                # 如果没找到枚举值，添加字符串
+                result.append(key)
+        return result
     
     @classmethod
-    def load_contour_from_data(cls, contour_type: CriticalContourType, data: Dict[str, Any], cardiac_phase: Optional[str] = None) -> Optional[ContourBase]:
+    def load_contour_from_data(cls, contour_type: Union[CriticalContourType, DynamicContourType, str], 
+                              data: Dict[str, Any], cardiac_phase: Optional[str] = None) -> Optional[ContourBase]:
         """从数据创建并加载轮廓"""
         contour = cls.create_contour(contour_type, cardiac_phase)
         if contour and contour.load_from_data(data):
             return contour
         return None
+    
+    @classmethod
+    def discover_contour_types_from_data(cls, measurement_data: Dict[str, Any]) -> List[Union[CriticalContourType, DynamicContourType]]:
+        """从measurement数据中发现所有可用的轮廓类型"""
+        discovered_types = []
+        
+        # 添加标准轮廓类型
+        for standard_type in CriticalContourType:
+            if standard_type.value in measurement_data:
+                discovered_types.append(standard_type)
+        
+        # 发现多层级平面类型
+        import re
+        pattern = re.compile(r"^Stent_Frame_base_up_([0-9]+(?:\.[0-9]+)?)_plane$")
+        for key in measurement_data.keys():
+            match = pattern.match(key)
+            if match:
+                try:
+                    height = float(match.group(1))
+                    dynamic_type = CriticalContourType.create_multi_level_plane_type(height)
+                    discovered_types.append(dynamic_type)
+                except ValueError:
+                    continue
+        
+        return discovered_types
 
 
 @dataclass
@@ -1171,8 +1271,8 @@ class ContourDataManager:
     
     def __init__(self, cardiac_phase: Optional[str] = None):
         self.logger = logging.getLogger(__name__)
-        # 使用动态字典存储轮廓，替代硬编码字段
-        self._contours: Dict[CriticalContourType, ContourBase] = {}
+        # 使用字符串键的字典存储轮廓，支持动态类型
+        self._contours: Dict[str, ContourBase] = {}
         self._raw_data: Dict[str, Any] = {}
         self.cardiac_phase = cardiac_phase  # 期像信息：'end_diastole' 或 'end_systole'
     
@@ -1190,22 +1290,25 @@ class ContourDataManager:
             self._raw_data = measurement_data.copy()
             success_count = 0
             
-            # 动态加载所有注册的轮廓类型
-            for contour_type in ContourFactory.get_registered_types():
+            # 自动发现所有可用的轮廓类型（包括多层级平面）
+            discovered_types = ContourFactory.discover_contour_types_from_data(measurement_data)
+            
+            # 动态加载所有发现的轮廓类型
+            for contour_type in discovered_types:
                 if self._load_contour_dynamic(measurement_data, contour_type):
                     success_count += 1
             
-            self.logger.info(f"成功加载 {success_count}/{len(ContourFactory.get_registered_types())} 个关键轮廓")
+            self.logger.info(f"成功加载 {success_count}/{len(discovered_types)} 个轮廓（包括多层级平面）")
             return success_count > 0
             
         except Exception as e:
             self.logger.error(f"加载轮廓数据失败: {e}")
             return False
     
-    def _load_contour_dynamic(self, data: Dict[str, Any], contour_type: CriticalContourType) -> bool:
+    def _load_contour_dynamic(self, data: Dict[str, Any], contour_type: Union[CriticalContourType, DynamicContourType]) -> bool:
         """动态加载指定类型的轮廓"""
         try:
-            contour_key = contour_type.value
+            contour_key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
             if contour_key not in data:
                 self.logger.warning(f"未找到 {contour_key} 数据")
                 return False
@@ -1215,37 +1318,146 @@ class ContourDataManager:
             # 使用工厂创建轮廓实例
             contour = ContourFactory.load_contour_from_data(contour_type, contour_data, self.cardiac_phase)
             if contour:
-                self._contours[contour_type] = contour
+                # 使用字符串键存储，以支持动态类型
+                storage_key = contour_key
+                self._contours[storage_key] = contour
                 self.logger.info(f"成功加载{contour.description}")
                 return True
             else:
-                self.logger.error(f"创建{contour_type.value}轮廓失败")
+                self.logger.error(f"创建{contour_key}轮廓失败")
                 return False
                 
         except Exception as e:
-            self.logger.error(f"加载{contour_type.value}轮廓失败: {e}")
+            contour_key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+            self.logger.error(f"加载{contour_key}轮廓失败: {e}")
             return False
     
     # ========== 动态轮廓访问方法 ==========
-    def get_contour(self, contour_type: CriticalContourType) -> Optional[ContourBase]:
+    def get_contour(self, contour_type: Union[CriticalContourType, DynamicContourType, str]) -> Optional[ContourBase]:
         """获取指定类型的轮廓"""
-        return self._contours.get(contour_type)
+        key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+        return self._contours.get(key)
     
-    def set_contour(self, contour_type: CriticalContourType, contour: ContourBase):
+    def set_contour(self, contour_type: Union[CriticalContourType, DynamicContourType, str], contour: ContourBase):
         """设置指定类型的轮廓"""
-        self._contours[contour_type] = contour
+        key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+        self._contours[key] = contour
     
-    def has_contour(self, contour_type: CriticalContourType) -> bool:
+    def has_contour(self, contour_type: Union[CriticalContourType, DynamicContourType, str]) -> bool:
         """检查是否有指定类型的轮廓"""
-        return contour_type in self._contours
+        key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+        return key in self._contours
     
     def get_all_contours(self) -> List[ContourBase]:
         """获取所有已加载的轮廓"""
         return list(self._contours.values())
     
-    def get_loaded_contour_types(self) -> List[CriticalContourType]:
-        """获取所有已加载的轮廓类型"""
+    def get_loaded_contour_types(self) -> List[str]:
+        """获取所有已加载的轮廓类型键"""
         return list(self._contours.keys())
+    
+    def get_multi_level_planes(self) -> List['MultiLevelPlaneContour']:
+        """获取所有多层级平面轮廓"""
+        planes = []
+        for key, contour in self._contours.items():
+            if contour.__class__.__name__ == 'MultiLevelPlaneContour':
+                planes.append(contour)
+        # 按高度排序
+        return sorted(planes, key=lambda p: p.height)
+    
+    def get_multi_level_plane_by_height(self, height: float) -> Optional['MultiLevelPlaneContour']:
+        """根据高度获取多层级平面轮廓"""
+        plane_type = CriticalContourType.create_multi_level_plane_type(height)
+        contour = self.get_contour(plane_type)
+        return contour if contour.__class__.__name__ == 'MultiLevelPlaneContour' else None
+    
+    def get_available_plane_heights(self) -> List[float]:
+        """获取所有可用的平面高度"""
+        heights = []
+        for contour in self._contours.values():
+            if contour.__class__.__name__ == 'MultiLevelPlaneContour':
+                heights.append(contour.height)
+        return sorted(heights)
+    
+    def load_multi_level_planes_from_measurement_data(self, measurement_data: Dict[str, Any], 
+                                                    available_heights: List[float]) -> int:
+        """
+        专门加载多层级平面的便利方法（保持向后兼容）
+        
+        Args:
+            measurement_data: 测量数据字典
+            available_heights: 可用的高度列表
+            
+        Returns:
+            int: 成功加载的平面数量
+        """
+        loaded_count = 0
+        
+        # 发现所有多层级平面类型
+        discovered_plane_types = []
+        for contour_type in ContourFactory.discover_contour_types_from_data(measurement_data):
+            if hasattr(contour_type, 'height') and contour_type.height is not None:
+                discovered_plane_types.append(contour_type)
+        
+        # 如果没有找到动态平面，尝试从可用高度创建
+        if not discovered_plane_types:
+            for height in available_heights:
+                plane_type = CriticalContourType.create_multi_level_plane_type(height)
+                if plane_type.value in measurement_data:
+                    discovered_plane_types.append(plane_type)
+        
+        # 加载发现的平面
+        for plane_type in discovered_plane_types:
+            if self._load_contour_dynamic(measurement_data, plane_type):
+                loaded_count += 1
+        
+        self.logger.info(f"专门加载了 {loaded_count} 个多层级平面")
+        return loaded_count
+    
+    def set_valve_level_mappings(self, manufacturer: str, model: str, valve_config=None):
+        """
+        为多层级平面设置瓣膜级别映射
+        
+        Args:
+            manufacturer: 瓣膜厂家
+            model: 瓣膜型号  
+            valve_config: 瓣膜配置对象
+        """
+        if not valve_config:
+            self.logger.warning("瓣膜配置未提供，无法进行级别映射")
+            return
+        
+        try:
+            # 获取瓣膜特定的高度配置
+            valve_plane_config = valve_config.get_valve_plane_config(manufacturer, model)
+            
+            # 为每个多层级平面设置级别类型
+            for contour in self.get_multi_level_planes():
+                height = contour.height
+                if abs(height - valve_plane_config.inflow) < 0.01:
+                    contour.level_type = ValvePlaneLevel.INFLOW.value
+                elif abs(height - valve_plane_config.nadir) < 0.01:
+                    contour.level_type = ValvePlaneLevel.NADIR.value
+                elif abs(height - valve_plane_config.commissure) < 0.01:
+                    contour.level_type = ValvePlaneLevel.COMMISSURE.value
+                else:
+                    contour.level_type = None  # 其他高度不设置级别
+            
+            self.logger.info(f"完成瓣膜 {manufacturer} {model} 的级别映射")
+            
+        except Exception as e:
+            self.logger.error(f"设置级别映射失败: {e}")
+    
+    def get_level_planes(self) -> Dict[str, Optional['MultiLevelPlaneContour']]:
+        """获取各级别对应的平面"""
+        result = {}
+        for level in [ValvePlaneLevel.INFLOW.value, ValvePlaneLevel.NADIR.value, ValvePlaneLevel.COMMISSURE.value]:
+            result[level] = None
+            for plane in self.get_multi_level_planes():
+                if plane.level_type == level:
+                    result[level] = plane
+                    break
+        return result
     
     # 业务访问方法（现在使用动态访问）
     def get_valve_stent_bottom(self) -> Optional[ValveStentBottomContour]:
@@ -1280,11 +1492,11 @@ class ContourDataManager:
         """获取所有轮廓的测量数据"""
         measurements = {}
         
-        for contour_type, contour in self._contours.items():
+        for contour_key, contour in self._contours.items():
             try:
-                measurements[contour_type.value] = contour.get_measurements()
+                measurements[contour_key] = contour.get_measurements()
             except Exception as e:
-                self.logger.error(f"获取{contour_type.value}测量数据失败: {e}")
+                self.logger.error(f"获取{contour_key}测量数据失败: {e}")
         
         return measurements
     
@@ -1306,12 +1518,12 @@ class ContourDataManager:
         """为所有已加载的轮廓创建可视化"""
         results = {}
         
-        for contour_type, contour in self._contours.items():
+        for contour_key, contour in self._contours.items():
             try:
-                results[contour_type.value] = contour.create_visualization()
+                results[contour_key] = contour.create_visualization()
             except Exception as e:
-                self.logger.error(f"创建{contour_type.value}可视化失败: {e}")
-                results[contour_type.value] = False
+                self.logger.error(f"创建{contour_key}可视化失败: {e}")
+                results[contour_key] = False
         
         success_count = sum(1 for success in results.values() if success)
         self.logger.info(f"可视化创建结果: {success_count}/{len(results)}个成功")
@@ -1319,11 +1531,11 @@ class ContourDataManager:
     
     def remove_all_visualizations(self):
         """移除所有轮廓的可视化节点"""
-        for contour_type, contour in self._contours.items():
+        for contour_key, contour in self._contours.items():
             try:
                 contour.remove_slicer_node()
             except Exception as e:
-                self.logger.error(f"移除{contour_type.value}可视化失败: {e}")
+                self.logger.error(f"移除{contour_key}可视化失败: {e}")
         
         self.logger.info("已移除所有轮廓可视化节点")
     
@@ -1331,11 +1543,11 @@ class ContourDataManager:
         """获取各轮廓的可视化状态"""
         status = {}
         
-        for contour_type, contour in self._contours.items():
+        for contour_key, contour in self._contours.items():
             try:
-                status[contour_type.value] = contour.get_slicer_node() is not None
+                status[contour_key] = contour.get_slicer_node() is not None
             except:
-                status[contour_type.value] = False
+                status[contour_key] = False
         
         return status
     
@@ -1386,16 +1598,18 @@ class ContourDataManager:
         }
         
         # 动态序列化所有轮廓
-        for contour_type, contour in self._contours.items():
+        for contour_key, contour in self._contours.items():
             try:
-                data['contours'][contour_type.value] = contour.to_dict()
+                data['contours'][contour_key] = contour.to_dict()
             except Exception as e:
-                self.logger.error(f"序列化{contour_type.value}轮廓失败: {e}")
+                self.logger.error(f"序列化{contour_key}轮廓失败: {e}")
         
-        # 为了向后兼容，也包含旧的字段名
-        data['valve_stent_bottom'] = data['contours'].get(CriticalContourType.VALVE_STENT_BOTTOM.value)
-        data['sinus_of_valsalva'] = data['contours'].get(CriticalContourType.SINUS_OF_VALSALVA.value)
-        data['stent_best_fit'] = data['contours'].get(CriticalContourType.STENT_BEST_FIT.value)
+        # 为了向后兼容，也包含旧的字段名（如果存在对应的轮廓）
+        for standard_type in CriticalContourType:
+            if standard_type.value in self._contours:
+                # 使用枚举名作为兼容字段名
+                legacy_name = standard_type.name.lower()
+                data[legacy_name] = data['contours'][standard_type.value]
         
         return data
     
@@ -1409,21 +1623,30 @@ class ContourDataManager:
         
         # 首先尝试从新的contours字段加载
         contours_data = data.get('contours', {})
-        for contour_type_str, contour_data in contours_data.items():
+        for contour_key, contour_data in contours_data.items():
             try:
-                # 查找对应的轮廓类型枚举
-                contour_type = None
+                # 尝试确定轮廓类型
+                contour_type_obj = None
+                
+                # 检查是否为标准轮廓类型
                 for ct in CriticalContourType:
-                    if ct.value == contour_type_str:
-                        contour_type = ct
+                    if ct.value == contour_key:
+                        contour_type_obj = ct
                         break
                 
-                if contour_type:
-                    contour = ContourFactory.load_contour_from_data(contour_type, contour_data, cardiac_phase)
+                # 检查是否为多层级平面类型
+                if not contour_type_obj and CriticalContourType.is_multi_level_plane_type(contour_key):
+                    height = CriticalContourType.parse_multi_level_height(contour_key)
+                    if height is not None:
+                        contour_type_obj = CriticalContourType.create_multi_level_plane_type(height)
+                
+                if contour_type_obj:
+                    contour = ContourFactory.load_contour_from_data(contour_type_obj, contour_data, cardiac_phase)
                     if contour:
-                        manager._contours[contour_type] = contour
+                        manager._contours[contour_key] = contour
+                        
             except Exception as e:
-                manager.logger.error(f"恢复{contour_type_str}轮廓失败: {e}")
+                manager.logger.error(f"恢复{contour_key}轮廓失败: {e}")
         
         # 向后兼容：从旧字段名加载（如果新格式没有数据）
         if not manager._contours:
@@ -1440,7 +1663,7 @@ class ContourDataManager:
                         contour = contour_class.from_dict(contour_data)
                         if contour:
                             contour.cardiac_phase = cardiac_phase
-                            manager._contours[contour_type] = contour
+                            manager._contours[contour_type.value] = contour
                     except Exception as e:
                         manager.logger.error(f"恢复{field_name}轮廓失败: {e}")
         
@@ -1536,9 +1759,10 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
         self.level_type = level_type
     
     @property
-    def contour_type(self) -> CriticalContourType:
-        # 为多层级平面创建动态类型标识
-        return CriticalContourType.VALVE_STENT_BOTTOM  # 复用现有类型，但通过高度区分
+    def contour_type(self) -> Union[CriticalContourType, DynamicContourType]:
+        """轮廓类型"""
+        # 为多层级平面返回动态类型
+        return CriticalContourType.create_multi_level_plane_type(self.height)
     
     @property
     def json_field_name(self) -> str:
@@ -1918,3 +2142,5 @@ class MultiLevelPlaneManager:
 ContourFactory.register(CriticalContourType.VALVE_STENT_BOTTOM, ValveStentBottomContour)
 ContourFactory.register(CriticalContourType.SINUS_OF_VALSALVA, SinusOfValsalvaContour)
 ContourFactory.register(CriticalContourType.STENT_BEST_FIT, StentBestFitContour)
+
+# 注意：MultiLevelPlaneContour 通过工厂的动态创建机制处理，无需显式注册

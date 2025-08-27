@@ -15,6 +15,7 @@
 """
 
 import logging
+import re
 from typing import Optional, Dict, Any, Callable, List
 import qt
 
@@ -617,8 +618,9 @@ class PhaseManagementService(qt.QObject):
                     except Exception as e:
                         logging.warning(f"期像管理服务：强制隐藏分割节点失败: {e}")
             
-            # 2. 通过名称模式强制隐藏所有轮廓节点
-            contour_patterns = [
+            # 2. 动态发现并强制隐藏所有期像相关的轮廓节点
+            # 2.1 先处理固定的三个基础轮廓类型
+            basic_contour_patterns = [
                 "ValveStent_Bottom_Contour_End_Diastole",
                 "ValveStent_Bottom_Contour_End_Systole",
                 "SinusOfValsalva_Contour_End_Diastole", 
@@ -627,7 +629,7 @@ class PhaseManagementService(qt.QObject):
                 "StentBestFit_Contour_End_Systole",
             ]
             
-            for pattern in contour_patterns:
+            for pattern in basic_contour_patterns:
                 node = slicer.mrmlScene.GetFirstNodeByName(pattern)
                 if node:
                     disp = node.GetDisplayNode()
@@ -637,9 +639,47 @@ class PhaseManagementService(qt.QObject):
                             disp.SetVisibility2D(False)
                             disp.SetVisibility3D(False)
                             hidden_count += 1
-                            logging.info(f"期像管理服务：强制隐藏轮廓节点: {node.GetName()}")
+                            logging.info(f"期像管理服务：强制隐藏基础轮廓节点: {node.GetName()}")
                         except Exception as e:
-                            logging.warning(f"期像管理服务：强制隐藏轮廓节点失败: {e}")
+                            logging.warning(f"期像管理服务：强制隐藏基础轮廓节点失败: {e}")
+            
+            # 2.2 动态发现并隐藏多层级平面轮廓节点
+            import re
+            multi_level_pattern = re.compile(r"^StentPlane_.*cm.*_End_(Diastole|Systole)$")
+            
+            # 扫描所有标记点节点查找多层级轮廓
+            for i in range(slicer.mrmlScene.GetNumberOfNodesByClass("vtkMRMLMarkupsCurveNode")):
+                node = slicer.mrmlScene.GetNthNodeByClass(i, "vtkMRMLMarkupsCurveNode")
+                if node:
+                    node_name = node.GetName()
+                    if multi_level_pattern.match(node_name):
+                        disp = node.GetDisplayNode()
+                        if disp:
+                            try:
+                                disp.SetVisibility(False)
+                                disp.SetVisibility2D(False)
+                                disp.SetVisibility3D(False)
+                                hidden_count += 1
+                                logging.info(f"期像管理服务：强制隐藏多层级轮廓节点: {node_name}")
+                            except Exception as e:
+                                logging.warning(f"期像管理服务：强制隐藏多层级轮廓节点失败: {e}")
+            
+            # 2.3 也检查可能的其他标记点节点类型
+            for i in range(slicer.mrmlScene.GetNumberOfNodesByClass("vtkMRMLMarkupsFiducialNode")):
+                node = slicer.mrmlScene.GetNthNodeByClass(i, "vtkMRMLMarkupsFiducialNode")
+                if node:
+                    node_name = node.GetName()
+                    if multi_level_pattern.match(node_name):
+                        disp = node.GetDisplayNode()
+                        if disp:
+                            try:
+                                disp.SetVisibility(False)
+                                disp.SetVisibility2D(False)
+                                disp.SetVisibility3D(False)
+                                hidden_count += 1
+                                logging.info(f"期像管理服务：强制隐藏多层级标记点节点: {node_name}")
+                            except Exception as e:
+                                logging.warning(f"期像管理服务：强制隐藏多层级标记点节点失败: {e}")
             
             logging.info(f"期像管理服务：强制隐藏完成，共处理 {hidden_count} 个节点")
             
@@ -737,6 +777,56 @@ class PhaseManagementService(qt.QObject):
                                         logging.warning(f"期像管理服务：轮廓节点可视化设置失败: {e}")
             except Exception as e:
                 logging.warning(f"期像管理服务：领域模型轮廓节点处理失败(phase={phase_key}): {e}")
+            
+            # 3) 补充处理：直接扫描多层级平面轮廓节点
+            # 因为多层级轮廓可能没有完全整合到领域模型的轮廓管理器中
+            try:
+                # 将期像键转换为显示后缀格式
+                if phase_key == 'end_diastole':
+                    phase_suffix = 'End_Diastole'
+                elif phase_key == 'end_systole':
+                    phase_suffix = 'End_Systole'
+                else:
+                    phase_suffix = phase_key
+                
+                multi_level_pattern = re.compile(rf"^StentPlane_.*cm.*_{phase_suffix}$")
+                
+                # 扫描所有标记点节点查找当前期像的多层级轮廓
+                for i in range(slicer.mrmlScene.GetNumberOfNodesByClass("vtkMRMLMarkupsCurveNode")):
+                    node = slicer.mrmlScene.GetNthNodeByClass(i, "vtkMRMLMarkupsCurveNode")
+                    if node:
+                        node_name = node.GetName()
+                        if multi_level_pattern.match(node_name):
+                            disp = node.GetDisplayNode()
+                            if disp:
+                                try:
+                                    disp.SetVisibility(visible)
+                                    disp.SetVisibility2D(False)
+                                    disp.SetVisibility3D(visible)
+                                    processed_nodes['contour'] += 1
+                                    logging.info(f"期像管理服务：直接处理多层级轮廓节点 {node_name} 可视化设置为 {visible}")
+                                except Exception as e:
+                                    logging.warning(f"期像管理服务：多层级轮廓节点可视化设置失败: {e}")
+                
+                # 也检查可能的其他标记点节点类型
+                for i in range(slicer.mrmlScene.GetNumberOfNodesByClass("vtkMRMLMarkupsFiducialNode")):
+                    node = slicer.mrmlScene.GetNthNodeByClass(i, "vtkMRMLMarkupsFiducialNode")
+                    if node:
+                        node_name = node.GetName()
+                        if multi_level_pattern.match(node_name):
+                            disp = node.GetDisplayNode()
+                            if disp:
+                                try:
+                                    disp.SetVisibility(visible)
+                                    disp.SetVisibility2D(False)
+                                    disp.SetVisibility3D(visible)
+                                    processed_nodes['contour'] += 1
+                                    logging.info(f"期像管理服务：直接处理多层级标记点节点 {node_name} 可视化设置为 {visible}")
+                                except Exception as e:
+                                    logging.warning(f"期像管理服务：多层级标记点节点可视化设置失败: {e}")
+                                    
+            except Exception as e:
+                logging.warning(f"期像管理服务：直接扫描多层级轮廓节点失败(phase={phase_key}): {e}")
             
             # 总结处理结果
             total_processed = sum(processed_nodes.values())
