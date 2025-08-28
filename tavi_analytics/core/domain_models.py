@@ -473,24 +473,38 @@ class ContourFactory:
 
 @dataclass
 class ContourGeometry:
-    """轮廓几何数据基类"""
-    points: List[List[float]]           # 原始点集
-    less_points: List[List[float]]      # 简化点集
-    plane_params: List[float]           # 平面参数 [a, b, c, d]
-    perimeter: float                    # 周长
-    area: float                         # 面积
-    ped: float                          # PED (Perimeter-derived Equivalent Diameter)
-    aed: float                          # AED (Area-derived Equivalent Diameter)
-    max_dist: float                     # 最大距离
-    min_dist: float                     # 最小距离
-    average_dist: float                 # 平均距离
-    max_dist_pair: List[List[float]]    # 最大距离点对
-    min_dist_pair: List[List[float]]    # 最小距离点对
+    """轮廓几何数据基类 - 标准化字段名"""
+    name: str = ""                               # 名称
+    points: List[List[float]] = None            # 完整多边形点集
+    plane_params: List[float] = None            # 平面参数 [a, b, c, d]
+    less_points: List[List[float]] = None       # 可选的简化多边形点集
+    perimeter: float = 0.0                      # 可选的周长
+    area: float = 0.0                           # 可选的面积
+    PED: float = 0.0                            # 可选的 PED (Perimeter-derived Equivalent Diameter)
+    AED: float = 0.0                            # 可选的 AED (Area-derived Equivalent Diameter)
+    max_dist_pair: List[List[float]] = None     # 可选的最大距离点对
+    max_dist: float = 0.0                       # 可选的最大距离
+    min_dist_pair: List[List[float]] = None     # 可选的最小距离点对
+    min_dist: float = 0.0                       # 可选的最小距离
+    average_dist: float = 0.0                   # 可选的平均距离
     
     # Slicer节点管理
     _slicer_node_id: Optional[str] = None
     # 期像信息，用于生成包含期像的节点名称
     cardiac_phase: Optional[str] = None  # 'end_diastole' 或 'end_systole'
+    
+    def __post_init__(self):
+        """初始化后处理，确保列表字段不为None"""
+        if self.points is None:
+            self.points = []
+        if self.plane_params is None:
+            self.plane_params = []
+        if self.less_points is None:
+            self.less_points = []
+        if self.max_dist_pair is None:
+            self.max_dist_pair = []
+        if self.min_dist_pair is None:
+            self.min_dist_pair = []
     
     def to_dict(self) -> Dict[str, Any]:
         """将平面几何数据转换为字典格式"""
@@ -508,18 +522,19 @@ class ContourGeometry:
                 slicer_node_id = str(self._slicer_node_id) if self._slicer_node_id else None
         
         return {
+            'name': self.name,
             'points': self.points,
-            'less_points': self.less_points,
             'plane_params': self.plane_params,
+            'less_points': self.less_points,
             'perimeter': self.perimeter,
             'area': self.area,
-            'ped': self.ped,
-            'aed': self.aed,
+            'PED': self.PED,
+            'AED': self.AED,
+            'max_dist_pair': self.max_dist_pair,
             'max_dist': self.max_dist,
+            'min_dist_pair': self.min_dist_pair,
             'min_dist': self.min_dist,
             'average_dist': self.average_dist,
-            'max_dist_pair': self.max_dist_pair,
-            'min_dist_pair': self.min_dist_pair,
             '_slicer_node_id': slicer_node_id,  # 安全的节点ID
             'cardiac_phase': self.cardiac_phase
         }
@@ -528,18 +543,19 @@ class ContourGeometry:
     def from_dict(cls, data: Dict[str, Any]) -> 'ContourGeometry':
         """从字典创建轮廓几何对象"""
         instance = cls(
+            name=data.get('name', ''),
             points=data.get('points', []),
-            less_points=data.get('less_points', []),
             plane_params=data.get('plane_params', []),
+            less_points=data.get('less_points', []),
             perimeter=data.get('perimeter', 0.0),
             area=data.get('area', 0.0),
-            ped=data.get('ped', 0.0),
-            aed=data.get('aed', 0.0),
-            max_dist=data.get('max_dist', 0.0),
-            min_dist=data.get('min_dist', 0.0),
-            average_dist=data.get('average_dist', 0.0),
+            PED=data.get('PED', 0.0),
+            AED=data.get('AED', 0.0),
             max_dist_pair=data.get('max_dist_pair', []),
-            min_dist_pair=data.get('min_dist_pair', [])
+            max_dist=data.get('max_dist', 0.0),
+            min_dist_pair=data.get('min_dist_pair', []),
+            min_dist=data.get('min_dist', 0.0),
+            average_dist=data.get('average_dist', 0.0)
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
         instance.cardiac_phase = data.get('cardiac_phase')
@@ -555,7 +571,9 @@ class ContourGeometry:
     @property
     def effective_points(self) -> List[List[float]]:
         """获取有效的点集（优先使用less_points）"""
-        return self.less_points if self.less_points else self.points
+        if self.less_points and len(self.less_points) > 0:
+            return self.less_points
+        return self.points if self.points else []
     
     def create_slicer_curve_node(self, node_name: str, contour_type: Optional[CriticalContourType] = None) -> Optional[str]:
         """
@@ -686,23 +704,25 @@ class ContourGeometry:
 class ValveStentBottomContour(ContourGeometry, ContourBase):
     """瓣膜支架最底端轮廓"""
     
-    def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
-                 ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
-                 max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
+    def __init__(self, name="", points=None, plane_params=None, less_points=None, 
+                 perimeter=0.0, area=0.0, PED=0.0, AED=0.0, max_dist_pair=None,
+                 max_dist=0.0, min_dist_pair=None, min_dist=0.0, average_dist=0.0, 
+                 cardiac_phase=None):
         # 初始化ContourGeometry的数据
         super().__init__(
+            name=name,
             points=points or [],
-            less_points=less_points or [],
             plane_params=plane_params or [],
+            less_points=less_points or [],
             perimeter=perimeter,
             area=area,
-            ped=ped,
-            aed=aed,
-            max_dist=max_dist,
-            min_dist=min_dist,
-            average_dist=average_dist,
+            PED=PED,
+            AED=AED,
             max_dist_pair=max_dist_pair or [],
-            min_dist_pair=min_dist_pair or []
+            max_dist=max_dist,
+            min_dist_pair=min_dist_pair or [],
+            min_dist=min_dist,
+            average_dist=average_dist
         )
         # 初始化ContourBase
         ContourBase.__init__(self, cardiac_phase)
@@ -714,19 +734,22 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
     def load_from_data(self, data: Dict[str, Any]) -> bool:
         """从数据字典加载轮廓数据"""
         try:
-            # 设置ContourGeometry的属性
+            # 设置ContourGeometry的标准字段
+            self.name = data.get('name', '')
             self.points = data.get('points', [])
             self.less_points = data.get('less_points', [])
             self.plane_params = data.get('plane_params', [])
             self.perimeter = data.get('perimeter', 0.0)
             self.area = data.get('area', 0.0)
-            self.ped = data.get('PED', 0.0)
-            self.aed = data.get('AED', 0.0)
+            # 标准字段名：PED/AED（不再兼容旧字段，严格按标准字段读取）
+            self.PED = data.get('PED', 0.0)
+            self.AED = data.get('AED', 0.0)
+            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist（严格字段）
+            self.max_dist_pair = data.get('max_dist_pair', [])
             self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist_pair = data.get('min_dist_pair', [])
             self.min_dist = data.get('min_dist', 0.0)
             self.average_dist = data.get('average_dist', 0.0)
-            self.max_dist_pair = data.get('max_dist_pair', [])
-            self.min_dist_pair = data.get('min_dist_pair', [])
             self._slicer_node_id = data.get('_slicer_node_id')
             return True
         except Exception as e:
@@ -763,8 +786,8 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
     def get_stent_diameter(self) -> Dict[str, float]:
         """获取支架相关的直径测量"""
         return {
-            'perimeter_derived_diameter': self.ped,
-            'area_derived_diameter': self.aed,
+            'perimeter_derived_diameter': self.PED,
+            'area_derived_diameter': self.AED,
             'max_diameter': self.max_dist,
             'min_diameter': self.min_dist,
             'average_diameter': self.average_dist
@@ -785,18 +808,20 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
     def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomContour':
         """从字典创建瓣膜支架底部轮廓对象"""
         instance = cls(
+            name=data.get('name', ''),
             points=data.get('points', []),
-            less_points=data.get('less_points', []),
             plane_params=data.get('plane_params', []),
+            less_points=data.get('less_points', []),
             perimeter=data.get('perimeter', 0.0),
             area=data.get('area', 0.0),
-            ped=data.get('ped', 0.0),
-            aed=data.get('aed', 0.0),
+            PED=data.get('PED', 0.0),
+            AED=data.get('AED', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
             max_dist=data.get('max_dist', 0.0),
+            min_dist_pair=data.get('min_dist_pair', []),
             min_dist=data.get('min_dist', 0.0),
             average_dist=data.get('average_dist', 0.0),
-            max_dist_pair=data.get('max_dist_pair', []),
-            min_dist_pair=data.get('min_dist_pair', [])
+            cardiac_phase=data.get('cardiac_phase')
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
         return instance
@@ -806,23 +831,25 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
 class SinusOfValsalvaContour(ContourGeometry, ContourBase):
     """Sinus Of Valsalva轮廓"""
     
-    def __init__(self, points=None, less_points=None, plane_params=None, perimeter=0.0, area=0.0, 
-                 ped=0.0, aed=0.0, max_dist=0.0, min_dist=0.0, average_dist=0.0, 
-                 max_dist_pair=None, min_dist_pair=None, cardiac_phase=None):
+    def __init__(self, name="", points=None, plane_params=None, less_points=None, 
+                 perimeter=0.0, area=0.0, PED=0.0, AED=0.0, max_dist_pair=None,
+                 max_dist=0.0, min_dist_pair=None, min_dist=0.0, average_dist=0.0, 
+                 cardiac_phase=None):
         # 初始化ContourGeometry的数据
         super().__init__(
+            name=name,
             points=points or [],
-            less_points=less_points or [],
             plane_params=plane_params or [],
+            less_points=less_points or [],
             perimeter=perimeter,
             area=area,
-            ped=ped,
-            aed=aed,
-            max_dist=max_dist,
-            min_dist=min_dist,
-            average_dist=average_dist,
+            PED=PED,
+            AED=AED,
             max_dist_pair=max_dist_pair or [],
-            min_dist_pair=min_dist_pair or []
+            max_dist=max_dist,
+            min_dist_pair=min_dist_pair or [],
+            min_dist=min_dist,
+            average_dist=average_dist
         )
         # 初始化ContourBase
         ContourBase.__init__(self, cardiac_phase)
@@ -834,19 +861,22 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
     def load_from_data(self, data: Dict[str, Any]) -> bool:
         """从数据字典加载轮廓数据"""
         try:
-            # 设置ContourGeometry的属性
+            # 设置ContourGeometry的标准字段
+            self.name = data.get('name', '')
             self.points = data.get('points', [])
             self.less_points = data.get('less_points', [])
             self.plane_params = data.get('plane_params', [])
             self.perimeter = data.get('perimeter', 0.0)
             self.area = data.get('area', 0.0)
-            self.ped = data.get('PED', 0.0)
-            self.aed = data.get('AED', 0.0)
+            # 标准字段名：PED/AED（不再兼容旧字段，严格按标准字段读取）
+            self.PED = data.get('PED', 0.0)
+            self.AED = data.get('AED', 0.0)
+            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist（严格字段）
+            self.max_dist_pair = data.get('max_dist_pair', [])
             self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist_pair = data.get('min_dist_pair', [])
             self.min_dist = data.get('min_dist', 0.0)
             self.average_dist = data.get('average_dist', 0.0)
-            self.max_dist_pair = data.get('max_dist_pair', [])
-            self.min_dist_pair = data.get('min_dist_pair', [])
             self._slicer_node_id = data.get('_slicer_node_id')
             return True
         except Exception as e:
@@ -885,8 +915,8 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
         return {
             'sinus_perimeter': self.perimeter,
             'sinus_area': self.area,
-            'sinus_ped': self.ped,
-            'sinus_aed': self.aed,
+            'sinus_ped': self.PED,
+            'sinus_aed': self.AED,
             'sinus_max_diameter': self.max_dist,
             'sinus_min_diameter': self.min_dist
         }
@@ -906,18 +936,20 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
     def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaContour':
         """从字典创建Sinus Of Valsalva轮廓对象"""
         instance = cls(
+            name=data.get('name', ''),
             points=data.get('points', []),
-            less_points=data.get('less_points', []),
             plane_params=data.get('plane_params', []),
+            less_points=data.get('less_points', []),
             perimeter=data.get('perimeter', 0.0),
             area=data.get('area', 0.0),
-            ped=data.get('ped', 0.0),
-            aed=data.get('aed', 0.0),
+            PED=data.get('PED', 0.0),
+            AED=data.get('AED', 0.0),
+            max_dist_pair=data.get('max_dist_pair', []),
             max_dist=data.get('max_dist', 0.0),
+            min_dist_pair=data.get('min_dist_pair', []),
             min_dist=data.get('min_dist', 0.0),
             average_dist=data.get('average_dist', 0.0),
-            max_dist_pair=data.get('max_dist_pair', []),
-            min_dist_pair=data.get('min_dist_pair', [])
+            cardiac_phase=data.get('cardiac_phase')
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
         return instance
@@ -1498,7 +1530,18 @@ class ContourDataManager:
         
         for contour_key, contour in self._contours.items():
             try:
-                measurements[contour_key] = contour.get_measurements()
+                result = contour.get_measurements()
+                measurements[contour_key] = result
+                # 诊断：打印每个轮廓的测量摘要
+                try:
+                    if contour.__class__.__name__ == 'MultiLevelPlaneContour':
+                        # 对多层级平面，重点标注缺失项
+                        missing = [k for k, v in (result or {}).items() if (v is None) or (isinstance(v, (int, float)) and v <= 0)]
+                        logging.info(f"[Measurements] plane_key={contour_key} phase={getattr(contour, 'cardiac_phase', None)} height={getattr(contour, 'height', None)} level={getattr(contour, 'level_type', None)} values={result} missing_or_zero={missing}")
+                    else:
+                        logging.info(f"[Measurements] key={contour_key} values={result}")
+                except Exception:
+                    pass
             except Exception as e:
                 self.logger.error(f"获取{contour_key}测量数据失败: {e}")
         
@@ -1736,24 +1779,25 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
     height: float = 0.0  # 平面高度 (cm)
     level_type: Optional[str] = None  # 级别类型 (inflow/nadir/commissure)
     
-    def __init__(self, height=0.0, level_type=None, points=None, less_points=None, 
-                 plane_params=None, perimeter=0.0, area=0.0, ped=0.0, aed=0.0, 
-                 max_dist=0.0, min_dist=0.0, average_dist=0.0, max_dist_pair=None, 
-                 min_dist_pair=None, cardiac_phase=None):
+    def __init__(self, height=0.0, level_type=None, name="", points=None, plane_params=None, 
+                 less_points=None, perimeter=0.0, area=0.0, PED=0.0, AED=0.0, 
+                 max_dist_pair=None, max_dist=0.0, min_dist_pair=None, min_dist=0.0, 
+                 average_dist=0.0, cardiac_phase=None):
         # 初始化ContourGeometry的数据
         super().__init__(
+            name=name,
             points=points or [],
-            less_points=less_points or [],
             plane_params=plane_params or [],
+            less_points=less_points or [],
             perimeter=perimeter,
             area=area,
-            ped=ped,
-            aed=aed,
-            max_dist=max_dist,
-            min_dist=min_dist,
-            average_dist=average_dist,
+            PED=PED,
+            AED=AED,
             max_dist_pair=max_dist_pair or [],
-            min_dist_pair=min_dist_pair or []
+            max_dist=max_dist,
+            min_dist_pair=min_dist_pair or [],
+            min_dist=min_dist,
+            average_dist=average_dist
         )
         # 初始化ContourBase
         ContourBase.__init__(self, cardiac_phase)
@@ -1776,24 +1820,39 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
     def load_from_data(self, data: Dict[str, Any]) -> bool:
         """从数据字典加载轮廓数据"""
         try:
-            # 设置ContourGeometry的属性
+            # 设置ContourGeometry的标准字段
+            self.name = data.get('name', '')
             self.points = data.get('points', [])
             self.less_points = data.get('less_points', [])
             self.plane_params = data.get('plane_params', [])
             self.perimeter = data.get('perimeter', 0.0)
             self.area = data.get('area', 0.0)
-            # 兼容大小写键名
-            self.ped = data.get('PED', data.get('ped', 0.0))
-            self.aed = data.get('AED', data.get('aed', 0.0))
-            self.max_dist = data.get('max_dist', 0.0)
-            self.min_dist = data.get('min_dist', 0.0)
-            self.average_dist = data.get('average_dist', 0.0)
+            # 标准字段名：PED/AED（兼容各种变体）
+            self.PED = data.get('PED', data.get('ped', data.get('perimeter_derived_diameter', 0.0)))
+            self.AED = data.get('AED', data.get('aed', data.get('area_derived_diameter', 0.0)))
+            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist
             self.max_dist_pair = data.get('max_dist_pair', [])
+            self.max_dist = data.get('max_dist', data.get('max_diameter', data.get('longest_diameter', 0.0)))
             self.min_dist_pair = data.get('min_dist_pair', [])
+            self.min_dist = data.get('min_dist', data.get('min_diameter', data.get('shortest_diameter', 0.0)))
+            self.average_dist = data.get('average_dist', data.get('average_diameter', 0.0))
             self._slicer_node_id = data.get('_slicer_node_id')
             
-            # 调试信息：记录加载的测量参数
-            logging.debug(f"MultiLevelPlaneContour加载参数: height={self.height}, perimeter={self.perimeter}, area={self.area}, max_dist={self.max_dist}, min_dist={self.min_dist}")
+            # 调试/诊断：记录加载键与测量参数概览
+            present_keys = sorted(list(data.keys())) if isinstance(data, dict) else []
+            logging.info(
+                f"[MultiLevelPlane] phase={self.cardiac_phase} height={self.height}cm level={self.level_type} keys={present_keys} "
+                f"perimeter={self.perimeter}, area={self.area}, PED={self.PED}, AED={self.AED}, "
+                f"longest(max)={self.max_dist}, shortest(min)={self.min_dist}, average={self.average_dist}"
+            )
+            # 专门提示：除周长/面积外的派生字段是否缺失
+            if (
+                (self.PED or 0) <= 0 and (self.AED or 0) <= 0 and 
+                (self.max_dist or 0) <= 0 and (self.min_dist or 0) <= 0 and (self.average_dist or 0) <= 0
+            ):
+                logging.warning(
+                    f"[MultiLevelPlane] phase={self.cardiac_phase} height={self.height}cm 仅发现周长/面积，其他直径类字段缺失或为0"
+                )
             
             return True
         except Exception as e:
@@ -1822,15 +1881,24 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
     
     def get_plane_measurements(self) -> Dict[str, float]:
         """获取平面相关测量"""
-        return {
+        measurements = {
             'perimeter': self.perimeter,
             'area': self.area,
             'longest_diameter': self.max_dist,
             'shortest_diameter': self.min_dist,
-            'perimeter_derived_diameter': self.ped,
-            'area_derived_diameter': self.aed,
+            'perimeter_derived_diameter': self.PED,
+            'area_derived_diameter': self.AED,
             'average_diameter': self.average_dist
         }
+        # 诊断：输出测量字典与缺失字段
+        try:
+            missing = [k for k, v in measurements.items() if (v is None) or (isinstance(v, (int, float)) and v <= 0)]
+            logging.info(
+                f"[MultiLevelPlane] phase={self.cardiac_phase} height={self.height}cm level={self.level_type} measurements={measurements} missing_or_zero={missing}"
+            )
+        except Exception:
+            pass
+        return measurements
     
     def create_visualization(self) -> bool:
         """创建可视化节点"""
@@ -1855,18 +1923,19 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
         instance = cls(
             height=data.get('height', 0.0),
             level_type=data.get('level_type'),
+            name=data.get('name', ''),
             points=data.get('points', []),
-            less_points=data.get('less_points', []),
             plane_params=data.get('plane_params', []),
+            less_points=data.get('less_points', []),
             perimeter=data.get('perimeter', 0.0),
             area=data.get('area', 0.0),
-            ped=data.get('ped', 0.0),
-            aed=data.get('aed', 0.0),
+            PED=data.get('PED', data.get('ped', 0.0)),
+            AED=data.get('AED', data.get('aed', 0.0)),
+            max_dist_pair=data.get('max_dist_pair', []),
             max_dist=data.get('max_dist', 0.0),
+            min_dist_pair=data.get('min_dist_pair', []),
             min_dist=data.get('min_dist', 0.0),
             average_dist=data.get('average_dist', 0.0),
-            max_dist_pair=data.get('max_dist_pair', []),
-            min_dist_pair=data.get('min_dist_pair', []),
             cardiac_phase=data.get('cardiac_phase')
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
@@ -1997,23 +2066,11 @@ class MultiLevelPlaneManager:
                             self.logger.debug(f"原始轮廓数据键: {list(contour_data.keys())}")
                             self.logger.debug(f"测量参数: perimeter={contour_data.get('perimeter', 'N/A')}, area={contour_data.get('area', 'N/A')}")
                             
-                            # 如果原始数据中没有测量参数，尝试使用默认值或计算
-                            if not adapted_data.get('perimeter') and not adapted_data.get('area'):
-                                # 为演示目的，使用基于高度和期像的模拟值
-                                phase_multiplier = 1.0 if self.cardiac_phase == 'end_diastole' else 0.9  # 收缩期稍小
-                                base_perimeter = (70.0 + height * 2.0) * phase_multiplier  # 基础周长 + 高度系数 * 期像系数
-                                base_area = (380.0 + height * 10.0) * phase_multiplier     # 基础面积 + 高度系数 * 期像系数
-                                
-                                adapted_data.update({
-                                    'perimeter': base_perimeter,
-                                    'area': base_area,
-                                    'PED': base_perimeter / 3.14159,  # 周长推导直径
-                                    'AED': 2 * (base_area / 3.14159) ** 0.5,  # 面积推导直径
-                                    'max_dist': base_perimeter / 3.0,
-                                    'min_dist': base_perimeter / 4.0,
-                                    'average_dist': (base_perimeter / 3.0 + base_perimeter / 4.0) / 2
-                                })
-                                self.logger.info(f"为{self.cardiac_phase}期像高度{height}cm生成模拟测量参数，系数: {phase_multiplier}")
+                            # 严格从原始数据读取测量值：不生成模拟/默认数值
+                            if not adapted_data.get('perimeter') or not adapted_data.get('area'):
+                                self.logger.warning(
+                                    f"{description} 高度{height}cm 缺少周长或面积等测量参数，保持为空以反映原始数据"
+                                )
                             
                             if plane_contour.load_from_data(adapted_data):
                                 self._planes[height] = plane_contour

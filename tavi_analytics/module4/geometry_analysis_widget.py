@@ -732,27 +732,56 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             phase_info = measurements.get('phase', 'unknown')
             self.logger.info(f"更新{self.level_type}表格，期像: {phase_info}")
             
+            # 详细诊断：打印每个预期字段的值和类型
+            self.logger.info(f"[UI诊断] {self.level_type} 测量数据详情:")
+            for display_name, key, unit in param_mapping:
+                value = measurements.get(key, None)
+                value_type = type(value).__name__ if value is not None else "None"
+                self.logger.info(f"  {display_name}: key='{key}' value={value} type={value_type}")
+            
             for row, (display_name, key, unit) in enumerate(param_mapping):
                 value = measurements.get(key, 0.0)
-                self.logger.debug(f"参数 {display_name}: {key} = {value}")
+                self.logger.info(f"[行{row}] 处理参数 {display_name}: {key} = {value}")
                 
-                if isinstance(value, (int, float)) and value > 0:
-                    formatted_value = f"{value:.2f} {unit}"
+                # 更严格的数值检查
+                is_valid_number = False
+                try:
+                    if value is not None:
+                        # 尝试转换为浮点数
+                        numeric_value = float(value)
+                        is_valid_number = numeric_value > 0
+                        self.logger.info(f"[行{row}] 数值转换: {value} -> {numeric_value}, 有效={is_valid_number}")
+                    else:
+                        self.logger.info(f"[行{row}] 值为None")
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(f"[行{row}] 数值转换失败: {value} ({type(value).__name__}) - {e}")
+                    is_valid_number = False
+                
+                if is_valid_number:
+                    formatted_value = f"{float(value):.2f} {unit}"
+                    self.logger.info(f"[行{row}] 格式化为有效值: {formatted_value}")
                 else:
                     formatted_value = f"-- {unit}"
+                    self.logger.info(f"[行{row}] 格式化为占位符: {formatted_value} (原值={value}, 类型={type(value).__name__})")
                 
                 # 更新值
                 value_item = self.measurements_table.item(row, 1)
                 if value_item:
                     old_text = value_item.text()
                     value_item.setText(formatted_value)
-                    self.logger.debug(f"表格更新: {display_name} {old_text} -> {formatted_value}")
+                    self.logger.info(f"[行{row}] 表格更新: {display_name} '{old_text}' -> '{formatted_value}'")
                     
                     # 根据数值设置颜色
-                    if value > 0:
+                    if is_valid_number:
                         value_item.setForeground(qt.QColor("#059669"))  # 绿色表示有效数值
                     else:
                         value_item.setForeground(qt.QColor("#6b7280"))  # 灰色表示无效数值
+                else:
+                    self.logger.warning(f"[行{row}] 表格项为空，无法更新 {display_name}")
+                    
+            # 强制刷新表格显示
+            self.measurements_table.viewport().update()
+            self.logger.info(f"[UI刷新] {self.level_type} 测量表格已强制刷新")
                         
         except Exception as e:
             self.logger.error(f"更新测量参数表格失败: {e}")
