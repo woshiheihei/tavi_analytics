@@ -241,10 +241,6 @@ class ContourBase(ABC):
         """标准节点名称"""
         pass
     
-    @abstractmethod
-    def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据加载轮廓"""
-        pass
     
     @abstractmethod
     def create_visualization(self) -> bool:
@@ -256,10 +252,27 @@ class ContourBase(ABC):
         """获取测量数据"""
         pass
     
-    @abstractmethod
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
-        pass
+        """基础 to_dict 实现，使用模板方法模式"""
+        # 如果继承了 ContourGeometry，调用其 to_dict
+        if hasattr(super(), 'to_dict'):
+            base_dict = super().to_dict()
+        else:
+            base_dict = {'cardiac_phase': self.cardiac_phase}
+        
+        # 添加轮廓类型
+        base_dict['contour_type'] = self.__class__.__name__
+        
+        # 让子类添加额外字段
+        extra_fields = self.get_extra_dict_fields()
+        if extra_fields:
+            base_dict.update(extra_fields)
+        
+        return base_dict
+    
+    def get_extra_dict_fields(self) -> Dict[str, Any]:
+        """子类可重写此方法添加额外字段"""
+        return {}
     
     @classmethod
     @abstractmethod
@@ -506,6 +519,31 @@ class ContourGeometry:
         if self.min_dist_pair is None:
             self.min_dist_pair = []
     
+    def load_from_data(self, data: Dict[str, Any]) -> bool:
+        """从数据字典加载轮廓数据"""
+        try:
+            # 设置ContourGeometry的标准字段
+            self.name = data.get('name', '')
+            self.points = data.get('points', [])
+            self.less_points = data.get('less_points', [])
+            self.plane_params = data.get('plane_params', [])
+            self.perimeter = data.get('perimeter', 0.0)
+            self.area = data.get('area', 0.0)
+            # 标准字段名：PED/AED（不再兼容旧字段，严格按标准字段读取）
+            self.PED = data.get('PED', 0.0)
+            self.AED = data.get('AED', 0.0)
+            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist（严格字段）
+            self.max_dist_pair = data.get('max_dist_pair', [])
+            self.max_dist = data.get('max_dist', 0.0)
+            self.min_dist_pair = data.get('min_dist_pair', [])
+            self.min_dist = data.get('min_dist', 0.0)
+            self.average_dist = data.get('average_dist', 0.0)
+            self._slicer_node_id = data.get('_slicer_node_id')
+            return True
+        except Exception as e:
+            logging.error(f"加载轮廓几何数据失败: {e}")
+            return False
+    
     def to_dict(self) -> Dict[str, Any]:
         """将平面几何数据转换为字典格式"""
         # 安全转换节点ID（处理可能的节点对象）
@@ -676,28 +714,6 @@ class ContourGeometry:
             logging.error(f"创建Slicer曲线节点失败: {e}")
             return None
     
-    def get_slicer_node(self):
-        """获取对应的Slicer节点"""
-        if not self._slicer_node_id:
-            return None
-        
-        try:
-            import slicer
-            return slicer.mrmlScene.GetNodeByID(self._slicer_node_id)
-        except:
-            return None
-    
-    def remove_slicer_node(self):
-        """移除对应的Slicer节点"""
-        node = self.get_slicer_node()
-        if node:
-            try:
-                import slicer
-                slicer.mrmlScene.RemoveNode(node)
-                self._slicer_node_id = None
-                logging.info("已移除Slicer曲线节点")
-            except Exception as e:
-                logging.error(f"移除Slicer节点失败: {e}")
 
 
 @dataclass
@@ -731,30 +747,6 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
     def contour_type(self) -> CriticalContourType:
         return CriticalContourType.VALVE_STENT_BOTTOM
     
-    def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载轮廓数据"""
-        try:
-            # 设置ContourGeometry的标准字段
-            self.name = data.get('name', '')
-            self.points = data.get('points', [])
-            self.less_points = data.get('less_points', [])
-            self.plane_params = data.get('plane_params', [])
-            self.perimeter = data.get('perimeter', 0.0)
-            self.area = data.get('area', 0.0)
-            # 标准字段名：PED/AED（不再兼容旧字段，严格按标准字段读取）
-            self.PED = data.get('PED', 0.0)
-            self.AED = data.get('AED', 0.0)
-            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist（严格字段）
-            self.max_dist_pair = data.get('max_dist_pair', [])
-            self.max_dist = data.get('max_dist', 0.0)
-            self.min_dist_pair = data.get('min_dist_pair', [])
-            self.min_dist = data.get('min_dist', 0.0)
-            self.average_dist = data.get('average_dist', 0.0)
-            self._slicer_node_id = data.get('_slicer_node_id')
-            return True
-        except Exception as e:
-            logging.error(f"加载瓣膜支架底部轮廓数据失败: {e}")
-            return False
     
     def get_measurements(self) -> Dict[str, float]:
         """获取测量数据"""
@@ -774,14 +766,6 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
             return f"{base_name}_{phase_suffix}"
         return base_name
     
-    def _get_phase_suffix(self, phase: str) -> str:
-        """将期像转换为显示友好的后缀"""
-        if phase == 'end_diastole':
-            return 'End_Diastole'
-        elif phase == 'end_systole':
-            return 'End_Systole'
-        else:
-            return phase  # 回退到原始名称
     
     def get_stent_diameter(self) -> Dict[str, float]:
         """获取支架相关的直径测量"""
@@ -798,11 +782,6 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
         node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.VALVE_STENT_BOTTOM)
         return node_id is not None
     
-    def to_dict(self) -> Dict[str, Any]:
-        """将瓣膜支架底部轮廓数据转换为字典格式"""
-        base_dict = super().to_dict()
-        base_dict['contour_type'] = 'ValveStentBottomContour'
-        return base_dict
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomContour':
@@ -858,31 +837,6 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
     def contour_type(self) -> CriticalContourType:
         return CriticalContourType.SINUS_OF_VALSALVA
     
-    def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载轮廓数据"""
-        try:
-            # 设置ContourGeometry的标准字段
-            self.name = data.get('name', '')
-            self.points = data.get('points', [])
-            self.less_points = data.get('less_points', [])
-            self.plane_params = data.get('plane_params', [])
-            self.perimeter = data.get('perimeter', 0.0)
-            self.area = data.get('area', 0.0)
-            # 标准字段名：PED/AED（不再兼容旧字段，严格按标准字段读取）
-            self.PED = data.get('PED', 0.0)
-            self.AED = data.get('AED', 0.0)
-            # 标准字段名：max_dist_pair, max_dist, min_dist_pair, min_dist, average_dist（严格字段）
-            self.max_dist_pair = data.get('max_dist_pair', [])
-            self.max_dist = data.get('max_dist', 0.0)
-            self.min_dist_pair = data.get('min_dist_pair', [])
-            self.min_dist = data.get('min_dist', 0.0)
-            self.average_dist = data.get('average_dist', 0.0)
-            self._slicer_node_id = data.get('_slicer_node_id')
-            return True
-        except Exception as e:
-            logging.error(f"加载Sinus Of Valsalva轮廓数据失败: {e}")
-            return False
-    
     def get_measurements(self) -> Dict[str, float]:
         """获取测量数据"""
         return self.get_sinus_measurements()
@@ -901,14 +855,6 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
             return f"{base_name}_{phase_suffix}"
         return base_name
     
-    def _get_phase_suffix(self, phase: str) -> str:
-        """将期像转换为显示友好的后缀"""
-        if phase == 'end_diastole':
-            return 'End_Diastole'
-        elif phase == 'end_systole':
-            return 'End_Systole'
-        else:
-            return phase  # 回退到原始名称
     
     def get_sinus_measurements(self) -> Dict[str, float]:
         """获取窦部相关测量"""
@@ -926,11 +872,6 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
         node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.SINUS_OF_VALSALVA)
         return node_id is not None
     
-    def to_dict(self) -> Dict[str, Any]:
-        """将Sinus Of Valsalva轮廓数据转换为字典格式"""
-        base_dict = super().to_dict()
-        base_dict['contour_type'] = 'SinusOfValsalvaContour'
-        return base_dict
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaContour':
@@ -973,33 +914,19 @@ class StentBestFitContour(ContourBase):
     def contour_type(self) -> CriticalContourType:
         return CriticalContourType.STENT_BEST_FIT
     
-    def load_from_data(self, data: Dict[str, Any]) -> bool:
-        """从数据字典加载轮廓数据"""
-        try:
-            self.name = data.get('name', '')
-            self.plane_params = data.get('plane_params')
-            self.distance_to_zjd = data.get('distance_to_zjd', 0.0)
-            self.points = data.get('points')
-            self._slicer_node_id = data.get('_slicer_node_id')
-            return True
-        except Exception as e:
-            logging.error(f"加载支架拟合轮廓数据失败: {e}")
-            return False
     
     def get_measurements(self) -> Dict[str, float]:
         """获取测量数据"""
         return self.get_distance_measurement()
     
-    def to_dict(self) -> Dict[str, Any]:
-        """将支架最佳拟合轮廓数据转换为字典格式"""
+    def get_extra_dict_fields(self) -> Dict[str, Any]:
+        """返回额外字段"""
         return {
-            'contour_type': 'StentBestFitContour',
             'name': self.name,
             'plane_params': self.plane_params,
             'distance_to_zjd': self.distance_to_zjd,
             'points': self.points,
-            '_slicer_node_id': self._slicer_node_id,
-            'cardiac_phase': self.cardiac_phase
+            '_slicer_node_id': self._slicer_node_id
         }
     
     @classmethod
@@ -1029,14 +956,6 @@ class StentBestFitContour(ContourBase):
             return f"{base_name}_{phase_suffix}"
         return base_name
     
-    def _get_phase_suffix(self, phase: str) -> str:
-        """将期像转换为显示友好的后缀"""
-        if phase == 'end_diastole':
-            return 'End_Diastole'
-        elif phase == 'end_systole':
-            return 'End_Systole'
-        else:
-            return phase  # 回退到原始名称
     
     @property
     def has_valid_params(self) -> bool:
@@ -1062,30 +981,6 @@ class StentBestFitContour(ContourBase):
             'distance_to_reference': self.distance_to_zjd
         }
     
-    def to_dict(self) -> Dict[str, Any]:
-        """将支架最佳拟合平面数据转换为字典格式"""
-        return {
-            'plane_type': 'StentBestFitPlane',
-            'name': self.name,
-            'plane_params': self.plane_params,
-            'distance_to_zjd': self.distance_to_zjd,
-            'points': self.points,
-            '_slicer_node_id': self._slicer_node_id,
-            'cardiac_phase': self.cardiac_phase
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitContour':
-        """从字典创建支架最佳拟合平面对象"""
-        instance = cls(
-            name=data.get('name', ''),
-            plane_params=data.get('plane_params'),
-            distance_to_zjd=data.get('distance_to_zjd', 0.0),
-            points=data.get('points')
-        )
-        instance._slicer_node_id = data.get('_slicer_node_id')
-        instance.cardiac_phase = data.get('cardiac_phase')
-        return instance
     
     def create_visualization(self) -> bool:
         """创建可视化节点（优先创建闭合曲线，然后是平面，最后是标记点）"""
@@ -1275,28 +1170,6 @@ class StentBestFitContour(ContourBase):
         
         return False
     
-    def get_slicer_node(self):
-        """获取对应的Slicer节点"""
-        if not self._slicer_node_id:
-            return None
-        
-        try:
-            import slicer
-            return slicer.mrmlScene.GetNodeByID(self._slicer_node_id)
-        except:
-            return None
-    
-    def remove_slicer_node(self):
-        """移除对应的Slicer节点"""
-        node = self.get_slicer_node()
-        if node:
-            try:
-                import slicer
-                slicer.mrmlScene.RemoveNode(node)
-                self._slicer_node_id = None
-                logging.info("已移除支架拟合平面节点")
-            except Exception as e:
-                logging.error(f"移除支架拟合平面节点失败: {e}")
 
 
 class ContourDataManager:
@@ -1906,16 +1779,13 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
         node_id = self.create_slicer_curve_node(self.standard_node_name, CriticalContourType.VALVE_STENT_BOTTOM)
         return node_id is not None
     
-    def to_dict(self) -> Dict[str, Any]:
-        """将多层级平面轮廓数据转换为字典格式"""
-        base_dict = super().to_dict()
-        base_dict.update({
-            'contour_type': 'MultiLevelPlaneContour',
+    def get_extra_dict_fields(self) -> Dict[str, Any]:
+        """返回额外字段"""
+        return {
             'height': self.height,
             'level_type': self.level_type,
             'json_field_name': self.json_field_name
-        })
-        return base_dict
+        }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'MultiLevelPlaneContour':
