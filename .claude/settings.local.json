@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "mcp__slicer__execute_python_code",
-      "mcp__slicer__list_nodes"
+      "mcp__slicer__list_nodes",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

@@ -274,11 +274,6 @@ class ContourBase(ABC):
         """子类可重写此方法添加额外字段"""
         return {}
     
-    @classmethod
-    @abstractmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ContourBase':
-        """从字典创建实例"""
-        pass
     
     def get_slicer_node(self):
         """获取对应的Slicer节点"""
@@ -593,10 +588,10 @@ class ContourGeometry:
             max_dist=data.get('max_dist', 0.0),
             min_dist_pair=data.get('min_dist_pair', []),
             min_dist=data.get('min_dist', 0.0),
-            average_dist=data.get('average_dist', 0.0)
+            average_dist=data.get('average_dist', 0.0),
+            cardiac_phase=data.get('cardiac_phase')
         )
         instance._slicer_node_id = data.get('_slicer_node_id')
-        instance.cardiac_phase = data.get('cardiac_phase')
         return instance
     
     @property
@@ -783,27 +778,6 @@ class ValveStentBottomContour(ContourGeometry, ContourBase):
         return node_id is not None
     
     
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ValveStentBottomContour':
-        """从字典创建瓣膜支架底部轮廓对象"""
-        instance = cls(
-            name=data.get('name', ''),
-            points=data.get('points', []),
-            plane_params=data.get('plane_params', []),
-            less_points=data.get('less_points', []),
-            perimeter=data.get('perimeter', 0.0),
-            area=data.get('area', 0.0),
-            PED=data.get('PED', 0.0),
-            AED=data.get('AED', 0.0),
-            max_dist_pair=data.get('max_dist_pair', []),
-            max_dist=data.get('max_dist', 0.0),
-            min_dist_pair=data.get('min_dist_pair', []),
-            min_dist=data.get('min_dist', 0.0),
-            average_dist=data.get('average_dist', 0.0),
-            cardiac_phase=data.get('cardiac_phase')
-        )
-        instance._slicer_node_id = data.get('_slicer_node_id')
-        return instance
 
 
 @dataclass
@@ -873,27 +847,6 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
         return node_id is not None
     
     
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SinusOfValsalvaContour':
-        """从字典创建Sinus Of Valsalva轮廓对象"""
-        instance = cls(
-            name=data.get('name', ''),
-            points=data.get('points', []),
-            plane_params=data.get('plane_params', []),
-            less_points=data.get('less_points', []),
-            perimeter=data.get('perimeter', 0.0),
-            area=data.get('area', 0.0),
-            PED=data.get('PED', 0.0),
-            AED=data.get('AED', 0.0),
-            max_dist_pair=data.get('max_dist_pair', []),
-            max_dist=data.get('max_dist', 0.0),
-            min_dist_pair=data.get('min_dist_pair', []),
-            min_dist=data.get('min_dist', 0.0),
-            average_dist=data.get('average_dist', 0.0),
-            cardiac_phase=data.get('cardiac_phase')
-        )
-        instance._slicer_node_id = data.get('_slicer_node_id')
-        return instance
 
 
 @dataclass
@@ -1787,29 +1740,6 @@ class MultiLevelPlaneContour(ContourGeometry, ContourBase):
             'json_field_name': self.json_field_name
         }
     
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MultiLevelPlaneContour':
-        """从字典创建多层级平面轮廓对象"""
-        instance = cls(
-            height=data.get('height', 0.0),
-            level_type=data.get('level_type'),
-            name=data.get('name', ''),
-            points=data.get('points', []),
-            plane_params=data.get('plane_params', []),
-            less_points=data.get('less_points', []),
-            perimeter=data.get('perimeter', 0.0),
-            area=data.get('area', 0.0),
-            PED=data.get('PED', data.get('ped', 0.0)),
-            AED=data.get('AED', data.get('aed', 0.0)),
-            max_dist_pair=data.get('max_dist_pair', []),
-            max_dist=data.get('max_dist', 0.0),
-            min_dist_pair=data.get('min_dist_pair', []),
-            min_dist=data.get('min_dist', 0.0),
-            average_dist=data.get('average_dist', 0.0),
-            cardiac_phase=data.get('cardiac_phase')
-        )
-        instance._slicer_node_id = data.get('_slicer_node_id')
-        return instance
 
 
 class MultiLevelPlaneManager:
