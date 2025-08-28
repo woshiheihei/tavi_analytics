@@ -142,8 +142,8 @@ class ContourVisualizationManager:
     def apply_display_properties(cls, display_node, config: VisualizationConfig):
         """应用显示属性到Slicer显示节点"""
         if display_node:
-            # 基础可见性与尺寸
-            display_node.SetVisibility(True)
+            # 基础可见性与尺寸（默认隐藏所有轮廓线）
+            display_node.SetVisibility(False)
             if hasattr(display_node, 'SetLineWidth'):
                 display_node.SetLineWidth(config.line_width)
             if hasattr(display_node, 'SetGlyphScale'):
@@ -691,6 +691,13 @@ class ContourGeometry:
                 try:
                     if hasattr(display_node, 'SetSliceProjection'):
                         display_node.SetSliceProjection(False)
+                except Exception:
+                    pass
+                # 明确保持默认隐藏（仅在定位时短暂显示）
+                try:
+                    display_node.SetVisibility(False)
+                    if hasattr(display_node, 'SetVisibility3D'):
+                        display_node.SetVisibility3D(False)
                 except Exception:
                     pass
             

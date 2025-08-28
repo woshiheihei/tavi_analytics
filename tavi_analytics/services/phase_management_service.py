@@ -562,11 +562,10 @@ class PhaseManagementService(qt.QObject):
             # 第一步：全面扫描并强制隐藏所有期像相关节点
             self._force_hide_all_phase_nodes()
             
-            # 第二步：仅显示活动期像的节点
-            logging.info(f"期像管理服务：正在显示期像 {active_phase}...")
+            # 第二步：显示活动期像的分割；轮廓保持隐藏
+            logging.info(f"期像管理服务：显示期像 {active_phase} 的分割（轮廓保持隐藏）...")
             self._set_phase_nodes_visibility(active_phase, visible=True)
-            
-            logging.info(f"期像管理服务：可视化管理完成 - 仅显示 {active_phase}")
+            logging.info(f"期像管理服务：可视化管理完成 - 分割可见，轮廓隐藏 ({active_phase})")
             
         except Exception as e:
             logging.error(f"期像管理服务：可视化管理失败: {e}")
@@ -744,7 +743,7 @@ class PhaseManagementService(qt.QObject):
             except Exception as e:
                 logging.warning(f"期像管理服务：领域模型分割节点处理失败(phase={phase_key}): {e}")
             
-            # 2) 轮廓节点处理 - 领域模型方式
+            # 2) 轮廓节点处理 - 保持隐藏（不在期像切换时显示）
             try:
                 if hasattr(self.session, 'get_phase_contour_manager'):
                     contour_mgr = self.session.get_phase_contour_manager(phase_key)
@@ -759,12 +758,12 @@ class PhaseManagementService(qt.QObject):
                                 disp = node.GetDisplayNode()
                                 if disp:
                                     try:
-                                        disp.SetVisibility(visible)
+                                        # 轮廓在期像切换时一律隐藏
+                                        disp.SetVisibility(False)
                                         disp.SetVisibility2D(False)
-                                        disp.SetVisibility3D(visible)
-                                        processed_nodes['contour'] += 1
+                                        disp.SetVisibility3D(False)
                                         n = node.GetName() if hasattr(node, 'GetName') else ''
-                                        logging.info(f"期像管理服务：领域模型轮廓节点 {n} 可视化设置为 {visible}")
+                                        logging.info(f"期像管理服务：保持轮廓节点隐藏: {n}")
                                     except Exception as e:
                                         logging.warning(f"期像管理服务：轮廓节点可视化设置失败: {e}")
             except Exception as e:
@@ -783,7 +782,7 @@ class PhaseManagementService(qt.QObject):
                 
                 multi_level_pattern = re.compile(rf"^StentPlane_.*cm.*_{phase_suffix}$")
                 
-                # 扫描所有标记点节点查找当前期像的多层级轮廓
+                # 扫描所有标记点节点查找当前期像的多层级轮廓（保持隐藏）
                 for i in range(slicer.mrmlScene.GetNumberOfNodesByClass("vtkMRMLMarkupsCurveNode")):
                     node = slicer.mrmlScene.GetNthNodeByClass(i, "vtkMRMLMarkupsCurveNode")
                     if node:
@@ -792,11 +791,10 @@ class PhaseManagementService(qt.QObject):
                             disp = node.GetDisplayNode()
                             if disp:
                                 try:
-                                    disp.SetVisibility(visible)
+                                    disp.SetVisibility(False)
                                     disp.SetVisibility2D(False)
-                                    disp.SetVisibility3D(visible)
-                                    processed_nodes['contour'] += 1
-                                    logging.info(f"期像管理服务：直接处理多层级轮廓节点 {node_name} 可视化设置为 {visible}")
+                                    disp.SetVisibility3D(False)
+                                    logging.info(f"期像管理服务：多层级轮廓节点保持隐藏: {node_name}")
                                 except Exception as e:
                                     logging.warning(f"期像管理服务：多层级轮廓节点可视化设置失败: {e}")
                 
@@ -809,11 +807,10 @@ class PhaseManagementService(qt.QObject):
                             disp = node.GetDisplayNode()
                             if disp:
                                 try:
-                                    disp.SetVisibility(visible)
+                                    disp.SetVisibility(False)
                                     disp.SetVisibility2D(False)
-                                    disp.SetVisibility3D(visible)
-                                    processed_nodes['contour'] += 1
-                                    logging.info(f"期像管理服务：直接处理多层级标记点节点 {node_name} 可视化设置为 {visible}")
+                                    disp.SetVisibility3D(False)
+                                    logging.info(f"期像管理服务：多层级标记点节点保持隐藏: {node_name}")
                                 except Exception as e:
                                     logging.warning(f"期像管理服务：多层级标记点节点可视化设置失败: {e}")
                                     

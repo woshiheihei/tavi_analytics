@@ -125,6 +125,57 @@ class ContourPositionService:
             
             if success:
                 logging.info(f"成功切换到轮廓: {contour_type}")
+                # 在3D视图中短暂显示该轮廓3秒，然后隐藏
+                try:
+                    import slicer, qt
+                    node_to_flash = None
+                    # 确定节点名称
+                    if (contour_type == 'custom') and node_name:
+                        node_to_flash = slicer.mrmlScene.GetFirstNodeByName(node_name)
+                    else:
+                        # 预置或动态类型
+                        type_key = contour_type.value if hasattr(contour_type, 'value') else str(contour_type)
+                        use_phase = phase or self.current_phase
+                        if type_key in self.SUPPORTED_CONTOURS:
+                            critical_contour_type = self.SUPPORTED_CONTOURS[type_key]
+                            contour = ContourFactory.create_contour(critical_contour_type, use_phase)
+                            if contour:
+                                node_to_flash = slicer.mrmlScene.GetFirstNodeByName(contour.get_node_name())
+                        elif CriticalContourType.is_multi_level_plane_type(type_key):
+                            contour = ContourFactory.create_contour(type_key, use_phase)
+                            if contour:
+                                node_to_flash = slicer.mrmlScene.GetFirstNodeByName(contour.get_node_name())
+
+                    if node_to_flash:
+                        disp = node_to_flash.GetDisplayNode()
+                        if disp:
+                            # 先确保节点存在，如不存在则尝试让领域模型创建一次
+                            try:
+                                disp.SetVisibility(True)
+                                if hasattr(disp, 'SetVisibility3D'):
+                                    disp.SetVisibility3D(True)
+                                if hasattr(disp, 'SetVisibility2D'):
+                                    disp.SetVisibility2D(False)
+                            except Exception:
+                                pass
+
+                            # 使用单次计时器在3秒后隐藏
+                            def _hide_after_delay():
+                                try:
+                                    disp.SetVisibility(False)
+                                    if hasattr(disp, 'SetVisibility3D'):
+                                        disp.SetVisibility3D(False)
+                                except Exception:
+                                    pass
+                            timer = qt.QTimer()
+                            timer.setSingleShot(True)
+                            timer.setInterval(3000)
+                            # 需要保持引用，避免被GC回收
+                            self._last_flash_timer = timer
+                            timer.timeout.connect(_hide_after_delay)
+                            timer.start()
+                except Exception as e:
+                    logging.warning(f"切换后闪现轮廓失败: {e}")
             else:
                 logging.error(f"切换到轮廓失败: {contour_type}")
             
