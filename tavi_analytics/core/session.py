@@ -1038,12 +1038,7 @@ class TAVRStudySession:
             return None
         return self.contour_data_manager.get_sinus_of_valsalva()
     
-    def get_stent_best_fit_plane(self):
-        """获取支架最佳拟合平面"""
-        if self.contour_data_manager is None:
-            self.logger.warning("contour_data_manager未设置，请先调用set_active_contour_manager")
-            return None
-        return self.contour_data_manager.get_stent_best_fit()
+    # 已移除：get_stent_best_fit_plane 兼容接口
     
     def has_critical_planes(self) -> bool:
         """检查是否已加载关键平面"""

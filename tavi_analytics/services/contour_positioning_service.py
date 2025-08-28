@@ -50,7 +50,6 @@ class ContourPositionService:
     SUPPORTED_CONTOURS = {
         'valve_stent_bottom': CriticalContourType.VALVE_STENT_BOTTOM,
         'sinus_of_valsalva': CriticalContourType.SINUS_OF_VALSALVA,
-        'stent_best_fit': CriticalContourType.STENT_BEST_FIT,
         'custom': None  # 自定义轮廓，需要手动指定节点名称
     }
     
@@ -413,7 +412,6 @@ class ContourPositionService:
         return {
             'valve_stent_bottom': '瓣膜支架底部轮廓',
             'sinus_of_valsalva': 'Sinus Of Valsalva轮廓',
-            'stent_best_fit': '支架最佳拟合轮廓',
             'custom': '自定义轮廓'
         }
     

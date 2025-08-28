@@ -32,7 +32,6 @@ class ContourPositionManager:
     SUPPORTED_CONTOURS = {
         'valve_stent_bottom': 'ValveStent_Bottom_Contour',
         'sinus_of_valsalva': 'SinusOfValsalva_Contour',
-        'stent_best_fit': 'StentBestFit_Contour',
         'aortic_annulus': 'AorticAnnulus_Contour',
         'custom': None  # 自定义轮廓，需要手动指定节点名称
     }

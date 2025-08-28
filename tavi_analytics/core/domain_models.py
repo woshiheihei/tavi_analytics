@@ -15,7 +15,6 @@ class CriticalContourType(Enum):
     """关键轮廓类型枚举"""
     VALVE_STENT_BOTTOM = "Stent_Frame_Base_plane"  # 瓣膜支架的最底端闭合轮廓
     SINUS_OF_VALSALVA = "SOV_plane"     # Sinus Of Valsalva的轮廓
-    STENT_BEST_FIT = "Stent_Cross_Sectional_0_Plane"          # 支架的best fit轮廓
     
     # 动态轮廓类型支持
     @classmethod
@@ -131,12 +130,7 @@ class ContourVisualizationManager:
             color=(0.1, 0.6, 1.0),  # 更亮的天蓝色，表示窦部
             line_width=2.5,
             glyph_scale=1.5
-        ),
-        CriticalContourType.STENT_BEST_FIT: VisualizationConfig(
-            color=(1.0, 0.55, 0.0),  # 亮橙色，表示支架拟合
-            line_width=2.0,
-            glyph_scale=1.5
-        )
+    )
     }
     
     @classmethod
@@ -848,283 +842,6 @@ class SinusOfValsalvaContour(ContourGeometry, ContourBase):
     
     
 
-
-@dataclass
-class StentBestFitContour(ContourBase):
-    """支架最佳拟合轮廓"""
-    
-    def __init__(self, name="", plane_params=None, distance_to_zjd=0.0, points=None, cardiac_phase=None):
-        super().__init__(cardiac_phase)
-        self.name = name
-        self.plane_params = plane_params  # 可能为空字符串
-        self.distance_to_zjd = distance_to_zjd  # 到某个参考点的距离
-        self.points = points  # 添加点数据支持
-        
-        # Slicer节点管理（对于这个轮廓，可能不创建曲线，而是创建平面节点）
-        self._slicer_node_id: Optional[str] = None
-    
-    @property
-    def contour_type(self) -> CriticalContourType:
-        return CriticalContourType.STENT_BEST_FIT
-    
-    
-    def get_measurements(self) -> Dict[str, float]:
-        """获取测量数据"""
-        return self.get_distance_measurement()
-    
-    def get_extra_dict_fields(self) -> Dict[str, Any]:
-        """返回额外字段"""
-        return {
-            'name': self.name,
-            'plane_params': self.plane_params,
-            'distance_to_zjd': self.distance_to_zjd,
-            'points': self.points,
-            '_slicer_node_id': self._slicer_node_id
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StentBestFitContour':
-        """从字典创建支架最佳拟合轮廓对象"""
-        instance = cls(
-            name=data.get('name', ''),
-            plane_params=data.get('plane_params'),
-            distance_to_zjd=data.get('distance_to_zjd', 0.0),
-            points=data.get('points'),
-            cardiac_phase=data.get('cardiac_phase')
-        )
-        instance._slicer_node_id = data.get('_slicer_node_id')
-        return instance
-    
-    @property
-    def description(self) -> str:
-        return "支架最佳拟合轮廓"
-    
-    @property
-    def standard_node_name(self) -> str:
-        """生成包含期像信息的标准节点名称"""
-        base_name = "StentBestFit_Contour"
-        if self.cardiac_phase:
-            # 将期像转换为显示友好的名称
-            phase_suffix = self._get_phase_suffix(self.cardiac_phase)
-            return f"{base_name}_{phase_suffix}"
-        return base_name
-    
-    
-    @property
-    def has_valid_params(self) -> bool:
-        """检查平面参数是否有效"""
-        return (
-            self.plane_params is not None and 
-            isinstance(self.plane_params, list) and 
-            len(self.plane_params) >= 4
-        )
-    
-    @property
-    def has_curve_points(self) -> bool:
-        """检查是否有足够的点数据创建曲线"""
-        return (
-            self.points is not None and 
-            isinstance(self.points, list) and 
-            len(self.points) >= 3
-        )
-    
-    def get_distance_measurement(self) -> Dict[str, float]:
-        """获取距离测量"""
-        return {
-            'distance_to_reference': self.distance_to_zjd
-        }
-    
-    
-    def create_visualization(self) -> bool:
-        """创建可视化节点（优先创建闭合曲线，然后是平面，最后是标记点）"""
-        try:
-            import slicer
-            import vtk
-            import logging
-            
-            # 检查是否已存在同名节点
-            existing_node = slicer.mrmlScene.GetFirstNodeByName(self.standard_node_name)
-            if existing_node:
-                slicer.mrmlScene.RemoveNode(existing_node)
-            
-            # 优先级1：如果有点数据，创建闭合曲线（与其他平面一致）
-            if self.has_curve_points:
-                curve_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsCurveNode')
-                curve_node.SetName(self.standard_node_name)
-                
-                # 清除现有点
-                curve_node.RemoveAllControlPoints()
-                
-                # 添加点到曲线（进行LPS到RAS坐标转换）
-                for point in self.points:
-                    if len(point) >= 3:
-                        # LPS到RAS转换：x -> -x, y -> -y, z -> z
-                        ras_x = -point[0]
-                        ras_y = -point[1] 
-                        ras_z = point[2]
-                        curve_node.AddControlPoint(ras_x, ras_y, ras_z)
-                
-                # 创建闭合效果：添加第一个点作为最后一个点（也要转换坐标）
-                if len(self.points) > 2:
-                    first_point = self.points[0]
-                    if len(first_point) >= 3:
-                        ras_x = -first_point[0]
-                        ras_y = -first_point[1]
-                        ras_z = first_point[2]
-                        curve_node.AddControlPoint(ras_x, ras_y, ras_z)
-                
-                # 设置为样条曲线
-                try:
-                    curve_node.SetCurveTypeToSpline()
-                except:
-                    try:
-                        curve_node.SetCurveTypeToLinear()
-                    except:
-                        pass
-                
-                # 取消默认选中
-                try:
-                    if hasattr(curve_node, 'SetAllControlPointsSelected'):
-                        curve_node.SetAllControlPointsSelected(False)
-                except Exception:
-                    pass
-
-                # 应用统一的可视化配置
-                display_node = curve_node.GetDisplayNode()
-                if display_node:
-                    config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
-                    ContourVisualizationManager.apply_display_properties(display_node, config)
-                    # 关闭2D
-                    try:
-                        if hasattr(display_node, 'SetVisibility2D'):
-                            display_node.SetVisibility2D(False)
-                    except Exception:
-                        pass
-                    try:
-                        if hasattr(display_node, 'SetSliceProjection'):
-                            display_node.SetSliceProjection(False)
-                    except Exception:
-                        pass
-                    # 关闭3D（需求：StentBestFit 不在三维窗口显示）
-                    try:
-                        if hasattr(display_node, 'SetVisibility3D'):
-                            display_node.SetVisibility3D(False)
-                    except Exception:
-                        pass
-                
-                self._slicer_node_id = curve_node.GetID()
-                logging.info(f"成功创建支架拟合闭合曲线: {self.standard_node_name}")
-                return True
-            
-            # 优先级2：如果有平面参数，创建平面节点
-            elif self.has_valid_params:
-                plane_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsPlaneNode')
-                plane_node.SetName(self.standard_node_name)
-                
-                # 设置平面参数 [a, b, c, d] -> ax + by + cz + d = 0
-                a, b, c, d = self.plane_params[:4]
-                
-                # 计算平面的原点（最接近原点的点）
-                norm_sq = a*a + b*b + c*c
-                if norm_sq > 0:
-                    origin_lps = [-a*d/norm_sq, -b*d/norm_sq, -c*d/norm_sq]
-                    normal_lps = [a, b, c]
-                    
-                    # LPS到RAS转换
-                    origin_ras = [-origin_lps[0], -origin_lps[1], origin_lps[2]]
-                    normal_ras = [-normal_lps[0], -normal_lps[1], normal_lps[2]]
-                    
-                    plane_node.SetOrigin(origin_ras)
-                    plane_node.SetNormal(normal_ras)
-                    
-                    # 应用统一的可视化配置（平面节点）
-                    display_node = plane_node.GetDisplayNode()
-                    if display_node:
-                        config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
-                        # 复用统一样式，并稍微透明一些
-                        ContourVisualizationManager.apply_display_properties(display_node, config)
-                        try:
-                            display_node.SetOpacity(0.3)
-                        except Exception:
-                            pass
-                        # 关闭2D
-                        try:
-                            if hasattr(display_node, 'SetVisibility2D'):
-                                display_node.SetVisibility2D(False)
-                        except Exception:
-                            pass
-                        try:
-                            if hasattr(display_node, 'SetSliceProjection'):
-                                display_node.SetSliceProjection(False)
-                        except Exception:
-                            pass
-                        # 关闭3D（需求：StentBestFit 不在三维窗口显示）
-                        try:
-                            if hasattr(display_node, 'SetVisibility3D'):
-                                display_node.SetVisibility3D(False)
-                        except Exception:
-                            pass
-                    
-                    self._slicer_node_id = plane_node.GetID()
-                    logging.info(f"成功创建支架拟合平面节点: {self.standard_node_name}")
-                    return True
-            
-            # 优先级3：创建标记点表示距离信息
-            else:
-                point_node = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
-                point_node.SetName(self.standard_node_name + "_Reference")
-                
-                # 在原点创建一个标记点
-                point_node.AddControlPoint(0, 0, 0)
-                point_node.SetNthControlPointLabel(0, f"Best Fit Ref (d={self.distance_to_zjd:.1f}mm)")
-                
-                # 应用统一的可视化配置（标记点）
-                display_node = point_node.GetDisplayNode()
-                if display_node:
-                    config = ContourVisualizationManager.get_config(CriticalContourType.STENT_BEST_FIT)
-                    ContourVisualizationManager.apply_display_properties(display_node, config)
-                    # 放大标记点便于查看
-                    try:
-                        display_node.SetGlyphScale(3.0)
-                    except Exception:
-                        pass
-                    # 关闭2D
-                    try:
-                        if hasattr(display_node, 'SetVisibility2D'):
-                            display_node.SetVisibility2D(False)
-                    except Exception:
-                        pass
-                    try:
-                        if hasattr(display_node, 'SetSliceProjection'):
-                            display_node.SetSliceProjection(False)
-                    except Exception:
-                        pass
-                    # 关闭3D（需求：StentBestFit 不在三维窗口显示）
-                    try:
-                        if hasattr(display_node, 'SetVisibility3D'):
-                            display_node.SetVisibility3D(False)
-                    except Exception:
-                        pass
-
-                # 取消默认选中
-                try:
-                    if hasattr(point_node, 'SetAllControlPointsSelected'):
-                        point_node.SetAllControlPointsSelected(False)
-                except Exception:
-                    pass
-                
-                self._slicer_node_id = point_node.GetID()
-                logging.info(f"成功创建支架拟合参考点: {self.standard_node_name}")
-                return True
-                
-        except Exception as e:
-            logging.error(f"创建支架拟合平面可视化失败: {e}")
-            return False
-        
-        return False
-    
-
-
 class ContourDataManager:
     """
     轮廓数据管理器
@@ -1332,10 +1049,7 @@ class ContourDataManager:
         contour = self.get_contour(CriticalContourType.SINUS_OF_VALSALVA)
         return contour if isinstance(contour, SinusOfValsalvaContour) else None
     
-    def get_stent_best_fit(self) -> Optional[StentBestFitContour]:
-        """获取支架最佳拟合轮廓"""
-        contour = self.get_contour(CriticalContourType.STENT_BEST_FIT)
-        return contour if isinstance(contour, StentBestFitContour) else None
+    # 已移除：StentBestFitContour 相关访问方法
     
     def has_critical_contours(self) -> bool:
         """检查是否已加载关键轮廓"""
@@ -1346,7 +1060,6 @@ class ContourDataManager:
         return {
             'valve_stent_bottom_loaded': self.has_contour(CriticalContourType.VALVE_STENT_BOTTOM),
             'sinus_of_valsalva_loaded': self.has_contour(CriticalContourType.SINUS_OF_VALSALVA),
-            'stent_best_fit_loaded': self.has_contour(CriticalContourType.STENT_BEST_FIT),
             'has_any_critical_contour': self.has_critical_contours()
         }
     
@@ -1452,13 +1165,7 @@ class ContourDataManager:
                 'perimeter': sinus_of_valsalva.perimeter
             }
         
-        stent_best_fit = self.get_stent_best_fit()
-        if stent_best_fit:
-            summary['contour_details']['stent_best_fit'] = {
-                'description': stent_best_fit.description,
-                'has_valid_params': stent_best_fit.has_valid_params,
-                'distance_to_zjd': stent_best_fit.distance_to_zjd
-            }
+    # 已移除：stent_best_fit 相关业务摘要
         
         return summary
     
@@ -1525,8 +1232,7 @@ class ContourDataManager:
         if not manager._contours:
             legacy_mappings = [
                 (CriticalContourType.VALVE_STENT_BOTTOM, 'valve_stent_bottom', ValveStentBottomContour),
-                (CriticalContourType.SINUS_OF_VALSALVA, 'sinus_of_valsalva', SinusOfValsalvaContour),
-                (CriticalContourType.STENT_BEST_FIT, 'stent_best_fit', StentBestFitContour)
+                (CriticalContourType.SINUS_OF_VALSALVA, 'sinus_of_valsalva', SinusOfValsalvaContour)
             ]
             
             for contour_type, field_name, contour_class in legacy_mappings:
@@ -1841,8 +1547,7 @@ class MultiLevelPlaneManager:
         # 检查是否有可用的轮廓数据
         contour_mappings = {
             CriticalContourType.VALVE_STENT_BOTTOM.value: "瓣膜支架底部",
-            CriticalContourType.SINUS_OF_VALSALVA.value: "Sinus Of Valsalva",
-            CriticalContourType.STENT_BEST_FIT.value: "支架最佳拟合"
+            CriticalContourType.SINUS_OF_VALSALVA.value: "Sinus Of Valsalva"
         }
         
         for contour_type, description in contour_mappings.items():
@@ -2002,6 +1707,5 @@ class MultiLevelPlaneManager:
 # 注册所有轮廓类型到工厂
 ContourFactory.register(CriticalContourType.VALVE_STENT_BOTTOM, ValveStentBottomContour)
 ContourFactory.register(CriticalContourType.SINUS_OF_VALSALVA, SinusOfValsalvaContour)
-ContourFactory.register(CriticalContourType.STENT_BEST_FIT, StentBestFitContour)
 
 # 注意：MultiLevelPlaneContour 通过工厂的动态创建机制处理，无需显式注册

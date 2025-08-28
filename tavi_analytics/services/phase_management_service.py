@@ -363,8 +363,6 @@ class PhaseManagementService(qt.QObject):
                 "ValveStent_Bottom_Contour_End_Systole",
                 "SinusOfValsalva_Contour_End_Diastole", 
                 "SinusOfValsalva_Contour_End_Systole",
-                "StentBestFit_Contour_End_Diastole",
-                "StentBestFit_Contour_End_Systole",
             ]
             
             for pattern in contour_patterns:
@@ -625,8 +623,6 @@ class PhaseManagementService(qt.QObject):
                 "ValveStent_Bottom_Contour_End_Systole",
                 "SinusOfValsalva_Contour_End_Diastole", 
                 "SinusOfValsalva_Contour_End_Systole",
-                "StentBestFit_Contour_End_Diastole",
-                "StentBestFit_Contour_End_Systole",
             ]
             
             for pattern in basic_contour_patterns:
@@ -765,13 +761,9 @@ class PhaseManagementService(qt.QObject):
                                     try:
                                         disp.SetVisibility(visible)
                                         disp.SetVisibility2D(False)
-                                        
-                                        # StentBestFit 特殊处理 - 永远关闭
-                                        n = node.GetName() if hasattr(node, 'GetName') else ''
-                                        is_stent_best_fit = isinstance(n, str) and n.startswith('StentBestFit_Contour')
-                                        disp.SetVisibility3D(False if is_stent_best_fit else visible)
-                                        
+                                        disp.SetVisibility3D(visible)
                                         processed_nodes['contour'] += 1
+                                        n = node.GetName() if hasattr(node, 'GetName') else ''
                                         logging.info(f"期像管理服务：领域模型轮廓节点 {n} 可视化设置为 {visible}")
                                     except Exception as e:
                                         logging.warning(f"期像管理服务：轮廓节点可视化设置失败: {e}")

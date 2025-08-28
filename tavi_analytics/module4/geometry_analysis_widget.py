@@ -640,7 +640,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 
                 # 检查是否有轮廓类型的数据
                 contour_fields = []
-                for contour_type in ["Stent_Frame_Base_plane", "SOV_plane", "Stent_Cross_Sectional_0_Plane"]:
+                for contour_type in ["Stent_Frame_Base_plane", "SOV_plane"]:
                     if contour_type in source_data:
                         contour_fields.append(contour_type)
                 
