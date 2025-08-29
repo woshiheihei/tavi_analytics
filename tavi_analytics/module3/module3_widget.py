@@ -277,16 +277,12 @@ class Module3Widget(qt.QWidget):
         except Exception:
             pass
 
-        # 标题区 - 创建水平布局包含标题和期像切换器
+        # 期像切换器区域
         title_container = qt.QWidget()
         title_layout = qt.QHBoxLayout(title_container)
         title_layout.setContentsMargins(8, 8, 8, 8)
         title_layout.setSpacing(20)
 
-        title = qt.QLabel("模块三：瓣叶功能评估")
-        title.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
-        title.setStyleSheet(StyleManager.get_label_style("large"))
-        title_layout.addWidget(title)
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()
 
