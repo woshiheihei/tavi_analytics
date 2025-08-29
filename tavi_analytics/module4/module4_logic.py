@@ -221,12 +221,14 @@ class Module4Logic:
         except Exception as e:
             self.logger.error(f"设置瓣膜信息失败: {e}")
     
-    def load_measurement_data(self, measurement_data: Dict[str, Any]) -> bool:
+    def load_measurement_data(self, measurement_data: Dict[str, Any], phase: Optional[str] = None) -> bool:
         """
         从measurement.json数据中加载多层级平面轮廓
         
         Args:
             measurement_data: 测量数据字典
+            phase: 可选，指定仅加载到某一期像（'end_diastole' 或 'end_systole'）；
+                   省略表示加载到两期像（向后兼容行为）
             
         Returns:
             bool: 加载是否成功
@@ -242,10 +244,17 @@ class Module4Logic:
                 self.logger.error("无法加载数据：session未设置")
                 return False
             
-            # 为所有期像加载轮廓数据（包括多层级平面）
-            for phase in ['end_diastole', 'end_systole']:
+            # 确定需要加载的期像集合（单期或双期）
+            phases_to_load: List[str]
+            if phase in ['end_diastole', 'end_systole']:
+                phases_to_load = [phase]
+            else:
+                phases_to_load = ['end_diastole', 'end_systole']
+            
+            # 为指定期像加载轮廓数据（包括多层级平面）
+            for use_phase in phases_to_load:
                 try:
-                    manager = self.session.get_phase_contour_manager(phase)
+                    manager = self.session.get_phase_contour_manager(use_phase)
                     
                     # 使用新的统一加载方法（自动包含多层级平面）
                     if manager.load_from_measurement_json(measurement_data):
@@ -253,13 +262,13 @@ class Module4Logic:
                         loaded_plane_count = manager.load_multi_level_planes_from_measurement_data(
                             measurement_data, available_heights
                         )
-                        self.logger.info(f"期像 {phase} 加载了 {loaded_plane_count} 个多层级平面轮廓")
+                        self.logger.info(f"期像 {use_phase} 加载了 {loaded_plane_count} 个多层级平面轮廓")
                         success_count += 1
                     else:
-                        self.logger.warning(f"期像 {phase} 数据加载失败")
+                        self.logger.warning(f"期像 {use_phase} 数据加载失败")
                         
                 except Exception as e:
-                    self.logger.error(f"期像 {phase} 加载失败: {e}")
+                    self.logger.error(f"期像 {use_phase} 加载失败: {e}")
             
             # 至少有一个期像成功加载即认为成功
             success = success_count > 0
@@ -402,31 +411,7 @@ class Module4Logic:
         
         return results
     
-    def create_visualizations_for_level(self, level: str) -> bool:
-        """为指定级别创建可视化"""
-        plane = self.get_plane_by_level(level)
-        if plane:
-            return plane.create_visualization()
-        return False
-    
-    def create_all_visualizations(self) -> Dict[str, bool]:
-        """为当前期像的所有轮廓创建可视化"""
-        manager = self.get_current_contour_manager()
-        if manager:
-            return manager.create_all_visualizations()
-        return {}
-    
-    def remove_visualizations_for_level(self, level: str):
-        """移除指定级别的可视化"""
-        plane = self.get_plane_by_level(level)
-        if plane:
-            plane.remove_slicer_node()
-    
-    def remove_all_visualizations(self):
-        """移除所有可视化"""
-        manager = self.get_current_contour_manager()
-        if manager:
-            manager.remove_all_visualizations()
+    #（已移除）显示/隐藏平面可视化相关方法
     
     # ========== 新增：轮廓定位方法（参考module3） ==========
     
@@ -659,9 +644,7 @@ class Module4Logic:
         """清理资源"""
         try:
             logging.info("清理模块四逻辑资源")
-            
-            # 移除所有可视化
-            self.remove_all_visualizations()
+            # 目前无可视化资源需要统一清理
             
             # 重置状态
             self._current_valve_manufacturer = ""

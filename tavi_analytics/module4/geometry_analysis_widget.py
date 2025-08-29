@@ -58,12 +58,19 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         # 添加 logger
         self.logger = logging.getLogger(__name__)
         
+        # 级别显示名（供按钮/提示复用）
+        self.level_display_name = {
+            'inflow': 'Inflow',
+            'nadir': 'Nadir',
+            'commissure_level': 'Commissure Level',
+            'commissure': 'Commissure Level'
+        }.get(self.level_type, self.level_type.title())
+        
         # UI组件
         self.valve_info_label = None
         self.measurements_table = None
         self.load_data_btn = None
-        self.show_plane_btn = None
-        self.hide_plane_btn = None
+        self.locate_plane_btn = None
         self.status_label = None
         
         logging.info(f"{level_type}几何形态分析界面初始化")
@@ -441,31 +448,58 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         button_layout = qt.QHBoxLayout()
         button_layout.setSpacing(8)
         
-        # 加载数据按钮
+        # 定位本级平面按钮（新增）
+        self.locate_plane_btn = LayoutManager.create_button_with_style(
+            f"定位 {self.level_display_name} 平面", "primary", "default", 36
+        )
+        self.locate_plane_btn.clicked.connect(self._on_locate_plane)
+        button_layout.addWidget(self.locate_plane_btn)
+        
+        # 加载数据按钮（保留，次要）
         self.load_data_btn = LayoutManager.create_button_with_style(
-            "加载平面数据", "primary", "default", 36
+            "重新加载数据", "secondary", "default", 36
         )
         self.load_data_btn.clicked.connect(self._on_load_data)
         button_layout.addWidget(self.load_data_btn)
         
-        # 显示平面按钮
-        self.show_plane_btn = LayoutManager.create_button_with_style(
-            "显示平面", "secondary", "default", 36
-        )
-        self.show_plane_btn.clicked.connect(self._on_show_plane)
-        self.show_plane_btn.setEnabled(False)
-        button_layout.addWidget(self.show_plane_btn)
-        
-        # 隐藏平面按钮
-        self.hide_plane_btn = LayoutManager.create_button_with_style(
-            "隐藏平面", "secondary", "default", 36
-        )
-        self.hide_plane_btn.clicked.connect(self._on_hide_plane)
-        self.hide_plane_btn.setEnabled(False)
-        button_layout.addWidget(self.hide_plane_btn)
-        
         layout.addLayout(button_layout)
         return frame
+
+    def _on_locate_plane(self):
+        """定位到当前级别平面"""
+        try:
+            if not self.logic:
+                self._update_status("错误: 逻辑组件未初始化", "error")
+                return
+            # UI反馈
+            if self.locate_plane_btn:
+                self.locate_plane_btn.setEnabled(False)
+                original_text = self.locate_plane_btn.text
+                if callable(original_text):
+                    original_text = original_text()
+                self.locate_plane_btn.setText("🔄 正在定位…")
+            
+            success = self.logic.switch_to_level_plane(self.level_type)
+            if success:
+                self._update_status(f"已定位到 {self.level_type} 平面", "success")
+                if self.locate_plane_btn:
+                    self.locate_plane_btn.setText("✅ 已定位")
+                    # 2秒后恢复
+                    qt.QTimer.singleShot(1500, lambda: self.locate_plane_btn.setText(f"定位 {self.level_display_name} 平面"))
+            else:
+                self._update_status(f"定位 {self.level_type} 平面失败，请检查是否已加载数据并设置瓣膜信息", "error")
+                if self.locate_plane_btn:
+                    self.locate_plane_btn.setText("❌ 定位失败")
+                    qt.QTimer.singleShot(1500, lambda: self.locate_plane_btn.setText(f"定位 {self.level_display_name} 平面"))
+        except Exception as e:
+            logging.error(f"定位 {self.level_type} 平面时出错: {e}")
+            self._update_status(f"定位失败: {e}", "error")
+            if self.locate_plane_btn:
+                self.locate_plane_btn.setText("❌ 出错")
+                qt.QTimer.singleShot(1500, lambda: self.locate_plane_btn.setText(f"定位 {self.level_display_name} 平面"))
+        finally:
+            if self.locate_plane_btn:
+                self.locate_plane_btn.setEnabled(True)
     
     def _create_measurements_section(self) -> qt.QWidget:
         """创建测量结果区域"""
@@ -559,8 +593,12 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             value_item.setTextAlignment(qt.Qt.AlignRight | qt.Qt.AlignVCenter)
             self.measurements_table.setItem(row, 1, value_item)
     
+    def _check_and_hide_temp_selector(self):
+        """检查瓣膜信息并决定是否隐藏临时选择器（现在调用新方法）"""
+        self._check_and_hide_valve_selector()
+    
     def _on_load_data(self):
-        """加载数据按钮响应"""
+        """重新加载数据按钮响应 - 手动重新加载或修复数据"""
         try:
             if not self.logic:
                 self._update_status("错误: 逻辑组件未初始化", "error")
@@ -649,7 +687,9 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 
                 if found_expected_fields or contour_fields:
                     try:
-                        if self.logic.load_measurement_data(source_data):
+                        # 将数据仅加载到当前逻辑期像，避免覆盖另一期像导致“看起来不变”
+                        current_phase = self.logic.get_current_phase() if hasattr(self.logic, 'get_current_phase') else None
+                        if self.logic.load_measurement_data(source_data, phase=current_phase):
                             self.logger.info(f"成功使用{source_name}加载数据")
                             load_success = True
                             break
@@ -677,42 +717,76 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 error_msg = measurements.get('error', '未知错误')
                 self._update_status(f"未找到 {self.level_type} 级别的平面数据: {error_msg}", "warning")
                 self.logger.warning(f"平面数据错误: {error_msg}")
-                self.show_plane_btn.setEnabled(False)
-                self.hide_plane_btn.setEnabled(False)
             else:
                 self._update_measurements_table(measurements)
                 self._update_status(f"成功加载 {self.level_type} 级别数据", "success")
-                self.show_plane_btn.setEnabled(True)
-                self.hide_plane_btn.setEnabled(True)
                 
         except Exception as e:
             self._update_status(f"加载数据失败: {e}", "error")
             logging.error(f"加载 {self.level_type} 数据失败: {e}")
     
-    def _check_and_hide_temp_selector(self):
-        """检查瓣膜信息并决定是否隐藏临时选择器（现在调用新方法）"""
-        self._check_and_hide_valve_selector()
-    
-    def _on_show_plane(self):
-        """显示平面按钮响应"""
+    def _auto_load_data_from_session(self):
+        """从会话自动加载数据，失败时显示手动选择界面"""
         try:
-            if self.logic and self.logic.create_visualizations_for_level(self.level_type):
-                self._update_status(f"{self.level_type} 平面已显示", "success")
+            if not self.session or not self.logic:
+                self._update_status("错误: 会话或逻辑组件未初始化", "error")
+                return
+            
+            # 1. 尝试从会话获取瓣膜信息
+            patient_data = self.session.get_patient_data()
+            if patient_data and patient_data.valveBrand and patient_data.valveModel:
+                # 设置瓣膜信息到逻辑组件
+                self.logic.set_valve_info(patient_data.valveBrand, patient_data.valveModel)
+                self.logger.info(f"从会话获取瓣膜信息: {patient_data.valveBrand} {patient_data.valveModel}")
+                
+                # 2. 检查会话中是否已有轮廓数据
+                if self._check_session_contour_data():
+                    self._update_status("自动加载完成", "success")
+                    self._update_valve_info()
+                    self._check_and_hide_temp_selector()
+                    
+                    # 刷新当前级别的测量数据显示
+                    self._refresh_measurements()
+                    return
+            
+            # 3. 如果会话数据不完整，尝试从其他数据源加载
+            self.logger.info("会话数据不完整，尝试手动加载数据")
+            self._on_load_data()
+            
+        except Exception as e:
+            self.logger.error(f"自动加载数据失败: {e}")
+            self._update_status(f"自动加载失败，请手动操作: {e}", "warning")
+    
+    def _check_session_contour_data(self) -> bool:
+        """检查会话中是否有当前期像的轮廓数据"""
+        try:
+            current_phase = self.logic.get_current_phase()
+            manager = self.session.get_phase_contour_manager(current_phase)
+            
+            # 检查多层级平面数据
+            planes = manager.get_multi_level_planes()
+            if not planes:
+                self.logger.info(f"期像 {current_phase} 无多层级平面数据")
+                return False
+            
+            # 检查当前级别是否有对应平面
+            level_plane = None
+            for plane in planes:
+                if plane.level_type == self.level_type:
+                    level_plane = plane
+                    break
+            
+            if level_plane:
+                self.logger.info(f"找到 {self.level_type} 级别对应的平面: {level_plane.height}cm")
+                return True
             else:
-                self._update_status(f"显示 {self.level_type} 平面失败", "error")
+                self.logger.info(f"未找到 {self.level_type} 级别对应的平面")
+                return False
+                
         except Exception as e:
-            self._update_status(f"显示平面失败: {e}", "error")
-            logging.error(f"显示 {self.level_type} 平面失败: {e}")
+            self.logger.error(f"检查会话轮廓数据失败: {e}")
+            return False
     
-    def _on_hide_plane(self):
-        """隐藏平面按钮响应"""
-        try:
-            if self.logic:
-                self.logic.remove_visualizations_for_level(self.level_type)
-                self._update_status(f"{self.level_type} 平面已隐藏", "info")
-        except Exception as e:
-            self._update_status(f"隐藏平面失败: {e}", "error")
-            logging.error(f"隐藏 {self.level_type} 平面失败: {e}")
     
     def _update_measurements_table(self, measurements: Dict[str, Any]):
         """更新测量参数表格"""
@@ -904,12 +978,12 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         # 显示axial切片在3D视图中（与模块三保持一致）
         self._show_axial_slice_in_3d()
         
+        # 自动加载数据（优先从会话，失败时显示手动选择）
+        self._auto_load_data_from_session()
+        
         # 检查并更新瓣膜信息显示
         self._check_and_hide_temp_selector()
         self._update_valve_info()
-        
-        # 自动加载数据
-        self._on_load_data()
     
     def on_deactivated(self):
         """停用时的回调"""
@@ -978,12 +1052,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     
     def cleanup(self):
         """清理资源"""
-        try:
-            # 隐藏可视化
-            if self.logic:
-                self.logic.remove_visualizations_for_level(self.level_type)
-        except Exception as e:
-            logging.error(f"清理 {self.level_type} 界面失败: {e}")
+    # 当前无可视化资源需要处理
         
         logging.info(f"{self.level_type}几何形态分析界面清理完成")
 
