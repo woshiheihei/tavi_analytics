@@ -47,6 +47,7 @@ class ValveOverlayWidget(qt.QWidget):
     # 定义信号
     overlayEnabled = qt.Signal(bool)      # 叠加启用/禁用信号
     opacityChanged = qt.Signal(float)     # 透明度改变信号
+    rotationChanged = qt.Signal(int)      # 旋转角度改变信号
     statusUpdated = qt.Signal(str)        # 状态更新信号
     
     def __init__(self, session: Optional[TAVRStudySession] = None, parent=None):
@@ -58,26 +59,30 @@ class ValveOverlayWidget(qt.QWidget):
             parent: 父组件
         """
         super().__init__(parent)
-        
+
+        # 基本状态
         self.session = session
         self.valve_node = None
         self.transform_node = None
         self.is_overlay_active = False
         self.current_opacity = 0.6
-        
+        self.current_rotation = 0  # 当前旋转角度
+        self.base_transform_matrix = None  # 基础叠加矩阵（不含旋转）
+
         # 设置组件属性
         self.setObjectName("ValveOverlayWidget")
-        
+
         # 回调函数列表
         self.overlay_callbacks = []
         self.opacity_callbacks = []
-        
+        self.rotation_callbacks = []  # 旋转回调函数列表
+
         # 创建界面
         self._setup_ui()
-        
+
         # 初始化检查瓣膜数据
         self._check_valve_availability()
-        
+
         logging.info("ValveOverlayWidget 初始化完成")
     
     def _setup_ui(self):
@@ -106,6 +111,9 @@ class ValveOverlayWidget(qt.QWidget):
         
         # 透明度调节区域
         self._create_opacity_section()
+        
+        # 旋转控制区域
+        self._create_rotation_section()
         
         # 高级选项区域
         self._create_advanced_section()
@@ -225,6 +233,95 @@ class ValveOverlayWidget(qt.QWidget):
         
         self.section_card.add_widget(opacity_frame)
     
+    def _create_rotation_section(self):
+        """创建旋转控制区域"""
+        rotation_frame = qt.QFrame()
+        rotation_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 8px;
+            }
+        """)
+        
+        rotation_layout = qt.QVBoxLayout(rotation_frame)
+        rotation_layout.setSpacing(6)
+        
+        # 旋转标签和角度显示
+        rotation_header = qt.QHBoxLayout()
+        rotation_label = qt.QLabel("支架旋转")
+        rotation_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+            }
+        """)
+        
+        self.rotation_value_label = qt.QLabel("0°")
+        self.rotation_value_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #6c757d;
+                font-weight: bold;
+            }
+        """)
+        
+        rotation_header.addWidget(rotation_label)
+        rotation_header.addStretch()
+        rotation_header.addWidget(self.rotation_value_label)
+        
+        rotation_layout.addLayout(rotation_header)
+        
+        # 旋转滑块
+        self.rotation_slider = qt.QSlider(qt.Qt.Horizontal)
+        self.rotation_slider.setRange(-180, 180)
+        self.rotation_slider.setValue(0)  # 默认0度
+        self.rotation_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #bbb;
+                background: white;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #28a745;
+                border: 1px solid #28a745;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::add-page:horizontal {
+                background: #dee2e6;
+                border: 1px solid #dee2e6;
+                height: 6px;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #28a745;
+                border: 1px solid #28a745;
+                width: 16px;
+                margin: -6px 0;
+                border-radius: 8px;
+            }
+        """)
+        self.rotation_slider.valueChanged.connect(self._on_rotation_changed)
+        self.rotation_slider.setEnabled(False)
+        
+        rotation_layout.addWidget(self.rotation_slider)
+        
+        # 添加说明文字
+        info_label = qt.QLabel("围绕当前切片法线方向旋转支架 (-180° ~ +180°)")
+        info_label.setStyleSheet("""
+            QLabel {
+                font-size: 10px;
+                color: #6c757d;
+                font-style: italic;
+            }
+        """)
+        rotation_layout.addWidget(info_label)
+        
+        self.section_card.add_widget(rotation_frame)
+
     def _create_advanced_section(self):
         """创建高级选项区域"""
         advanced_layout = qt.QHBoxLayout()
@@ -497,6 +594,9 @@ class ValveOverlayWidget(qt.QWidget):
             transform_node.SetMatrixTransformToParent(P)
             self.valve_node.SetAndObserveTransformNodeID(transform_node.GetID())
             self.transform_node = transform_node
+            # 记录基础矩阵，旋转滑块以此为基准叠加
+            self.base_transform_matrix = vtk.vtkMatrix4x4()
+            self.base_transform_matrix.DeepCopy(P)
             
             # 配置Red切片叠加
             comp_node = red_widget.mrmlSliceCompositeNode()
@@ -542,6 +642,7 @@ class ValveOverlayWidget(qt.QWidget):
                 }
             """)
             self.opacity_slider.setEnabled(True)
+            self.rotation_slider.setEnabled(True)
             self.adjust_btn.setEnabled(True)
             self.reset_btn.setEnabled(True)
         else:
@@ -562,11 +663,119 @@ class ValveOverlayWidget(qt.QWidget):
                 }
             """)
             self.opacity_slider.setEnabled(False)
+            self.rotation_slider.setEnabled(False)
             self.adjust_btn.setEnabled(False)
             self.reset_btn.setEnabled(False)
         
         self.overlay_btn.setEnabled(True)
     
+    def _apply_rotation_transform(self, angle_degrees: int):
+        """应用围绕slice法线的旋转变换（绝对角度，合成到基础矩阵上）"""
+        try:
+            import slicer
+            import vtk
+            import math
+            
+            if not hasattr(self, 'transform_node') or not self.transform_node:
+                logging.warning("无法应用旋转: 变换节点不存在")
+                return
+            
+            # 获取Red slice的法线方向
+            lm = slicer.app.layoutManager()
+            red_widget = lm.sliceWidget('Red')
+            if not red_widget:
+                logging.error("无法获取Red slice widget")
+                return
+            
+            slice_node = red_widget.mrmlSliceNode()
+            slice_to_ras = slice_node.GetSliceToRAS()
+            
+            # 提取法线方向 (第3列，即z轴方向)
+            normal = [slice_to_ras.GetElement(0, 2),
+                     slice_to_ras.GetElement(1, 2), 
+                     slice_to_ras.GetElement(2, 2)]
+            
+            # 提取旋转中心 (slice的中心点)
+            center = [slice_to_ras.GetElement(0, 3),
+                     slice_to_ras.GetElement(1, 3),
+                     slice_to_ras.GetElement(2, 3)]
+            
+            # 创建旋转变换
+            transform_matrix = vtk.vtkMatrix4x4()
+            transform_matrix.Identity()
+            
+            # 转换角度为弧度
+            angle_radians = math.radians(angle_degrees)
+            
+            # 使用Rodrigues旋转公式创建旋转矩阵
+            # 先平移到原点
+            translate_to_origin = vtk.vtkMatrix4x4()
+            translate_to_origin.Identity()
+            translate_to_origin.SetElement(0, 3, -center[0])
+            translate_to_origin.SetElement(1, 3, -center[1])
+            translate_to_origin.SetElement(2, 3, -center[2])
+            
+            # 旋转矩阵 (围绕法线)
+            cos_a = math.cos(angle_radians)
+            sin_a = math.sin(angle_radians)
+            
+            # 标准化法线向量
+            norm = vtk.vtkMath.Norm(normal)
+            if norm == 0:
+                logging.error("法线向量长度为0")
+                return
+            
+            nx, ny, nz = normal[0]/norm, normal[1]/norm, normal[2]/norm
+            
+            # Rodrigues旋转矩阵
+            rotation_matrix = vtk.vtkMatrix4x4()
+            rotation_matrix.Identity()
+            
+            # 构建旋转矩阵元素
+            rotation_matrix.SetElement(0, 0, cos_a + nx*nx*(1-cos_a))
+            rotation_matrix.SetElement(0, 1, nx*ny*(1-cos_a) - nz*sin_a)
+            rotation_matrix.SetElement(0, 2, nx*nz*(1-cos_a) + ny*sin_a)
+            
+            rotation_matrix.SetElement(1, 0, ny*nx*(1-cos_a) + nz*sin_a)
+            rotation_matrix.SetElement(1, 1, cos_a + ny*ny*(1-cos_a))
+            rotation_matrix.SetElement(1, 2, ny*nz*(1-cos_a) - nx*sin_a)
+            
+            rotation_matrix.SetElement(2, 0, nz*nx*(1-cos_a) - ny*sin_a)
+            rotation_matrix.SetElement(2, 1, nz*ny*(1-cos_a) + nx*sin_a)
+            rotation_matrix.SetElement(2, 2, cos_a + nz*nz*(1-cos_a))
+            
+            # 平移回原位置
+            translate_back = vtk.vtkMatrix4x4()
+            translate_back.Identity()
+            translate_back.SetElement(0, 3, center[0])
+            translate_back.SetElement(1, 3, center[1])
+            translate_back.SetElement(2, 3, center[2])
+            
+            # 组合变换: 平移回原位置 * 旋转 * 平移到原点
+            rot_about_center = vtk.vtkMatrix4x4()
+            tmp = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(rotation_matrix, translate_to_origin, tmp)
+            vtk.vtkMatrix4x4.Multiply4x4(translate_back, tmp, rot_about_center)
+
+            # 将旋转与基础叠加矩阵合成： M = rot_about_center * base
+            if self.base_transform_matrix is None:
+                # 若未记录基础矩阵，则以当前变换为基础
+                self.base_transform_matrix = vtk.vtkMatrix4x4()
+                self.transform_node.GetMatrixTransformToParent(self.base_transform_matrix)
+            final_m = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(rot_about_center, self.base_transform_matrix, final_m)
+
+            # 应用变换
+            self.transform_node.SetMatrixTransformToParent(final_m)
+            
+            # 刷新视图
+            red_widget.sliceView().scheduleRender()
+            
+            logging.info(f"应用旋转变换: {angle_degrees}° 围绕法线 {normal}")
+            
+        except Exception as e:
+            logging.error(f"应用旋转变换失败: {e}")
+
     def _on_opacity_changed(self, value: int):
         """透明度改变时的回调"""
         opacity = value / 100.0
@@ -596,6 +805,28 @@ class ValveOverlayWidget(qt.QWidget):
             except Exception as e:
                 logging.error(f"执行透明度回调失败: {e}")
     
+    def _on_rotation_changed(self, value: int):
+        """旋转角度改变时的回调"""
+        self.current_rotation = value
+        self.rotation_value_label.setText(f"{value}°")
+        
+        # 如果叠加已激活，立即应用旋转变化
+        if self.is_overlay_active and hasattr(self, 'transform_node') and self.transform_node:
+            try:
+                self._apply_rotation_transform(value)
+            except Exception as e:
+                logging.error(f"应用旋转变化失败: {e}")
+        
+        # 发出信号
+        self.rotationChanged.emit(value)
+        
+        # 调用回调函数
+        for callback in self.rotation_callbacks:
+            try:
+                callback(value)
+            except Exception as e:
+                logging.error(f"执行旋转回调失败: {e}")
+
     def _open_transforms_module(self):
         """打开Transforms模块进行微调"""
         try:
@@ -625,6 +856,11 @@ class ValveOverlayWidget(qt.QWidget):
             self.opacity_slider.setValue(60)
             self.opacity_value_label.setText("60%")
             
+            # 重置旋转
+            self.current_rotation = 0
+            self.rotation_slider.setValue(0)
+            self.rotation_value_label.setText("0°")
+            
             # 删除变换节点
             import slicer
             transform_node = slicer.util.getFirstNodeByClassByName('vtkMRMLLinearTransformNode', 'ValveToRedSlice')
@@ -647,6 +883,10 @@ class ValveOverlayWidget(qt.QWidget):
         """添加透明度变化回调函数"""
         self.opacity_callbacks.append(callback)
     
+    def add_rotation_callback(self, callback: Callable[[int], None]):
+        """添加旋转变化回调函数"""
+        self.rotation_callbacks.append(callback)
+    
     def get_overlay_status(self) -> bool:
         """获取当前叠加状态"""
         return self.is_overlay_active
@@ -659,6 +899,15 @@ class ValveOverlayWidget(qt.QWidget):
         """设置透明度"""
         opacity = max(0.0, min(1.0, opacity))  # 限制范围[0,1]
         self.opacity_slider.setValue(int(opacity * 100))
+    
+    def get_current_rotation(self) -> int:
+        """获取当前旋转角度"""
+        return self.current_rotation
+    
+    def set_rotation(self, angle: int):
+        """设置旋转角度"""
+        angle = max(-180, min(180, angle))  # 限制范围[-180,180]
+        self.rotation_slider.setValue(angle)
     
     def force_enable_overlay(self):
         """强制启用叠加（外部调用）"""
