@@ -101,9 +101,6 @@ class ValveOverlayWidget(qt.QWidget):
     
     def _create_controls(self):
         """创建控制组件"""
-        # 状态显示区域
-        self._create_status_section()
-        
         # 主操作按钮区域
         self._create_action_section()
         
@@ -112,42 +109,6 @@ class ValveOverlayWidget(qt.QWidget):
         
         # 高级选项区域
         self._create_advanced_section()
-    
-    def _create_status_section(self):
-        """创建状态显示区域"""
-        status_frame = qt.QFrame()
-        status_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 6px;
-                padding: 8px;
-            }
-        """)
-        
-        status_layout = qt.QHBoxLayout(status_frame)
-        status_layout.setSpacing(8)
-        
-        # 瓣膜状态图标
-        self.valve_status_icon = qt.QLabel("❓")
-        self.valve_status_icon.setStyleSheet("font-size: 16px; color: #6c757d;")
-        self.valve_status_icon.setToolTip("瓣膜数据状态")
-        
-        # 状态文本
-        self.status_label = qt.QLabel("正在检查瓣膜数据...")
-        self.status_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #495057;
-                background: transparent;
-            }
-        """)
-        
-        status_layout.addWidget(self.valve_status_icon)
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch()
-        
-        self.section_card.add_widget(status_frame)
     
     def _create_action_section(self):
         """创建主操作按钮区域"""
@@ -178,29 +139,7 @@ class ValveOverlayWidget(qt.QWidget):
         self.overlay_btn.clicked.connect(self._toggle_overlay)
         self.overlay_btn.setEnabled(False)
         
-        # 刷新按钮
-        refresh_btn = qt.QPushButton("🔄")
-        refresh_btn.setStyleSheet("""
-            QPushButton {
-                padding: 10px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: bold;
-                max-width: 36px;
-                min-width: 36px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-        """)
-        refresh_btn.setToolTip("重新检查瓣膜数据")
-        refresh_btn.clicked.connect(self._check_valve_availability)
-        
         action_layout.addWidget(self.overlay_btn)
-        action_layout.addWidget(refresh_btn)
         action_layout.addStretch()
         
         self.section_card.add_layout(action_layout)
@@ -348,7 +287,7 @@ class ValveOverlayWidget(qt.QWidget):
         self.section_card.add_layout(advanced_layout)
     
     def _check_valve_availability(self):
-        """检查瓣膜数据可用性"""
+        """检查瓣膜数据可用性 - 后台检测，只输出日志"""
         try:
             # 尝试在Slicer中查找valve节点
             import slicer
@@ -369,9 +308,7 @@ class ValveOverlayWidget(qt.QWidget):
             
             if valve_node:
                 self.valve_node = valve_node
-                self.valve_status_icon.setText("✅")
-                self.valve_status_icon.setStyleSheet("font-size: 16px; color: #28a745;")
-                self.status_label.setText(f"已找到瓣膜数据: {valve_node.GetName()}")
+                logging.info(f"已找到瓣膜数据: {valve_node.GetName()}")
                 self.overlay_btn.setEnabled(True)
                 
                 # 检查是否已有叠加状态
@@ -379,17 +316,13 @@ class ValveOverlayWidget(qt.QWidget):
                 
             else:
                 self.valve_node = None
-                self.valve_status_icon.setText("❌")
-                self.valve_status_icon.setStyleSheet("font-size: 16px; color: #dc3545;")
-                self.status_label.setText("未找到瓣膜数据 (名称: valve)")
+                logging.warning("未找到瓣膜数据 (名称: valve)")
                 self.overlay_btn.setEnabled(False)
                 self._update_overlay_status(False)
             
         except Exception as e:
             logging.error(f"检查瓣膜数据时出错: {e}")
-            self.valve_status_icon.setText("⚠️")
-            self.valve_status_icon.setStyleSheet("font-size: 16px; color: #ffc107;")
-            self.status_label.setText(f"检查失败: {str(e)}")
+            self.valve_node = None
             self.overlay_btn.setEnabled(False)
     
     def _check_overlay_status(self):
