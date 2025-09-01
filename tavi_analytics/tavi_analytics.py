@@ -27,6 +27,7 @@ from core.session import TAVRStudySession
 from core.data_models import PatientData
 from module1.module1_adapter import Module1Adapter
 from ui.main_ui import MainUI
+from core.resource_manager import get_resource_manager
 
 
 #
@@ -164,6 +165,12 @@ class tavi_analyticsWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # 创建逻辑实例
         self.logic = tavi_analyticsLogic()
+
+        # 预加载必需资源（如 assets/valve.nrrd）
+        try:
+            get_resource_manager().ensure_preloaded()
+        except Exception as e:
+            logging.warning(f"预加载资源时出错: {e}")
         
         # 设置模块管理器
         self._manager.set_session(self._session)

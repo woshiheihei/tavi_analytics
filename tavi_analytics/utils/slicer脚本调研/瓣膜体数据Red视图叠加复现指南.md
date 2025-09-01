@@ -1,4 +1,28 @@
-# 瓣膜体数据 Red 视图叠加复现指南
+# 瓣膜体数据 Red 视图对齐指南
+
+本指南说明如何在 3D Slicer 中，通过一个线性变换（ValveToRedSlice）将瓣膜体数据（valve）对齐到当前 Red 切片平面的位置与朝向。
+
+---
+
+## 目标
+
+- 通过一个线性变换（ValveToRedSlice）将 valve 对齐到当前 Red 切片平面的位置与朝向。
+
+## 前提条件
+
+- 已加载瓣膜体数据：名称为 `valve`（优先 VectorVolume，或 S## 术语与 API 速查
+
+- SliceToRAS（切片 -> RAS）：`sliceNode.GetSliceToRAS()`
+- IJKToRAS（体素 -> RAS）：`volumeNode.GetIJKToRASMatrix(mat)`
+- 线性变换节点：`vtkMRMLLinearTransformNode`
+- 前景叠加设置（Red）：`sliceWidget.mrmlSliceCompositeNode()` 前景/透明度
+
+---
+
+如需将该能力集成到插件模块，建议把"矩阵计算 + 变换应用 + 叠加配置"封装为一个函数，并支持命名参数（valve节点名、透明度、是否关闭插值、是否实时跟随等）。e）。
+- Red 视图已调整到目标切面位置。
+
+> 如果数据命名不同，可在脚本中修改目标名称，或用"部分匹配"找到对应节点。
 
 本指南说明如何在 3D Slicer 中，将 2D 的瓣膜体数据（valve）叠加到 CTA 原始影像（source）的 Red 切片视图上，使人工瓣膜精确贴合到已通过 MPR 调整好的主动脉瓣环位置。
 
@@ -38,16 +62,13 @@ def find_volume_by_name(class_name, target_name):
     partial = [n for n in nodes if lower in n.GetName().lower()]
     return partial[0] if partial else None
 
-# 1) Locate CTA (background) and valve (foreground) volumes
+# 1) Locate valve volume
 valveNode = find_volume_by_name('vtkMRMLVectorVolumeNode', 'valve')
 if valveNode is None:
     valveNode = find_volume_by_name('vtkMRMLScalarVolumeNode', 'valve')
-sourceNode = find_volume_by_name('vtkMRMLScalarVolumeNode', 'source')
 
 if valveNode is None:
     raise RuntimeError('未找到名为 "valve" 的体数据 (Vector/ScalarVolume)。')
-if sourceNode is None:
-    raise RuntimeError('未找到名为 "source" 的CTA体数据 (ScalarVolume)。')
 
 # 2) Get Red slice orientation (SliceToRAS)
 lm = slicer.app.layoutManager()
@@ -96,10 +117,8 @@ if transformNode is None:
 transformNode.SetMatrixTransformToParent(P)
 valveNode.SetAndObserveTransformNodeID(transformNode.GetID())
 
-# 7) Configure Red slice compositing: CTA为背景，valve为前景
+# 7) Configure Red slice compositing: valve为前景
 compNode = redWidget.mrmlSliceCompositeNode()
-if sourceNode:
-    compNode.SetBackgroundVolumeID(sourceNode.GetID())
 compNode.SetForegroundVolumeID(valveNode.GetID())
 compNode.SetForegroundOpacity(0.6)
 
@@ -118,8 +137,9 @@ print({'valve': valveNode.GetName(), 'transform': transformNode.GetName(), 'dims
 
 执行完成后：
 
-- 在 Red 视图中，CTA（source）为背景，valve 为半透明前景叠加。
+- 在 Red 视图中，valve 作为前景半透明叠加显示。
 - 变换节点 `ValveToRedSlice` 已创建并应用于 valve。
+- valve 几何中心会落在当前 Red 切片中心，方向与切片一致。
 
 ---
 
@@ -142,7 +162,7 @@ P = SliceToRAS × S × (IJKToRAS)^-1
 ## 交互微调建议
 
 - 选择 Transforms 模块 -> `ValveToRedSlice`：
-  - 轻微调整 Translation/Rotation，使人工瓣膜边缘与环部位贴合。
+  - 轻微调整 Translation/Rotation，使瓣膜位置与目标切面贴合。
 - Red 视图前景透明度：在 Slice Controller 调整 Foreground Opacity（脚本默认 0.6）。
 - 清晰度：已关闭前景插值（更利于边界判读）。
 - 如果方向颠倒/镜像：尝试绕切片法向轴旋转 180° 或对 X/Y 小角度修正。
@@ -152,7 +172,7 @@ P = SliceToRAS × S × (IJKToRAS)^-1
 ## 常见问题排查
 
 - 找不到节点：
-  - 确认 CTA 命名为 `source`，瓣膜体数据命名为 `valve`。
+  - 确认瓣膜体数据命名为 `valve`。
   - 或在脚本中把目标名称改成你的实际名称；脚本已支持部分匹配。
 - valve 不是 VectorVolume：
   - 脚本会回退寻找 ScalarVolume；若仍失败，检查数据类型。
@@ -184,10 +204,9 @@ transformName = 'ValveToRedSlice'
 # 复用上文的查找逻辑
 valveNode = slicer.util.getFirstNodeByClassByName('vtkMRMLVectorVolumeNode', 'valve') or \
             slicer.util.getFirstNodeByClassByName('vtkMRMLScalarVolumeNode', 'valve')
-sourceNode = slicer.util.getFirstNodeByClassByName('vtkMRMLScalarVolumeNode', 'source')
 
-if not valveNode or not sourceNode:
-    raise RuntimeError('请先准备好 valve 与 source 节点。')
+if not valveNode:
+    raise RuntimeError('请先准备好 valve 节点。')
 
 transformNode = slicer.util.getFirstNodeByClassByName('vtkMRMLLinearTransformNode', transformName) or \
                 slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLinearTransformNode', transformName)
