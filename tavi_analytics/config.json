@@ -35,7 +35,7 @@
       "auto_generate_report": false
     },
     "module5": {
-      "enabled": false,
+      "enabled": true,
       "auto_export": false
     }
   },

@@ -114,8 +114,18 @@ class tavi_analytics(ScriptedLoadableModule):
                 manager.register_module(module4_info)
                 logging.info("模块四注册成功")
             
-            # 这里可以注册其他模块（模块五等）
-            # TODO: 注册其他模块
+            # 注册模块五（交接对齐，占位界面）
+            if self._config.is_module_enabled("module5"):
+                from module5.module5_adapter import Module5Adapter
+                module5_info = ModuleInfo(
+                    name="module5",
+                    display_name="交接对齐",
+                    module_class=Module5Adapter,
+                    dependencies=["module1"],
+                    enabled=True
+                )
+                manager.register_module(module5_info)
+                logging.info("模块五注册成功")
             
         except Exception as e:
             logging.error(f"初始化模块时出错: {e}")

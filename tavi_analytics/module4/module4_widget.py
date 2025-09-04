@@ -13,7 +13,7 @@ try:
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
-    from ..widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
+    # from ..widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
     from .module4_logic import Module4Logic
     from .geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 except ImportError:
@@ -30,7 +30,7 @@ except ImportError:
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.compact_phase_toggle import CompactPhaseToggle
-    from widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
+    # from widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
     from module4_logic import Module4Logic
     from geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 
@@ -52,9 +52,7 @@ class Module4Widget(qt.QWidget):
         self.nadir_analysis = NadirAnalysisWidget(session, self.logic, parent=self)
         self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, self.logic, parent=self)
         
-        # 创建瓣膜叠加组件
-        self.valve_overlay_widget = create_valve_overlay_widget(session=session, parent=self)
-        self._connect_valve_overlay_signals()
+    # 模块四不再包含瓣膜叠加组件（迁移至模块五）
         
         self.setObjectName("Module4Widget")
         self._setup_ui()
@@ -95,47 +93,7 @@ class Module4Widget(qt.QWidget):
         except Exception as e:
             logging.error(f"同步期像组件状态失败: {e}")
     
-    def _connect_valve_overlay_signals(self):
-        """连接瓣膜叠加组件的信号"""
-        if not self.valve_overlay_widget:
-            return
-        
-        # 连接Qt信号
-        self.valve_overlay_widget.overlayEnabled.connect(self._on_valve_overlay_changed)
-        self.valve_overlay_widget.opacityChanged.connect(self._on_valve_opacity_changed)
-        self.valve_overlay_widget.statusUpdated.connect(self._on_valve_status_updated)
-        
-        # 添加回调函数
-        self.valve_overlay_widget.add_overlay_callback(self._valve_overlay_callback)
-        self.valve_overlay_widget.add_opacity_callback(self._valve_opacity_callback)
-    
-    def _on_valve_overlay_changed(self, is_enabled: bool):
-        """瓣膜叠加状态改变时的处理"""
-        status = "启用" if is_enabled else "禁用"
-        logging.info(f"模块四响应：瓣膜叠加已{status}")
-        
-        # 可以根据需要在这里添加特定的业务逻辑
-        if is_enabled:
-            logging.info("瓣膜叠加已启用，几何形态分析可以更精确进行")
-        else:
-            logging.info("瓣膜叠加已禁用")
-    
-    def _on_valve_opacity_changed(self, opacity: float):
-        """瓣膜透明度改变时的处理"""
-        logging.info(f"模块四响应：瓣膜透明度调整为 {opacity:.2f}")
-    
-    def _on_valve_status_updated(self, status: str):
-        """瓣膜状态更新时的处理"""
-        logging.info(f"模块四收到瓣膜状态更新: {status}")
-    
-    def _valve_overlay_callback(self, is_enabled: bool):
-        """瓣膜叠加回调函数"""
-        status = "启用" if is_enabled else "禁用"
-        logging.debug(f"模块四回调：瓣膜叠加{status}回调被触发")
-    
-    def _valve_opacity_callback(self, opacity: float):
-        """瓣膜透明度回调函数"""
-        logging.debug(f"模块四回调：透明度回调 {opacity:.2f}")
+    # 瓣膜叠加相关（已迁移至模块五）
     
     
     def _setup_ui(self):
@@ -183,8 +141,7 @@ class Module4Widget(qt.QWidget):
         # 直接将选项卡添加到主布局
         main_layout.addWidget(self.analysis_tabs)
         
-        # 添加瓣膜叠加组件到底部
-        main_layout.addWidget(self.valve_overlay_widget)
+    # 瓣膜叠加组件已迁移到模块五
         
         main_layout.addStretch()
 
@@ -198,8 +155,7 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.set_session(session)
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.set_session(session)
-        if hasattr(self, 'valve_overlay_widget'):
-            self.valve_overlay_widget.set_session(session)
+    # 瓣膜叠加组件已迁移，无需处理
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
             pass
@@ -322,8 +278,7 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.cleanup()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.cleanup()
-        if hasattr(self, 'valve_overlay_widget'):
-            self.valve_overlay_widget.cleanup()
+    # 瓣膜叠加组件已迁移，无需处理
         if self.logic:
             self.logic.cleanup()
         logging.info("模块四界面清理完成")

@@ -123,7 +123,7 @@ class PluginConfig:
                     "auto_generate_report": False
                 },
                 "module5": {
-                    "enabled": False,
+                    "enabled": True,
                     "auto_export": False
                 }
             },
