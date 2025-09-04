@@ -23,6 +23,7 @@ try:
     from ..core.session import TAVRStudySession
     from ..ui.styles import StyleManager, ComponentStyleFactory
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from ..widgets.section_card import SectionCard
     from .module4_logic import Module4Logic
     from ..core.domain_models import ValvePlaneLevel
 except ImportError:
@@ -38,6 +39,7 @@ except ImportError:
     from core.session import TAVRStudySession
     from ui.styles import StyleManager, ComponentStyleFactory
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
+    from widgets.section_card import SectionCard
     from module4_logic import Module4Logic
     from core.domain_models import ValvePlaneLevel
 
@@ -82,29 +84,29 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         main_layout = qt.QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(8)
-        
-        # 标题区域
+
+        # 标题区域（轻样式，避免与卡片冲突）
         title_frame = self._create_title_section()
         main_layout.addWidget(title_frame)
-        
-        # 瓣膜信息区域
-        valve_info_frame = self._create_valve_info_section()
-        main_layout.addWidget(valve_info_frame)
-        
-        # 控制按钮区域
-        control_frame = self._create_control_section()
-        main_layout.addWidget(control_frame)
-        
-        # 测量结果区域
-        measurements_frame = self._create_measurements_section()
-        main_layout.addWidget(measurements_frame)
-        
+
+        # 瓣膜信息区域 - 使用统一 SectionCard
+        valve_info_card = self._create_valve_info_section()
+        main_layout.addWidget(valve_info_card)
+
+        # 控制按钮区域 - 使用统一 SectionCard
+        control_card = self._create_control_section()
+        main_layout.addWidget(control_card)
+
+        # 测量结果区域 - 使用统一 SectionCard
+        measurements_card = self._create_measurements_section()
+        main_layout.addWidget(measurements_card)
+
         # 状态区域
         status_frame = self._create_status_section()
         main_layout.addWidget(status_frame)
-        
+
         main_layout.addStretch()
-        
+
         # 在UI创建完成后，安全地初始化瓣膜选择器
         self._setup_valve_selector()
     
@@ -319,18 +321,8 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         title_text = f"{self.level_type.title()} 几何形态分析"
         title = qt.QLabel(title_text)
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: bold;
-                color: #1e40af;
-                background-color: #dbeafe;
-                padding: 8px 16px;
-                border: 1px solid #93c5fd;
-                border-radius: 6px;
-                margin-bottom: 4px;
-            }
-        """)
+        # 使用统一样式系统，避免内联配色干扰全局主题
+        title.setStyleSheet(StyleManager.get_label_style("large"))
         layout.addWidget(title)
         
         # 描述
@@ -344,126 +336,71 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         return frame
     
     def _create_valve_info_section(self) -> qt.QWidget:
-        """创建瓣膜信息区域"""
-        frame = LayoutManager.create_section_frame("瓣膜信息")
-        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
-        
-        # 瓣膜信息显示标签
+        """创建瓣膜信息区域（SectionCard）"""
+        card = SectionCard(title="瓣膜信息", icon_text="🫀", variant="dashed", parent=self)
+
+        # 瓣膜信息显示标签（默认静音样式）
         self.valve_info_label = qt.QLabel("瓣膜信息未设置")
-        self.valve_info_label.setStyleSheet("""
-            QLabel {
-                color: #6b7280;
-                font-size: 12px;
-                padding: 8px;
-                background-color: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 4px;
-            }
-        """)
-        layout.addWidget(self.valve_info_label)
-        
-        # 瓣膜选择器
+        self.valve_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
+        card.add_widget(self.valve_info_label)
+
+        # 选择器行
         self.valve_selector_frame = qt.QWidget()
         selector_layout = qt.QHBoxLayout(self.valve_selector_frame)
         selector_layout.setContentsMargins(0, 8, 0, 0)
         selector_layout.setSpacing(8)
-        
-        # 添加说明标签
+
         selector_label = qt.QLabel("瓣膜选择:")
-        selector_label.setStyleSheet("""
-            QLabel {
-                color: #374151;
-                font-size: 12px;
-                font-weight: bold;
-                min-width: 60px;
-            }
-        """)
+        selector_label.setStyleSheet(StyleManager.get_label_style("small"))
         selector_layout.addWidget(selector_label)
-        
+
         # 厂家选择下拉框
         self.manufacturer_combo = qt.QComboBox()
         self.manufacturer_combo.addItems([
-            "Medtronic", "Edwards Lifesciences", "Venus Medtech", 
+            "Medtronic", "Edwards Lifesciences", "Venus Medtech",
             "MicroPort", "Peijia Medical"
         ])
-        self.manufacturer_combo.setStyleSheet("""
-            QComboBox {
-                padding: 6px 8px;
-                border: 1px solid #d1d5db;
-                border-radius: 4px;
-                font-size: 12px;
-                min-width: 120px;
-                max-width: 140px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border-color: #9ca3af;
-            }
-            QComboBox:focus {
-                border-color: #3b82f6;
-            }
-        """)
         selector_layout.addWidget(self.manufacturer_combo)
-        
+
         # 型号选择下拉框
         self.model_combo = qt.QComboBox()
-        self.model_combo.setStyleSheet("""
-            QComboBox {
-                padding: 6px 8px;
-                border: 1px solid #d1d5db;
-                border-radius: 4px;
-                font-size: 12px;
-                min-width: 130px;
-                max-width: 150px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border-color: #9ca3af;
-            }
-            QComboBox:focus {
-                border-color: #3b82f6;
-            }
-        """)
         selector_layout.addWidget(self.model_combo)
-        
-        # 设置按钮
+
+        # 设置按钮（统一按钮工厂样式）
         self.set_valve_btn = LayoutManager.create_button_with_style(
             "应用", "primary", "sm", 32
         )
-        self.set_valve_btn.setMinimumWidth(80)  # 设置最小宽度防止被压缩
+        self.set_valve_btn.setMinimumWidth(80)
         selector_layout.addWidget(self.set_valve_btn)
-        
+
         selector_layout.addStretch()
-        
-        layout.addWidget(self.valve_selector_frame)
-        
-        return frame
+        card.add_widget(self.valve_selector_frame)
+
+        return card
     
     def _create_control_section(self) -> qt.QWidget:
-        """创建控制按钮区域"""
-        frame = LayoutManager.create_section_frame("操作控制")
-        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
-        
-        # 按钮布局
+        """创建控制按钮区域（SectionCard）"""
+        card = SectionCard(title="操作控制", icon_text="🎯", variant="dashed", parent=self)
+
+        # 按钮行
         button_layout = qt.QHBoxLayout()
         button_layout.setSpacing(8)
-        
-        # 定位本级平面按钮（新增）
+
         self.locate_plane_btn = LayoutManager.create_button_with_style(
             f"定位 {self.level_display_name} 平面", "primary", "default", 36
         )
         self.locate_plane_btn.clicked.connect(self._on_locate_plane)
         button_layout.addWidget(self.locate_plane_btn)
-        
-        # 加载数据按钮（保留，次要）
+
         self.load_data_btn = LayoutManager.create_button_with_style(
             "重新加载数据", "secondary", "default", 36
         )
         self.load_data_btn.clicked.connect(self._on_load_data)
         button_layout.addWidget(self.load_data_btn)
-        
-        layout.addLayout(button_layout)
-        return frame
+
+        button_layout.addStretch()
+        card.add_layout(button_layout)
+        return card
 
     def _on_locate_plane(self):
         """定位到当前级别平面"""
@@ -502,17 +439,17 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 self.locate_plane_btn.setEnabled(True)
     
     def _create_measurements_section(self) -> qt.QWidget:
-        """创建测量结果区域"""
-        frame = LayoutManager.create_section_frame("测量参数")
-        layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, frame)
-        
+        """创建测量结果区域（SectionCard）"""
+        card = SectionCard(title="测量参数", icon_text="📐", variant="dashed", parent=self)
+
         # 创建测量参数表格
         self.measurements_table = qt.QTableWidget()
         self.measurements_table.setColumnCount(2)
         self.measurements_table.setHorizontalHeaderLabels(["参数", "数值"])
-        
+
         # 设置表格样式
-        self.measurements_table.setStyleSheet("""
+        self.measurements_table.setStyleSheet(
+            """
             QTableWidget {
                 border: 1px solid #e5e7eb;
                 border-radius: 4px;
@@ -530,23 +467,24 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
                 font-weight: bold;
                 color: #374151;
             }
-        """)
-        
+            """
+        )
+
         # 设置表格属性
         self.measurements_table.horizontalHeader().setStretchLastSection(True)
         self.measurements_table.verticalHeader().setVisible(False)
         self.measurements_table.setAlternatingRowColors(True)
         self.measurements_table.setSelectionBehavior(qt.QAbstractItemView.SelectRows)
         self.measurements_table.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
-        
+
         # 设置固定高度
         self.measurements_table.setFixedHeight(210)  # 减少一行的高度
-        
+
         # 初始化空表格
         self._init_empty_measurements_table()
-        
-        layout.addWidget(self.measurements_table)
-        return frame
+
+        card.add_widget(self.measurements_table)
+        return card
     
     def _create_status_section(self) -> qt.QWidget:
         """创建状态区域"""
@@ -895,44 +833,17 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     def _show_valve_info_success(self, message: str):
         """显示成功的瓣膜信息"""
         self.valve_info_label.setText(message)
-        self.valve_info_label.setStyleSheet("""
-            QLabel {
-                color: #059669;
-                font-size: 12px;
-                padding: 8px;
-                background-color: #ecfdf5;
-                border: 1px solid #a7f3d0;
-                border-radius: 4px;
-            }
-        """)
-    
+        self.valve_info_label.setStyleSheet(StyleManager.get_label_style("success"))
+
     def _show_valve_info_warning(self, message: str):
         """显示警告的瓣膜信息"""
         self.valve_info_label.setText(f"⚠️ {message}")
-        self.valve_info_label.setStyleSheet("""
-            QLabel {
-                color: #d97706;
-                font-size: 12px;
-                padding: 8px;
-                background-color: #fffbeb;
-                border: 1px solid #fcd34d;
-                border-radius: 4px;
-            }
-        """)
-    
+        self.valve_info_label.setStyleSheet(StyleManager.get_label_style("warning"))
+
     def _show_valve_info_error(self, message: str):
         """显示错误的瓣膜信息"""
         self.valve_info_label.setText(f"❌ {message}")
-        self.valve_info_label.setStyleSheet("""
-            QLabel {
-                color: #dc2626;
-                font-size: 12px;
-                padding: 8px;
-                background-color: #fef2f2;
-                border: 1px solid #fca5a5;
-                border-radius: 4px;
-            }
-        """)
+        self.valve_info_label.setStyleSheet(StyleManager.get_label_style("error"))
     
     
     def _update_status(self, message: str, status_type: str = "info"):
@@ -1052,8 +963,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
     
     def cleanup(self):
         """清理资源"""
-    # 当前无可视化资源需要处理
-        
+        # 当前无可视化资源需要处理
         logging.info(f"{self.level_type}几何形态分析界面清理完成")
 
 

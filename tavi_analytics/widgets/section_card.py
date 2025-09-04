@@ -68,38 +68,52 @@ class SectionCard(qt.QWidget):
 
     def _apply_variant_style(self, variant: str):
         variant = (variant or "neutral").lower()
+
+        # 是否使用虚线边框（支持传入 "dashed" 或 "*-dashed"）
+        use_dashed = (variant == "dashed") or ("dashed" in variant)
+
         # 颜色方案映射（与现有UI风格对齐）
-        if variant == "blue":
+        if variant.startswith("blue"):
             card_bg = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #e3f2fd, stop:1 #bbdefb)"
-            border = "#2196f3"
+            border_color = "#2196f3"
             title_color = "#1565c0"
             icon_color = "#1976d2"
-        elif variant == "green":
+        elif variant.startswith("green"):
             # 参考: border-color: #10b981; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
             # 使用 Qt 的 qlineargradient 近似 135deg 的方向
             card_bg = "qlineargradient(x1:1, y1:0, x2:0, y2:1, stop:0 #d1fae5, stop:1 #a7f3d0)"
-            border = "#10b981"
+            border_color = "#10b981"
             title_color = "#065f46"
             icon_color = "#10b981"
-        elif variant == "purple":
+        elif variant.startswith("purple"):
             card_bg = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f3e5f5, stop:1 #e1bee7)"
-            border = "#9c27b0"
+            border_color = "#9c27b0"
             title_color = "#6a1b9a"
             icon_color = "#7b1fa2"
         else:
-            # neutral 默认卡片
+            # neutral 默认卡片（纯白背景）
             card_bg = "#ffffff"
-            border = "#e2e8f0"
+            border_color = "#e2e8f0"  # slate-200
             title_color = "#0f172a"
             icon_color = "#64748b"
+
+        # 边框样式（按需求：虚线 2px dashed #dee2e6，圆角 8px）
+        border_width = 2 if use_dashed else 2
+        border_style = "dashed" if use_dashed else "solid"
+        # 虚线时使用专用颜色与更小圆角
+        if use_dashed:
+            border_color = "#dee2e6"
+            border_radius = 8
+        else:
+            border_radius = 16
 
         # 卡片样式
         self.setStyleSheet(
             f"""
             QWidget#SectionCard {{
                 background: {card_bg};
-                border: 2px solid {border};
-                border-radius: 16px;
+                border: {border_width}px {border_style} {border_color};
+                border-radius: {border_radius}px;
                 margin: 4px;
             }}
             """
