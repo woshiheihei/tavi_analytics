@@ -888,111 +888,103 @@ class ValveOverlayWidget(qt.QWidget):
         self.overlay_btn.setEnabled(True)
     
     def _apply_rotation_transform(self, angle_degrees: int):
-        """应用围绕slice法线的旋转变换（绝对角度，合成到基础矩阵上）"""
+        """应用旋转：围绕当前切片法线，旋转中心采用“平面内微调后的中心”。"""
+        try:
+            mat = self._compose_final_transform(angle_degrees)
+            if mat is None:
+                return
+            # 应用变换
+            self.transform_node.SetMatrixTransformToParent(mat)
+            # 刷新视图
+            import slicer
+            slicer.app.layoutManager().sliceWidget('Red').sliceView().scheduleRender()
+        except Exception as e:
+            logging.error(f"应用旋转变换失败: {e}")
+
+    def _compose_final_transform(self, angle_degrees: int, offset_xy: Optional[list] = None):
+        """组合最终变换矩阵 = Rot(adjustedCenter, normal, angle) * T(offsetRAS) * Base
+
+        offset_xy: [x_mm, y_mm] 为切片平面内的偏移，默认取 self.cumulative_offset。
+        返回 vtkMatrix4x4，失败时返回 None。
+        """
         try:
             import slicer
             import vtk
             import math
-            
+
             if not hasattr(self, 'transform_node') or not self.transform_node:
-                logging.warning("无法应用旋转: 变换节点不存在")
-                return
-            
-            # 获取Red slice的法线方向
+                logging.warning("无法组合变换: 变换节点不存在")
+                return None
+            if self.base_transform_matrix is None:
+                # 若无基础矩阵，使用当前矩阵作为基础
+                self.base_transform_matrix = vtk.vtkMatrix4x4()
+                self.transform_node.GetMatrixTransformToParent(self.base_transform_matrix)
+
             lm = slicer.app.layoutManager()
             red_widget = lm.sliceWidget('Red')
             if not red_widget:
                 logging.error("无法获取Red slice widget")
-                return
-            
+                return None
             slice_node = red_widget.mrmlSliceNode()
             slice_to_ras = slice_node.GetSliceToRAS()
-            
-            # 提取法线方向 (第3列，即z轴方向)
-            normal = [slice_to_ras.GetElement(0, 2),
-                     slice_to_ras.GetElement(1, 2), 
-                     slice_to_ras.GetElement(2, 2)]
-            
-            # 提取旋转中心 (slice的中心点)
-            center = [slice_to_ras.GetElement(0, 3),
-                     slice_to_ras.GetElement(1, 3),
-                     slice_to_ras.GetElement(2, 3)]
-            
-            # 创建旋转变换
-            transform_matrix = vtk.vtkMatrix4x4()
-            transform_matrix.Identity()
-            
-            # 转换角度为弧度
+
+            # Slice 基向量与中心
+            xdir = [slice_to_ras.GetElement(0, 0), slice_to_ras.GetElement(1, 0), slice_to_ras.GetElement(2, 0)]
+            ydir = [slice_to_ras.GetElement(0, 1), slice_to_ras.GetElement(1, 1), slice_to_ras.GetElement(2, 1)]
+            normal = [slice_to_ras.GetElement(0, 2), slice_to_ras.GetElement(1, 2), slice_to_ras.GetElement(2, 2)]
+            center = [slice_to_ras.GetElement(0, 3), slice_to_ras.GetElement(1, 3), slice_to_ras.GetElement(2, 3)]
+
+            # 偏移（默认取当前累计）
+            if offset_xy is None:
+                offset_xy = getattr(self, 'cumulative_offset', [0.0, 0.0])
+            xoff, yoff = float(offset_xy[0]), float(offset_xy[1])
+            ras_offset = [xoff * xdir[0] + yoff * ydir[0],
+                          xoff * xdir[1] + yoff * ydir[1],
+                          xoff * xdir[2] + yoff * ydir[2]]
+
+            # 旋转角度（弧度）
             angle_radians = math.radians(angle_degrees)
-            
-            # 使用Rodrigues旋转公式创建旋转矩阵
-            # 先平移到原点
-            translate_to_origin = vtk.vtkMatrix4x4()
-            translate_to_origin.Identity()
-            translate_to_origin.SetElement(0, 3, -center[0])
-            translate_to_origin.SetElement(1, 3, -center[1])
-            translate_to_origin.SetElement(2, 3, -center[2])
-            
-            # 旋转矩阵 (围绕法线)
-            cos_a = math.cos(angle_radians)
-            sin_a = math.sin(angle_radians)
-            
-            # 标准化法线向量
-            norm = vtk.vtkMath.Norm(normal)
-            if norm == 0:
+            c, s = math.cos(angle_radians), math.sin(angle_radians)
+
+            # 规范化法线
+            nlen = math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2)
+            if nlen == 0:
                 logging.error("法线向量长度为0")
-                return
-            
-            nx, ny, nz = normal[0]/norm, normal[1]/norm, normal[2]/norm
-            
-            # Rodrigues旋转矩阵
-            rotation_matrix = vtk.vtkMatrix4x4()
-            rotation_matrix.Identity()
-            
-            # 构建旋转矩阵元素
-            rotation_matrix.SetElement(0, 0, cos_a + nx*nx*(1-cos_a))
-            rotation_matrix.SetElement(0, 1, nx*ny*(1-cos_a) - nz*sin_a)
-            rotation_matrix.SetElement(0, 2, nx*nz*(1-cos_a) + ny*sin_a)
-            
-            rotation_matrix.SetElement(1, 0, ny*nx*(1-cos_a) + nz*sin_a)
-            rotation_matrix.SetElement(1, 1, cos_a + ny*ny*(1-cos_a))
-            rotation_matrix.SetElement(1, 2, ny*nz*(1-cos_a) - nx*sin_a)
-            
-            rotation_matrix.SetElement(2, 0, nz*nx*(1-cos_a) - ny*sin_a)
-            rotation_matrix.SetElement(2, 1, nz*ny*(1-cos_a) + nx*sin_a)
-            rotation_matrix.SetElement(2, 2, cos_a + nz*nz*(1-cos_a))
-            
-            # 平移回原位置
-            translate_back = vtk.vtkMatrix4x4()
-            translate_back.Identity()
-            translate_back.SetElement(0, 3, center[0])
-            translate_back.SetElement(1, 3, center[1])
-            translate_back.SetElement(2, 3, center[2])
-            
-            # 组合变换: 平移回原位置 * 旋转 * 平移到原点
-            rot_about_center = vtk.vtkMatrix4x4()
+                return None
+            nx, ny, nz = normal[0]/nlen, normal[1]/nlen, normal[2]/nlen
+
+            # Rodrigues 旋转矩阵
+            R = vtk.vtkMatrix4x4(); R.Identity()
+            R.SetElement(0,0, c+nx*nx*(1-c)); R.SetElement(0,1, nx*ny*(1-c)-nz*s); R.SetElement(0,2, nx*nz*(1-c)+ny*s)
+            R.SetElement(1,0, ny*nx*(1-c)+nz*s); R.SetElement(1,1, c+ny*ny*(1-c)); R.SetElement(1,2, ny*nz*(1-c)-nx*s)
+            R.SetElement(2,0, nz*nx*(1-c)-ny*s); R.SetElement(2,1, nz*ny*(1-c)+nx*s); R.SetElement(2,2, c+nz*nz*(1-c))
+
+            # 旋转中心 = slice中心 + 偏移
+            adj_center = [center[0] + ras_offset[0], center[1] + ras_offset[1], center[2] + ras_offset[2]]
+            T1 = vtk.vtkMatrix4x4(); T1.Identity()
+            T1.SetElement(0,3, -adj_center[0]); T1.SetElement(1,3, -adj_center[1]); T1.SetElement(2,3, -adj_center[2])
+            T2 = vtk.vtkMatrix4x4(); T2.Identity()
+            T2.SetElement(0,3,  adj_center[0]); T2.SetElement(1,3,  adj_center[1]); T2.SetElement(2,3,  adj_center[2])
+
+            # 平移矩阵（将对象从 slice 中心移动到调整后的中心）
+            Toff = vtk.vtkMatrix4x4(); Toff.Identity()
+            Toff.SetElement(0,3, ras_offset[0]); Toff.SetElement(1,3, ras_offset[1]); Toff.SetElement(2,3, ras_offset[2])
+
+            # 组合：Rot(adjustedCenter) * T(offset) * Base
             tmp = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4.Multiply4x4(rotation_matrix, translate_to_origin, tmp)
-            vtk.vtkMatrix4x4.Multiply4x4(translate_back, tmp, rot_about_center)
+            rot_about = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(R, T1, tmp)
+            vtk.vtkMatrix4x4.Multiply4x4(T2, tmp, rot_about)
 
-            # 将旋转与基础叠加矩阵合成： M = rot_about_center * base
-            if self.base_transform_matrix is None:
-                # 若未记录基础矩阵，则以当前变换为基础
-                self.base_transform_matrix = vtk.vtkMatrix4x4()
-                self.transform_node.GetMatrixTransformToParent(self.base_transform_matrix)
+            tmp2 = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(Toff, self.base_transform_matrix, tmp2)
             final_m = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4.Multiply4x4(rot_about_center, self.base_transform_matrix, final_m)
+            vtk.vtkMatrix4x4.Multiply4x4(rot_about, tmp2, final_m)
 
-            # 应用变换
-            self.transform_node.SetMatrixTransformToParent(final_m)
-            
-            # 刷新视图
-            red_widget.sliceView().scheduleRender()
-            
-            logging.info(f"应用旋转变换: {angle_degrees}° 围绕法线 {normal}")
-            
+            return final_m
         except Exception as e:
-            logging.error(f"应用旋转变换失败: {e}")
+            logging.error(f"组合最终变换失败: {e}")
+            return None
 
     def _adjust_position(self, direction: str):
         """在当前切片平面内进行位置微调"""
@@ -1016,151 +1008,38 @@ class ValveOverlayWidget(qt.QWidget):
                 f"偏移: ({self.cumulative_offset[0]:.1f}, {self.cumulative_offset[1]:.1f}) mm"
             )
             
-            # 应用位置调整
+            # 应用位置调整（基于当前旋转 + 偏移的统一公式）
             if self.is_overlay_active and hasattr(self, 'transform_node') and self.transform_node:
-                self._apply_position_adjustment()
+                mat = self._compose_final_transform(self.current_rotation)
+                if mat is not None:
+                    self.transform_node.SetMatrixTransformToParent(mat)
+                    import slicer
+                    slicer.app.layoutManager().sliceWidget('Red').sliceView().scheduleRender()
                 
         except Exception as e:
             logging.error(f"位置微调失败: {e}")
     
     def _apply_position_adjustment(self):
-        """应用平面内位置调整到变换矩阵"""
+        """已由统一组合方法替代，保留占位以兼容旧调用。"""
         try:
-            import slicer
-            import vtk
-            
-            # 获取Red slice的方向信息
-            lm = slicer.app.layoutManager()
-            red_widget = lm.sliceWidget('Red')
-            if not red_widget:
-                return
-                
-            slice_node = red_widget.mrmlSliceNode()
-            slice_to_ras = slice_node.GetSliceToRAS()
-            
-            # 获取slice的X和Y方向向量（平面内的两个基向量）
-            slice_x = [slice_to_ras.GetElement(0, 0),
-                      slice_to_ras.GetElement(1, 0), 
-                      slice_to_ras.GetElement(2, 0)]
-            slice_y = [slice_to_ras.GetElement(0, 1),
-                      slice_to_ras.GetElement(1, 1), 
-                      slice_to_ras.GetElement(2, 1)]
-            
-            # 计算在RAS坐标系中的偏移向量
-            # offset = x_offset * slice_x + y_offset * slice_y
-            ras_offset = [
-                self.cumulative_offset[0] * slice_x[0] + self.cumulative_offset[1] * slice_y[0],
-                self.cumulative_offset[0] * slice_x[1] + self.cumulative_offset[1] * slice_y[1],
-                self.cumulative_offset[0] * slice_x[2] + self.cumulative_offset[1] * slice_y[2]
-            ]
-            
-            # 创建平移矩阵
-            translation_matrix = vtk.vtkMatrix4x4()
-            translation_matrix.Identity()
-            translation_matrix.SetElement(0, 3, ras_offset[0])
-            translation_matrix.SetElement(1, 3, ras_offset[1])
-            translation_matrix.SetElement(2, 3, ras_offset[2])
-            
-            # 获取当前的旋转+基础变换
-            current_base = vtk.vtkMatrix4x4()
-            if self.current_rotation != 0:
-                # 如果有旋转，使用旋转后的矩阵作为基础
-                self._get_rotated_base_matrix(current_base)
-            else:
-                # 没有旋转，直接使用基础矩阵
-                if self.base_transform_matrix is not None:
-                    current_base.DeepCopy(self.base_transform_matrix)
-                else:
-                    self.transform_node.GetMatrixTransformToParent(current_base)
-            
-            # 合成最终变换: Translation * Current_Base
-            final_matrix = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4.Multiply4x4(translation_matrix, current_base, final_matrix)
-            
-            # 应用变换
-            self.transform_node.SetMatrixTransformToParent(final_matrix)
-            
-            # 刷新视图
-            red_widget.sliceView().scheduleRender()
-            
-            logging.info(f"应用位置微调: {self.cumulative_offset}")
-            
+            mat = self._compose_final_transform(self.current_rotation)
+            if mat is not None:
+                self.transform_node.SetMatrixTransformToParent(mat)
+                import slicer
+                slicer.app.layoutManager().sliceWidget('Red').sliceView().scheduleRender()
+                logging.info(f"应用位置微调: {self.cumulative_offset}")
         except Exception as e:
             logging.error(f"应用位置调整失败: {e}")
     
     def _get_rotated_base_matrix(self, output_matrix):
-        """获取应用了当前旋转角度的基础矩阵"""
+        """已由统一组合方法替代，保留以兼容旧调用。"""
         try:
-            import slicer
-            import vtk
-            import math
-            
-            # 获取Red slice信息
-            lm = slicer.app.layoutManager()
-            red_widget = lm.sliceWidget('Red')
-            slice_node = red_widget.mrmlSliceNode()
-            slice_to_ras = slice_node.GetSliceToRAS()
-            
-            # 提取法线方向和中心
-            normal = [slice_to_ras.GetElement(0, 2),
-                     slice_to_ras.GetElement(1, 2), 
-                     slice_to_ras.GetElement(2, 2)]
-            center = [slice_to_ras.GetElement(0, 3),
-                     slice_to_ras.GetElement(1, 3),
-                     slice_to_ras.GetElement(2, 3)]
-            
-            # 构建旋转变换（同 _apply_rotation_transform 的逻辑）
-            angle_radians = math.radians(self.current_rotation)
-            cos_a = math.cos(angle_radians)
-            sin_a = math.sin(angle_radians)
-            
-            # 标准化法线向量
-            norm = math.sqrt(sum(n*n for n in normal))
-            if norm == 0:
-                output_matrix.DeepCopy(self.base_transform_matrix)
+            mat = self._compose_final_transform(self.current_rotation, [0.0, 0.0])
+            if mat is None:
                 return
-            
-            nx, ny, nz = normal[0]/norm, normal[1]/norm, normal[2]/norm
-            
-            # Rodrigues旋转矩阵
-            rotation_matrix = vtk.vtkMatrix4x4()
-            rotation_matrix.Identity()
-            rotation_matrix.SetElement(0, 0, cos_a + nx*nx*(1-cos_a))
-            rotation_matrix.SetElement(0, 1, nx*ny*(1-cos_a) - nz*sin_a)
-            rotation_matrix.SetElement(0, 2, nx*nz*(1-cos_a) + ny*sin_a)
-            rotation_matrix.SetElement(1, 0, ny*nx*(1-cos_a) + nz*sin_a)
-            rotation_matrix.SetElement(1, 1, cos_a + ny*ny*(1-cos_a))
-            rotation_matrix.SetElement(1, 2, ny*nz*(1-cos_a) - nx*sin_a)
-            rotation_matrix.SetElement(2, 0, nz*nx*(1-cos_a) - ny*sin_a)
-            rotation_matrix.SetElement(2, 1, nz*ny*(1-cos_a) + nx*sin_a)
-            rotation_matrix.SetElement(2, 2, cos_a + nz*nz*(1-cos_a))
-            
-            # 平移矩阵
-            translate_to_origin = vtk.vtkMatrix4x4()
-            translate_to_origin.Identity()
-            translate_to_origin.SetElement(0, 3, -center[0])
-            translate_to_origin.SetElement(1, 3, -center[1])
-            translate_to_origin.SetElement(2, 3, -center[2])
-            
-            translate_back = vtk.vtkMatrix4x4()
-            translate_back.Identity()
-            translate_back.SetElement(0, 3, center[0])
-            translate_back.SetElement(1, 3, center[1])
-            translate_back.SetElement(2, 3, center[2])
-            
-            # 组合旋转变换
-            rot_about_center = vtk.vtkMatrix4x4()
-            tmp = vtk.vtkMatrix4x4()
-            vtk.vtkMatrix4x4.Multiply4x4(rotation_matrix, translate_to_origin, tmp)
-            vtk.vtkMatrix4x4.Multiply4x4(translate_back, tmp, rot_about_center)
-            
-            # 与基础矩阵合成
-            vtk.vtkMatrix4x4.Multiply4x4(rot_about_center, self.base_transform_matrix, output_matrix)
-            
+            output_matrix.DeepCopy(mat)
         except Exception as e:
             logging.error(f"获取旋转基础矩阵失败: {e}")
-            if self.base_transform_matrix is not None:
-                output_matrix.DeepCopy(self.base_transform_matrix)
     
     def _reset_position_adjustment(self):
         """重置位置微调"""
