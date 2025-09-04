@@ -68,6 +68,7 @@ class ValveOverlayWidget(qt.QWidget):
         self.current_opacity = 0.6
         self.current_rotation = 0  # 当前旋转角度
         self.base_transform_matrix = None  # 基础叠加矩阵（不含旋转）
+        self.cumulative_offset = [0.0, 0.0]  # 累计平面内偏移量 [x, y] in mm
 
         # 设置组件属性
         self.setObjectName("ValveOverlayWidget")
@@ -114,6 +115,9 @@ class ValveOverlayWidget(qt.QWidget):
         
         # 旋转控制区域
         self._create_rotation_section()
+        
+        # 方向键微调区域
+        self._create_position_adjust_section()
         
         # 高级选项区域
         self._create_advanced_section()
@@ -322,6 +326,204 @@ class ValveOverlayWidget(qt.QWidget):
         
         self.section_card.add_widget(rotation_frame)
 
+    def _create_position_adjust_section(self):
+        """创建方向键微调区域"""
+        adjust_frame = qt.QFrame()
+        adjust_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                padding: 12px;
+            }
+        """)
+        
+        adjust_layout = qt.QVBoxLayout(adjust_frame)
+        adjust_layout.setSpacing(8)
+        
+        # 标题和步长设置
+        header_layout = qt.QHBoxLayout()
+        adjust_label = qt.QLabel("平面内位置微调")
+        adjust_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+            }
+        """)
+        
+        # 步长选择
+        step_label = qt.QLabel("步长:")
+        step_label.setStyleSheet("font-size: 11px; color: #6c757d;")
+        
+        self.step_combo = qt.QComboBox()
+        self.step_combo.addItems(["0.5mm", "1.0mm", "2.0mm", "5.0mm"])
+        self.step_combo.setCurrentText("1.0mm")
+        self.step_combo.setStyleSheet("""
+            QComboBox {
+                font-size: 10px;
+                padding: 2px 6px;
+                border: 1px solid #ced4da;
+                border-radius: 3px;
+                background-color: white;
+                min-width: 60px;
+            }
+        """)
+        
+        header_layout.addWidget(adjust_label)
+        header_layout.addStretch()
+        header_layout.addWidget(step_label)
+        header_layout.addWidget(self.step_combo)
+        
+        adjust_layout.addLayout(header_layout)
+        
+        # 游戏手柄式方向键布局
+        dpad_layout = qt.QGridLayout()
+        dpad_layout.setSpacing(4)
+        
+        # 创建方向按钮
+        button_style = """
+            QPushButton {
+                background-color: #ffffff;
+                border: 2px solid #007bff;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #007bff;
+                width: 40px;
+                height: 40px;
+                min-width: 40px;
+                min-height: 40px;
+                max-width: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #e3f2fd;
+                border-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #007bff;
+                color: white;
+            }
+            QPushButton:disabled {
+                background-color: #f8f9fa;
+                border-color: #dee2e6;
+                color: #6c757d;
+            }
+        """
+        
+        # 上键 (向上移动)
+        self.up_btn = qt.QPushButton("▲")
+        self.up_btn.setStyleSheet(button_style)
+        self.up_btn.setToolTip("向上微调")
+        self.up_btn.clicked.connect(lambda: self._adjust_position('up'))
+        self.up_btn.setEnabled(False)
+        
+        # 下键 (向下移动)
+        self.down_btn = qt.QPushButton("▼")
+        self.down_btn.setStyleSheet(button_style)
+        self.down_btn.setToolTip("向下微调")
+        self.down_btn.clicked.connect(lambda: self._adjust_position('down'))
+        self.down_btn.setEnabled(False)
+        
+        # 左键 (向左移动)
+        self.left_btn = qt.QPushButton("◀")
+        self.left_btn.setStyleSheet(button_style)
+        self.left_btn.setToolTip("向左微调")
+        self.left_btn.clicked.connect(lambda: self._adjust_position('left'))
+        self.left_btn.setEnabled(False)
+        
+        # 右键 (向右移动)
+        self.right_btn = qt.QPushButton("▶")
+        self.right_btn.setStyleSheet(button_style)
+        self.right_btn.setToolTip("向右微调")
+        self.right_btn.clicked.connect(lambda: self._adjust_position('right'))
+        self.right_btn.setEnabled(False)
+        
+        # 中心重置按钮
+        self.center_btn = qt.QPushButton("●")
+        self.center_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 2px solid #28a745;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+                color: #28a745;
+                width: 40px;
+                height: 40px;
+                min-width: 40px;
+                min-height: 40px;
+                max-width: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #e8f5e8;
+                border-color: #1e7e34;
+            }
+            QPushButton:pressed {
+                background-color: #28a745;
+                color: white;
+            }
+            QPushButton:disabled {
+                background-color: #f8f9fa;
+                border-color: #dee2e6;
+                color: #6c757d;
+            }
+        """)
+        self.center_btn.setToolTip("重置到中心位置")
+        self.center_btn.clicked.connect(self._reset_position_adjustment)
+        self.center_btn.setEnabled(False)
+        
+        # 菱形布局：上下左右+中心
+        dpad_layout.addWidget(self.up_btn, 0, 1, qt.Qt.AlignCenter)     # 上
+        dpad_layout.addWidget(self.left_btn, 1, 0, qt.Qt.AlignCenter)   # 左
+        dpad_layout.addWidget(self.center_btn, 1, 1, qt.Qt.AlignCenter) # 中心
+        dpad_layout.addWidget(self.right_btn, 1, 2, qt.Qt.AlignCenter)  # 右
+        dpad_layout.addWidget(self.down_btn, 2, 1, qt.Qt.AlignCenter)   # 下
+        
+        # 设置列和行的拉伸，确保按钮居中
+        dpad_layout.setColumnStretch(0, 1)
+        dpad_layout.setColumnStretch(1, 0)  # 中间列不拉伸
+        dpad_layout.setColumnStretch(2, 1)
+        
+        # 添加方向键到主布局
+        dpad_container = qt.QWidget()
+        dpad_container.setLayout(dpad_layout)
+        adjust_layout.addWidget(dpad_container, qt.Qt.AlignCenter)
+        
+        # 说明文字
+        info_label = qt.QLabel("在当前切片平面内进行精确位置调整")
+        info_label.setStyleSheet("""
+            QLabel {
+                font-size: 10px;
+                color: #6c757d;
+                font-style: italic;
+                margin-top: 4px;
+            }
+        """)
+        info_label.setAlignment(qt.Qt.AlignCenter)
+        adjust_layout.addWidget(info_label)
+        
+        # 累计位移显示
+        self.offset_label = qt.QLabel("偏移: (0.0, 0.0) mm")
+        self.offset_label.setStyleSheet("""
+            QLabel {
+                font-size: 10px;
+                color: #495057;
+                background-color: #e9ecef;
+                border-radius: 3px;
+                padding: 4px 8px;
+                margin-top: 4px;
+            }
+        """)
+        self.offset_label.setAlignment(qt.Qt.AlignCenter)
+        adjust_layout.addWidget(self.offset_label)
+        
+        self.section_card.add_widget(adjust_frame)
+        
+        # 初始化累计偏移量
+        self.cumulative_offset = [0.0, 0.0]  # [x_offset, y_offset] in mm
+
     def _create_advanced_section(self):
         """创建高级选项区域"""
         advanced_layout = qt.QHBoxLayout()
@@ -522,6 +724,10 @@ class ValveOverlayWidget(qt.QWidget):
                 
                 red_widget.sliceView().scheduleRender()
             
+            # 重置位置微调状态
+            self.cumulative_offset = [0.0, 0.0]
+            self.offset_label.setText("偏移: (0.0, 0.0) mm")
+            
             self._update_overlay_status(False)
             self.statusUpdated.emit("瓣膜叠加已禁用")
             self.overlayEnabled.emit(False)
@@ -643,6 +849,12 @@ class ValveOverlayWidget(qt.QWidget):
             """)
             self.opacity_slider.setEnabled(True)
             self.rotation_slider.setEnabled(True)
+            # 启用方向键微调按钮
+            self.up_btn.setEnabled(True)
+            self.down_btn.setEnabled(True)
+            self.left_btn.setEnabled(True)
+            self.right_btn.setEnabled(True)
+            self.center_btn.setEnabled(True)
             self.adjust_btn.setEnabled(True)
             self.reset_btn.setEnabled(True)
         else:
@@ -664,6 +876,12 @@ class ValveOverlayWidget(qt.QWidget):
             """)
             self.opacity_slider.setEnabled(False)
             self.rotation_slider.setEnabled(False)
+            # 禁用方向键微调按钮
+            self.up_btn.setEnabled(False)
+            self.down_btn.setEnabled(False)
+            self.left_btn.setEnabled(False)
+            self.right_btn.setEnabled(False)
+            self.center_btn.setEnabled(False)
             self.adjust_btn.setEnabled(False)
             self.reset_btn.setEnabled(False)
         
@@ -776,6 +994,203 @@ class ValveOverlayWidget(qt.QWidget):
         except Exception as e:
             logging.error(f"应用旋转变换失败: {e}")
 
+    def _adjust_position(self, direction: str):
+        """在当前切片平面内进行位置微调"""
+        try:
+            # 获取步长
+            step_text = self.step_combo.currentText
+            step_size = float(step_text.replace('mm', ''))
+            
+            # 更新累计偏移量
+            if direction == 'up':
+                self.cumulative_offset[1] += step_size
+            elif direction == 'down':
+                self.cumulative_offset[1] -= step_size
+            elif direction == 'left':
+                self.cumulative_offset[0] -= step_size
+            elif direction == 'right':
+                self.cumulative_offset[0] += step_size
+            
+            # 更新显示
+            self.offset_label.setText(
+                f"偏移: ({self.cumulative_offset[0]:.1f}, {self.cumulative_offset[1]:.1f}) mm"
+            )
+            
+            # 应用位置调整
+            if self.is_overlay_active and hasattr(self, 'transform_node') and self.transform_node:
+                self._apply_position_adjustment()
+                
+        except Exception as e:
+            logging.error(f"位置微调失败: {e}")
+    
+    def _apply_position_adjustment(self):
+        """应用平面内位置调整到变换矩阵"""
+        try:
+            import slicer
+            import vtk
+            
+            # 获取Red slice的方向信息
+            lm = slicer.app.layoutManager()
+            red_widget = lm.sliceWidget('Red')
+            if not red_widget:
+                return
+                
+            slice_node = red_widget.mrmlSliceNode()
+            slice_to_ras = slice_node.GetSliceToRAS()
+            
+            # 获取slice的X和Y方向向量（平面内的两个基向量）
+            slice_x = [slice_to_ras.GetElement(0, 0),
+                      slice_to_ras.GetElement(1, 0), 
+                      slice_to_ras.GetElement(2, 0)]
+            slice_y = [slice_to_ras.GetElement(0, 1),
+                      slice_to_ras.GetElement(1, 1), 
+                      slice_to_ras.GetElement(2, 1)]
+            
+            # 计算在RAS坐标系中的偏移向量
+            # offset = x_offset * slice_x + y_offset * slice_y
+            ras_offset = [
+                self.cumulative_offset[0] * slice_x[0] + self.cumulative_offset[1] * slice_y[0],
+                self.cumulative_offset[0] * slice_x[1] + self.cumulative_offset[1] * slice_y[1],
+                self.cumulative_offset[0] * slice_x[2] + self.cumulative_offset[1] * slice_y[2]
+            ]
+            
+            # 创建平移矩阵
+            translation_matrix = vtk.vtkMatrix4x4()
+            translation_matrix.Identity()
+            translation_matrix.SetElement(0, 3, ras_offset[0])
+            translation_matrix.SetElement(1, 3, ras_offset[1])
+            translation_matrix.SetElement(2, 3, ras_offset[2])
+            
+            # 获取当前的旋转+基础变换
+            current_base = vtk.vtkMatrix4x4()
+            if self.current_rotation != 0:
+                # 如果有旋转，使用旋转后的矩阵作为基础
+                self._get_rotated_base_matrix(current_base)
+            else:
+                # 没有旋转，直接使用基础矩阵
+                if self.base_transform_matrix is not None:
+                    current_base.DeepCopy(self.base_transform_matrix)
+                else:
+                    self.transform_node.GetMatrixTransformToParent(current_base)
+            
+            # 合成最终变换: Translation * Current_Base
+            final_matrix = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(translation_matrix, current_base, final_matrix)
+            
+            # 应用变换
+            self.transform_node.SetMatrixTransformToParent(final_matrix)
+            
+            # 刷新视图
+            red_widget.sliceView().scheduleRender()
+            
+            logging.info(f"应用位置微调: {self.cumulative_offset}")
+            
+        except Exception as e:
+            logging.error(f"应用位置调整失败: {e}")
+    
+    def _get_rotated_base_matrix(self, output_matrix):
+        """获取应用了当前旋转角度的基础矩阵"""
+        try:
+            import slicer
+            import vtk
+            import math
+            
+            # 获取Red slice信息
+            lm = slicer.app.layoutManager()
+            red_widget = lm.sliceWidget('Red')
+            slice_node = red_widget.mrmlSliceNode()
+            slice_to_ras = slice_node.GetSliceToRAS()
+            
+            # 提取法线方向和中心
+            normal = [slice_to_ras.GetElement(0, 2),
+                     slice_to_ras.GetElement(1, 2), 
+                     slice_to_ras.GetElement(2, 2)]
+            center = [slice_to_ras.GetElement(0, 3),
+                     slice_to_ras.GetElement(1, 3),
+                     slice_to_ras.GetElement(2, 3)]
+            
+            # 构建旋转变换（同 _apply_rotation_transform 的逻辑）
+            angle_radians = math.radians(self.current_rotation)
+            cos_a = math.cos(angle_radians)
+            sin_a = math.sin(angle_radians)
+            
+            # 标准化法线向量
+            norm = math.sqrt(sum(n*n for n in normal))
+            if norm == 0:
+                output_matrix.DeepCopy(self.base_transform_matrix)
+                return
+            
+            nx, ny, nz = normal[0]/norm, normal[1]/norm, normal[2]/norm
+            
+            # Rodrigues旋转矩阵
+            rotation_matrix = vtk.vtkMatrix4x4()
+            rotation_matrix.Identity()
+            rotation_matrix.SetElement(0, 0, cos_a + nx*nx*(1-cos_a))
+            rotation_matrix.SetElement(0, 1, nx*ny*(1-cos_a) - nz*sin_a)
+            rotation_matrix.SetElement(0, 2, nx*nz*(1-cos_a) + ny*sin_a)
+            rotation_matrix.SetElement(1, 0, ny*nx*(1-cos_a) + nz*sin_a)
+            rotation_matrix.SetElement(1, 1, cos_a + ny*ny*(1-cos_a))
+            rotation_matrix.SetElement(1, 2, ny*nz*(1-cos_a) - nx*sin_a)
+            rotation_matrix.SetElement(2, 0, nz*nx*(1-cos_a) - ny*sin_a)
+            rotation_matrix.SetElement(2, 1, nz*ny*(1-cos_a) + nx*sin_a)
+            rotation_matrix.SetElement(2, 2, cos_a + nz*nz*(1-cos_a))
+            
+            # 平移矩阵
+            translate_to_origin = vtk.vtkMatrix4x4()
+            translate_to_origin.Identity()
+            translate_to_origin.SetElement(0, 3, -center[0])
+            translate_to_origin.SetElement(1, 3, -center[1])
+            translate_to_origin.SetElement(2, 3, -center[2])
+            
+            translate_back = vtk.vtkMatrix4x4()
+            translate_back.Identity()
+            translate_back.SetElement(0, 3, center[0])
+            translate_back.SetElement(1, 3, center[1])
+            translate_back.SetElement(2, 3, center[2])
+            
+            # 组合旋转变换
+            rot_about_center = vtk.vtkMatrix4x4()
+            tmp = vtk.vtkMatrix4x4()
+            vtk.vtkMatrix4x4.Multiply4x4(rotation_matrix, translate_to_origin, tmp)
+            vtk.vtkMatrix4x4.Multiply4x4(translate_back, tmp, rot_about_center)
+            
+            # 与基础矩阵合成
+            vtk.vtkMatrix4x4.Multiply4x4(rot_about_center, self.base_transform_matrix, output_matrix)
+            
+        except Exception as e:
+            logging.error(f"获取旋转基础矩阵失败: {e}")
+            if self.base_transform_matrix is not None:
+                output_matrix.DeepCopy(self.base_transform_matrix)
+    
+    def _reset_position_adjustment(self):
+        """重置位置微调"""
+        try:
+            # 重置累计偏移量
+            self.cumulative_offset = [0.0, 0.0]
+            self.offset_label.setText("偏移: (0.0, 0.0) mm")
+            
+            # 重新应用变换（只包含旋转，不包含位置偏移）
+            if self.is_overlay_active and hasattr(self, 'transform_node') and self.transform_node:
+                if self.current_rotation != 0:
+                    # 有旋转时，重新应用旋转变换
+                    self._apply_rotation_transform(self.current_rotation)
+                else:
+                    # 没有旋转时，直接使用基础矩阵
+                    if self.base_transform_matrix is not None:
+                        self.transform_node.SetMatrixTransformToParent(self.base_transform_matrix)
+                
+                # 刷新视图
+                import slicer
+                lm = slicer.app.layoutManager()
+                red_widget = lm.sliceWidget('Red')
+                if red_widget:
+                    red_widget.sliceView().scheduleRender()
+            
+            logging.info("位置微调已重置")
+            
+        except Exception as e:
+            logging.error(f"重置位置微调失败: {e}")
+
     def _on_opacity_changed(self, value: int):
         """透明度改变时的回调"""
         opacity = value / 100.0
@@ -860,6 +1275,10 @@ class ValveOverlayWidget(qt.QWidget):
             self.current_rotation = 0
             self.rotation_slider.setValue(0)
             self.rotation_value_label.setText("0°")
+            
+            # 重置位置微调
+            self.cumulative_offset = [0.0, 0.0]
+            self.offset_label.setText("偏移: (0.0, 0.0) mm")
             
             # 删除变换节点
             import slicer
