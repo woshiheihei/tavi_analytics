@@ -71,6 +71,20 @@ class SectionCard(qt.QWidget):
     def add_layout(self, layout):
         self.body_layout.addLayout(layout)
 
+    def add_header_widget(self, widget: qt.QWidget, align_right: bool = True):
+        """Add a widget to the header bar. When align_right is True, it will appear on the right side."""
+        if align_right:
+            # header already has a stretch; appending puts the widget on the right
+            self._header_layout.addWidget(widget)
+        else:
+            # Insert before the stretch to keep it near the title
+            # Find stretch index (the last item usually). Fallback to append.
+            index = self._header_layout.count() - 1
+            if index < 0:
+                self._header_layout.addWidget(widget)
+            else:
+                self._header_layout.insertWidget(index, widget)
+
     def _apply_variant_style(self, variant: str):
         variant = (variant or "neutral").lower()
 

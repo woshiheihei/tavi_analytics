@@ -368,20 +368,24 @@ class HaltAnalysisWidget(qt.QWidget):
     def _create_key_view_section(self, parent_layout):
         """创建关键视图管理区域 - 使用公共组件 + SectionCard"""
         card = SectionCard(title="关键视图", icon_text="🔖", variant="dashed", parent=self)
+
         # 创建关键视图管理器组件
         self.key_view_manager = KeyViewManagerWidget(
             analysis_type="HALT",
             session=self.session,
             compact_mode=True,  # 使用紧凑模式
-            parent=self
+            parent=self,
+            use_external_header=True,
         )
-        
+
         # 连接信号
         self.key_view_manager.viewMarked.connect(self._on_view_marked)
         self.key_view_manager.viewRestored.connect(self._on_view_restored)
         self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
         self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
-        
+
+        # 将“标记”按钮放到卡片右上角，避免内容区顶端空白
+        card.add_header_widget(self.key_view_manager.mark_btn, align_right=True)
         card.add_widget(self.key_view_manager)
         parent_layout.addWidget(card)
     

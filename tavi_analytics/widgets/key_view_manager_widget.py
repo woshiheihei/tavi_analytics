@@ -58,7 +58,8 @@ class KeyViewManagerWidget(qt.QWidget):
                  analysis_type: str = "GENERAL", 
                  session: Optional[TAVRStudySession] = None, 
                  compact_mode: bool = False,
-                 parent=None):
+                 parent=None,
+                 use_external_header: bool = False):
         """
         初始化关键视图管理器组件
         
@@ -69,21 +70,22 @@ class KeyViewManagerWidget(qt.QWidget):
             parent: 父组件
         """
         super().__init__(parent)
-        
+
         self.analysis_type = analysis_type
         self.session = session
         self.compact_mode = compact_mode
-        
+        self.use_external_header = use_external_header
+
         # 获取视图标记服务
         self.view_service = get_view_marking_service(analysis_type, session)
-        
+
         # 设置组件属性
         self.setObjectName(f"KeyViewManagerWidget_{analysis_type}")
-        
+
         # 回调函数列表
-        self.mark_callbacks: List[Callable[[str], None]] = []
-        self.restore_callbacks: List[Callable[[str], None]] = []
-        self.delete_callbacks: List[Callable[[str], None]] = []
+        self.mark_callbacks = []
+        self.restore_callbacks = []
+        self.delete_callbacks = []
         
         # 创建界面
         self._setup_ui()
@@ -94,118 +96,51 @@ class KeyViewManagerWidget(qt.QWidget):
         logging.info(f"KeyViewManagerWidget 初始化完成 - 分析类型: {analysis_type}, 紧凑模式: {compact_mode}")
     
     def _setup_ui(self):
-        """设置用户界面"""
+        """设置用户界面（作为纯内容组件，由父级 SectionCard 包裹）"""
         main_layout = qt.QVBoxLayout(self)
-        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(6 if self.compact_mode else 8)
-        
-        # 创建主框架
-        self.main_frame = self._create_main_frame()
-        main_layout.addWidget(self.main_frame)
-        
-        frame_layout = qt.QVBoxLayout(self.main_frame)
-        frame_layout.setSpacing(6 if self.compact_mode else 8)
-        
-        # 标题和操作区域
-        self._create_header_section(frame_layout)
-        
-        # 已标记视图列表
-        self._create_views_list_section(frame_layout)
-        
-        # 操作按钮（仅在非紧凑模式下显示）
-        if not self.compact_mode:
-            self._create_actions_section(frame_layout)
-    
-    def _create_main_frame(self) -> qt.QFrame:
-        """创建主框架"""
-        frame = qt.QFrame()
-        
-        if self.compact_mode:
-            # 紧凑模式样式
-            frame.setStyleSheet("""
-                QFrame {
-                    background-color: #f8fff8;
-                    border: 1px solid #c3e6cb;
-                    border-radius: 4px;
-                    padding: 6px;
-                }
-            """)
-        else:
-            # 标准模式样式
-            frame.setStyleSheet("""
-                QFrame {
-                    background-color: #f8fff8;
-                    border: 1px solid #c3e6cb;
-                    border-radius: 6px;
-                    padding: 10px;
-                }
-            """)
-        
-        return frame
-    
-    def _create_header_section(self, parent_layout):
-        """创建标题和操作区域"""
+
+        # 顶部工具行（可外置到父级 SectionCard 的 header）
         header_layout = qt.QHBoxLayout()
-        header_layout.setSpacing(8)
-        
-        # 标题
-        title_text = "关键视图" if self.compact_mode else f"关键视图 - {self.analysis_type}"
-        title = qt.QLabel(title_text)
-        
-        if self.compact_mode:
-            title.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50;")
-        else:
-            title.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
-        
-        header_layout.addWidget(title)
-        header_layout.addStretch()
-        
-        # 标记当前视图按钮
+        header_layout.setSpacing(6 if self.compact_mode else 8)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
+        if not self.use_external_header:
+            if not self.compact_mode:
+                title = qt.QLabel(f"关键视图 - {self.analysis_type}")
+                title.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+                header_layout.addWidget(title)
+            header_layout.addStretch()
+
         mark_text = "📌" if self.compact_mode else "📌 标记 (Ctrl+M)"
         self.mark_btn = qt.QPushButton(mark_text)
-        
         if self.compact_mode:
             self.mark_btn.setStyleSheet("""
-                QPushButton {
-                    padding: 4px 8px;
-                    background-color: #28a745;
-                    color: white;
-                    border: none;
-                    border-radius: 3px;
-                    font-weight: 500;
-                    font-size: 10px;
-                    min-width: 30px;
-                }
-                QPushButton:hover {
-                    background-color: #218838;
-                }
+                QPushButton { padding: 4px 8px; background-color: #28a745; color: white; border: none; border-radius: 3px; font-weight: 500; font-size: 10px; min-width: 30px; }
+                QPushButton:hover { background-color: #218838; }
             """)
         else:
             self.mark_btn.setStyleSheet("""
-                QPushButton {
-                    padding: 6px 10px;
-                    background-color: #28a745;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    font-weight: 500;
-                    font-size: 11px;
-                }
-                QPushButton:hover {
-                    background-color: #218838;
-                }
+                QPushButton { padding: 6px 10px; background-color: #28a745; color: white; border: none; border-radius: 4px; font-weight: 500; font-size: 11px; }
+                QPushButton:hover { background-color: #218838; }
             """)
-        
         self.mark_btn.clicked.connect(self._show_mark_view_dialog)
         self.mark_btn.setToolTip(f"标记当前MPR视图位置 ({self.analysis_type}分析)")
-        
-        # 添加快捷键
         mark_shortcut = qt.QShortcut(qt.QKeySequence("Ctrl+M"), self)
         mark_shortcut.activated.connect(self._show_mark_view_dialog)
-        
-        header_layout.addWidget(self.mark_btn)
-        
-        parent_layout.addLayout(header_layout)
+        if not self.use_external_header:
+            header_layout.addWidget(self.mark_btn)
+            main_layout.addLayout(header_layout)
+
+        # 已标记视图列表
+        self._create_views_list_section(main_layout)
+
+        # 操作按钮（仅在非紧凑模式下显示）
+        if not self.compact_mode:
+            self._create_actions_section(main_layout)
+    
+    # 旧的主框/标题构建逻辑（卡片化样式）已移除，由父级 SectionCard 统一提供
     
     def _create_views_list_section(self, parent_layout):
         """创建已标记视图列表区域"""
