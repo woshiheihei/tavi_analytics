@@ -128,6 +128,17 @@ class TAVRStudySession:
             
             # 期像管理服务（延迟加载，避免循环导入）
             self._phase_management_service = None
+
+            # 交接对齐角度（单位：度）
+            # 键名：
+            # - RCA_to_RCC_LCC
+            # - RCA_to_LCC_NCC
+            # - RCA_to_NCC_RCC
+            self.commissure_alignment_angles = {
+                "RCA_to_RCC_LCC": 0.0,
+                "RCA_to_LCC_NCC": 0.0,
+                "RCA_to_NCC_RCC": 0.0,
+            }
             
             # 标记已初始化
             self._initialized = True
@@ -992,6 +1003,48 @@ class TAVRStudySession:
             TAVRStudySession: 单例实例
         """
         return cls()
+
+    # ====== 交接对齐角度（会话级）======
+    def set_commissure_alignment_angles(self, values: Dict[str, float]) -> bool:
+        """设置交接对齐角度，未提供的键保持不变。
+
+        Args:
+            values: 包含一个或多个角度的字典，范围限制在[0, 360]
+        Returns:
+            bool: 设置成功返回True
+        """
+        try:
+            if not hasattr(self, 'commissure_alignment_angles') or not isinstance(self.commissure_alignment_angles, dict):
+                self.commissure_alignment_angles = {
+                    "RCA_to_RCC_LCC": 0.0,
+                    "RCA_to_LCC_NCC": 0.0,
+                    "RCA_to_NCC_RCC": 0.0,
+                }
+            for key in ("RCA_to_RCC_LCC", "RCA_to_LCC_NCC", "RCA_to_NCC_RCC"):
+                if key in values and values[key] is not None:
+                    try:
+                        v = float(values[key])
+                        # 限制范围
+                        v = max(0.0, min(360.0, v))
+                        self.commissure_alignment_angles[key] = v
+                    except Exception:
+                        self.logger.warning(f"交接对齐角度无效 {key}: {values[key]}")
+            self.logger.info(f"更新交接对齐角度: {self.commissure_alignment_angles}")
+            return True
+        except Exception as e:
+            self.logger.error(f"设置交接对齐角度失败: {e}")
+            return False
+
+    def get_commissure_alignment_angles(self) -> Dict[str, float]:
+        """获取交接对齐角度（副本）"""
+        try:
+            return dict(getattr(self, 'commissure_alignment_angles', {}))
+        except Exception:
+            return {
+                "RCA_to_RCC_LCC": 0.0,
+                "RCA_to_LCC_NCC": 0.0,
+                "RCA_to_NCC_RCC": 0.0,
+            }
     
     # ====== 平面数据管理方法 ======
     # 兼容API：加载到contour_data_manager（需要先通过get_phase_contour_manager设置）

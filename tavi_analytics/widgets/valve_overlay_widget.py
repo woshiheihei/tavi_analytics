@@ -49,6 +49,7 @@ class ValveOverlayWidget(qt.QWidget):
     opacityChanged = qt.Signal(float)     # 透明度改变信号
     rotationChanged = qt.Signal(int)      # 旋转角度改变信号
     statusUpdated = qt.Signal(str)        # 状态更新信号
+    commissureAnglesChanged = qt.Signal(dict)  # 交接对齐角度变更
     
     def __init__(self, session: Optional[TAVRStudySession] = None, parent=None, compact: bool = True):
         """
@@ -124,6 +125,9 @@ class ValveOverlayWidget(qt.QWidget):
 
         # 透明度调节区域（常显）
         self._create_opacity_section()
+
+        # 交接对齐测量（常显）
+        self._create_commissure_alignment_section()
 
         # 高级区域（旋转/微调/更多） -> 容器，可折叠
         self.advanced_container = qt.QWidget()
@@ -369,6 +373,116 @@ class ValveOverlayWidget(qt.QWidget):
             return rotation_frame
         else:
             self.section_card.add_widget(rotation_frame)
+
+    def _create_commissure_alignment_section(self):
+        """创建交接对齐测量表单 (单位：度)"""
+        frame = qt.QFrame()
+        frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 8px;
+            }
+        """)
+
+        v = qt.QVBoxLayout(frame)
+        v.setContentsMargins(6, 4, 6, 6)
+        v.setSpacing(6 if self._compact else 8)
+
+        # 标题
+        header = qt.QHBoxLayout()
+        title = qt.QLabel("交接对齐测量")
+        title.setStyleSheet("QLabel { font-size: 11px; font-weight: bold; }")
+        unit = qt.QLabel("单位: °")
+        unit.setStyleSheet("QLabel { font-size: 10px; color: #6c757d; }")
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(unit)
+        v.addLayout(header)
+
+        # 表单
+        form = qt.QFormLayout()
+        form.setLabelAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
+        form.setFormAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(4 if self._compact else 6)
+
+        def make_angle_spin():
+            spin = qt.QDoubleSpinBox()
+            spin.setRange(0.0, 360.0)
+            spin.setDecimals(1)
+            spin.setSingleStep(0.5)
+            spin.setSuffix(" °")
+            spin.setKeyboardTracking(False)
+            spin.setStyleSheet("QDoubleSpinBox { font-size: 11px; padding: 2px 6px; }")
+            return spin
+
+        # 三个角度输入
+        self.spin_rca_rcc_lcc = make_angle_spin()
+        self.spin_rca_lcc_ncc = make_angle_spin()
+        self.spin_rca_ncc_rcc = make_angle_spin()
+
+        # 连接变化信号
+        self.spin_rca_rcc_lcc.valueChanged.connect(self._on_commissure_angles_changed)
+        self.spin_rca_lcc_ncc.valueChanged.connect(self._on_commissure_angles_changed)
+        self.spin_rca_ncc_rcc.valueChanged.connect(self._on_commissure_angles_changed)
+
+        form.addRow("Angle RCA to RCC/LCC commissure", self.spin_rca_rcc_lcc)
+        form.addRow("Angle RCA to LCC/NCC commissure", self.spin_rca_lcc_ncc)
+        form.addRow("Angle RCA to NCC/RCC commissure", self.spin_rca_ncc_rcc)
+
+        v.addLayout(form)
+
+        # 轻提示
+        hint = qt.QLabel("填写三个交接点之间的相对角度")
+        hint.setStyleSheet("QLabel { font-size: 10px; color: #6c757d; font-style: italic; }")
+        v.addWidget(hint)
+
+        # 初始内部状态
+        self._commissure_angles = {
+            "RCA_to_RCC_LCC": 0.0,
+            "RCA_to_LCC_NCC": 0.0,
+            "RCA_to_NCC_RCC": 0.0,
+        }
+
+        self.section_card.add_widget(frame)
+
+    def _on_commissure_angles_changed(self, *_args):
+        """任一角度变更时，同步内部状态并发出信号"""
+        try:
+            def read_spin(spin: qt.QDoubleSpinBox) -> float:
+                # 兼容 value 为方法或属性的情况
+                val_attr = getattr(spin, 'value', None)
+                if callable(val_attr):
+                    return float(val_attr())
+                if val_attr is not None:
+                    try:
+                        return float(val_attr)
+                    except Exception:
+                        pass
+                # 兜底从文本解析（去掉单位）
+                txt_attr = getattr(spin, 'text', None)
+                if callable(txt_attr):
+                    txt = str(txt_attr())
+                else:
+                    txt = str(txt_attr) if txt_attr is not None else "0"
+                return float(txt.replace('°', '').replace(' °', '').strip())
+
+            self._commissure_angles = {
+                "RCA_to_RCC_LCC": read_spin(self.spin_rca_rcc_lcc),
+                "RCA_to_LCC_NCC": read_spin(self.spin_rca_lcc_ncc),
+                "RCA_to_NCC_RCC": read_spin(self.spin_rca_ncc_rcc),
+            }
+            # 写入会话（若可用）
+            try:
+                if self.session is not None and hasattr(self.session, 'set_commissure_alignment_angles'):
+                    self.session.set_commissure_alignment_angles(self._commissure_angles)
+            except Exception as e:
+                logging.debug(f"写入会话交接角度时出错（可忽略）: {e}")
+            self.commissureAnglesChanged.emit(dict(self._commissure_angles))
+        except Exception as e:
+            logging.error(f"更新交接对齐角度失败: {e}")
 
     def _create_position_adjust_section(self, return_widget: bool = False):
         """创建方向键微调区域"""
@@ -1242,6 +1356,43 @@ class ValveOverlayWidget(qt.QWidget):
     def add_rotation_callback(self, callback: Callable[[int], None]):
         """添加旋转变化回调函数"""
         self.rotation_callbacks.append(callback)
+
+    # 交接对齐角度相关接口
+    def get_commissure_alignment_angles(self) -> dict:
+        """获取交接对齐角度，键为:
+        - RCA_to_RCC_LCC
+        - RCA_to_LCC_NCC
+        - RCA_to_NCC_RCC
+        """
+        return dict(getattr(self, "_commissure_angles", {}))
+
+    def set_commissure_alignment_angles(self, values: dict):
+        """设置交接对齐角度（单位：度）。未提供的键保持不变。"""
+        try:
+            if not hasattr(self, "_commissure_angles"):
+                self._commissure_angles = {
+                    "RCA_to_RCC_LCC": 0.0,
+                    "RCA_to_LCC_NCC": 0.0,
+                    "RCA_to_NCC_RCC": 0.0,
+                }
+            for key in ("RCA_to_RCC_LCC", "RCA_to_LCC_NCC", "RCA_to_NCC_RCC"):
+                if key in values and values[key] is not None:
+                    v = max(0.0, min(360.0, float(values[key])))
+                    self._commissure_angles[key] = v
+            # 同步到控件（避免触发三次信号）
+            self.spin_rca_rcc_lcc.blockSignals(True)
+            self.spin_rca_lcc_ncc.blockSignals(True)
+            self.spin_rca_ncc_rcc.blockSignals(True)
+            self.spin_rca_rcc_lcc.setValue(self._commissure_angles["RCA_to_RCC_LCC"])
+            self.spin_rca_lcc_ncc.setValue(self._commissure_angles["RCA_to_LCC_NCC"])
+            self.spin_rca_ncc_rcc.setValue(self._commissure_angles["RCA_to_NCC_RCC"])
+            self.spin_rca_rcc_lcc.blockSignals(False)
+            self.spin_rca_lcc_ncc.blockSignals(False)
+            self.spin_rca_ncc_rcc.blockSignals(False)
+            # 统一发一次变更信号
+            self.commissureAnglesChanged.emit(dict(self._commissure_angles))
+        except Exception as e:
+            logging.error(f"设置交接对齐角度失败: {e}")
     
     def get_overlay_status(self) -> bool:
         """获取当前叠加状态"""
@@ -1282,6 +1433,14 @@ class ValveOverlayWidget(qt.QWidget):
     def set_session(self, session: TAVRStudySession):
         """设置会话对象"""
         self.session = session
+        # 从会话同步交接对齐角度到UI
+        try:
+            if self.session is not None and hasattr(self.session, 'get_commissure_alignment_angles'):
+                values = self.session.get_commissure_alignment_angles() or {}
+                if values:
+                    self.set_commissure_alignment_angles(values)
+        except Exception as e:
+            logging.debug(f"从会话同步交接角度失败（可忽略）: {e}")
     
     def cleanup(self):
         """清理资源"""
