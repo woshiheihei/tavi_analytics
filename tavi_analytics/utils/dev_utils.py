@@ -108,6 +108,22 @@ class DevUtils:
                 return result
             return data
 
+        # 视图标记快照（与会话绑定）
+        view_marks_snapshot = {}
+        try:
+            # 延迟导入，避免循环依赖
+            from ..services.view_marking_service import get_view_marks_snapshot_for_session  # type: ignore
+        except Exception:
+            try:
+                from services.view_marking_service import get_view_marks_snapshot_for_session  # type: ignore
+            except Exception:
+                get_view_marks_snapshot_for_session = None  # type: ignore
+        try:
+            if get_view_marks_snapshot_for_session is not None:
+                view_marks_snapshot = get_view_marks_snapshot_for_session(session) or {}
+        except Exception as e:
+            logging.warning(f"收集视图标记快照失败: {e}")
+
         return {
             "patient_data": patient,
             "volume_sequence_node_id": safe_node_to_id(session.volume_sequence_node_id),
@@ -120,6 +136,8 @@ class DevUtils:
             "phase_segmentation_node_ids": safe_dict_conversion(
                 getattr(session, 'phase_segmentation_node_ids', {})
             ),
+            # 关键视图标记（按分析类型分组）
+            "view_marks": view_marks_snapshot,
         }
 
     @staticmethod
@@ -228,6 +246,26 @@ class DevUtils:
                 logging.info("创建了新的空轮廓数据管理器")
             except Exception as e:
                 logging.warning(f"创建空轮廓管理器失败: {e}")
+
+        # 恢复关键视图标记（与会话绑定）
+        try:
+            view_marks_snapshot = data.get("view_marks")
+            if view_marks_snapshot:
+                try:
+                    from ..services.view_marking_service import restore_view_marks_from_snapshot  # type: ignore
+                except Exception:
+                    try:
+                        from services.view_marking_service import restore_view_marks_from_snapshot  # type: ignore
+                    except Exception:
+                        restore_view_marks_from_snapshot = None  # type: ignore
+                if restore_view_marks_from_snapshot is not None:
+                    ok = restore_view_marks_from_snapshot(session, view_marks_snapshot, merge=True)
+                    if ok:
+                        logging.info("成功恢复关键视图标记到当前会话")
+                    else:
+                        logging.warning("部分或全部关键视图标记恢复失败")
+        except Exception as e:
+            logging.warning(f"恢复关键视图标记失败: {e}")
 
     @staticmethod
     def _apply_module_states(module_states: Dict[str, Any]) -> None:

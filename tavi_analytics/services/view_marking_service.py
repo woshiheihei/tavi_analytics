@@ -15,6 +15,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import qt
 import json
 from pathlib import Path
+import re
 
 # 轻量依赖，仅在需要时注入
 try:
@@ -69,13 +70,31 @@ class ViewMarkingService:
             # 使用用户主目录下的应用数据目录
             app_data_dir = Path.home() / ".tavi_analytics" / "view_marks"
             app_data_dir.mkdir(parents=True, exist_ok=True)
-            
-            # 根据分析类型和会话信息创建文件名
-            session_id = getattr(self.session, 'study_name', 'default') if self.session else 'default'
+
+            # 构造更稳健的session标识：优先使用patientID，其次study_name，最后default
+            session_id = 'default'
+            try:
+                if self.session is not None:
+                    # patientID 来源：session.patient_data.patientID
+                    patient_id = None
+                    if hasattr(self.session, 'patient_data') and getattr(self.session.patient_data, 'patientID', None):
+                        patient_id = self.session.patient_data.patientID
+                    study_name = getattr(self.session, 'study_name', None)
+                    sid = (patient_id or study_name or 'default')
+                    # 规范化文件名中的非法字符
+                    session_id = str(sid).strip().replace(' ', '_').replace('/', '_')
+            except Exception:
+                session_id = 'default'
+
+            # 保存用于图片目录命名
+            self._session_id = session_id
+            self._app_data_dir = app_data_dir
+
+            # 根据分析类型和会议信息创建文件名
             self.persistence_file = app_data_dir / f"{self.analysis_type}_{session_id}_views.json"
-            
+
             logging.debug(f"视图标记持久化文件: {self.persistence_file}")
-            
+
         except Exception as e:
             logging.error(f"设置持久化路径失败: {e}")
             self.persistence_file = None
@@ -95,6 +114,132 @@ class ViewMarkingService:
         except Exception as e:
             logging.error(f"加载视图标记失败: {e}")
             self.marked_views = {}
+
+    def _sanitize_filename(self, name: str) -> str:
+        """将任意名称转换为安全的文件名片段。"""
+        # 替换非字母数字与下划线、横线为下划线
+        safe = re.sub(r"[^\w\-]+", "_", name.strip())
+        return safe[:80] if len(safe) > 80 else safe
+
+    def _get_images_dir(self) -> Path:
+        """获取用于保存截图的目录，按分析类型与session组织。"""
+        base = getattr(self, "_app_data_dir", Path.home() / ".tavi_analytics" / "view_marks")
+        session_id = getattr(self, "_session_id", "default")
+        images_dir = base / "images" / f"{self.analysis_type}_{session_id}"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        return images_dir
+
+    def _capture_all_slice_views(self, view_name: str) -> Dict[str, str]:
+        """截取当前布局中所有切片视图的截图并保存。
+
+        返回值: { sliceName: filePath }
+        """
+        try:
+            import slicer
+        except Exception:
+            logging.warning("Slicer环境不可用，跳过截图")
+            return {}
+
+        def save_slice_view_png(slice_widget, slice_view, out_path: str) -> bool:
+            """将切片视图保存为PNG，尝试多种方式提高成功率。"""
+            # 预渲染并处理事件
+            try:
+                qt.QApplication.processEvents()
+            except Exception:
+                pass
+            try:
+                rw = slice_view.renderWindow()
+                if rw:
+                    rw.Render()
+            except Exception:
+                pass
+
+            # 方案1：抓取整个SliceWidget
+            try:
+                pix = slice_widget.grab()
+                if hasattr(pix, 'save') and pix.save(out_path):
+                    return True
+            except Exception:
+                pass
+
+            # 方案2：仅抓取SliceView
+            try:
+                pix = slice_view.grab()
+                if hasattr(pix, 'save') and pix.save(out_path):
+                    return True
+            except Exception:
+                pass
+
+            # 方案3：QScreen根据winId抓取
+            try:
+                screen = qt.QApplication.primaryScreen()
+                target = slice_view if hasattr(slice_view, 'winId') else slice_widget
+                if screen and target and hasattr(target, 'winId'):
+                    pm = screen.grabWindow(int(target.winId()))
+                    if hasattr(pm, 'save') and pm.save(out_path):
+                        return True
+            except Exception:
+                pass
+
+            # 方案4：VTK窗口捕获
+            try:
+                import vtk
+                rw = slice_view.renderWindow()
+                if rw is None:
+                    return False
+                w2i = vtk.vtkWindowToImageFilter()
+                w2i.SetInput(rw)
+                # 确保当前渲染帧
+                rw.Render()
+                w2i.Update()
+                writer = vtk.vtkPNGWriter()
+                writer.SetFileName(out_path)
+                writer.SetInputConnection(w2i.GetOutputPort())
+                writer.Write()
+                return os.path.exists(out_path) and os.path.getsize(out_path) > 0
+            except Exception as e:
+                logging.debug(f"VTK捕获失败: {e}")
+                return False
+
+        try:
+            lm = slicer.app.layoutManager()
+            if not lm:
+                logging.warning("LayoutManager 不可用，跳过截图")
+                return {}
+
+            try:
+                slice_names = list(lm.sliceViewNames())
+            except Exception:
+                # 常见默认视图名称
+                slice_names = ["Red", "Yellow", "Green"]
+
+            timestamp = qt.QDateTime.currentDateTime().toString("yyyyMMdd_HHmmss")
+            safe_view = self._sanitize_filename(view_name)
+            images_dir = self._get_images_dir()
+
+            saved: Dict[str, str] = {}
+            for name in slice_names:
+                try:
+                    sw = lm.sliceWidget(name)
+                    if not sw:
+                        continue
+                    sv = sw.sliceView()
+                    filename = f"{timestamp}_{safe_view}_{name}.png"
+                    fpath = images_dir / filename
+                    ok = save_slice_view_png(sw, sv, str(fpath))
+                    if ok:
+                        saved[name] = str(fpath)
+                except Exception as e:
+                    logging.debug(f"保存{name}视图截图失败: {e}")
+
+            if not saved:
+                logging.warning("未能保存任何切片视图截图")
+            else:
+                logging.info(f"已保存切片视图截图: {saved}")
+            return saved
+        except Exception as e:
+            logging.warning(f"截取切片视图失败: {e}")
+            return {}
     
     def _save_marked_views(self):
         """保存视图标记到文件"""
@@ -163,7 +308,7 @@ class ViewMarkingService:
                     description = f"{self.analysis_type}分析关键视图 - {view_name}"
             
             # 保存视图状态（包含期像信息）
-            self.marked_views[view_name] = {
+            mark_entry = {
                 'center_point': center_point.tolist(),
                 'normal_vector': normal_vector.tolist(),
                 'phase': current_phase,
@@ -173,6 +318,16 @@ class ViewMarkingService:
                 'description': description,
                 'analysis_type': self.analysis_type
             }
+
+            # 截取切片视图截图并写入元数据
+            try:
+                snapshots = self._capture_all_slice_views(view_name)
+                if snapshots:
+                    mark_entry['snapshots'] = snapshots  # { 'Red': path, ... }
+            except Exception as e:
+                logging.debug(f"截取截图时出现问题，已跳过: {e}")
+
+            self.marked_views[view_name] = mark_entry
             
             # 持久化保存
             self._save_marked_views()
@@ -314,6 +469,54 @@ class ViewMarkingService:
             return True
         except Exception as e:
             logging.error(f"清除所有视图标记失败: {e}")
+            return False
+
+    # ==== 新增：与全局Session持久化集成的快照/恢复辅助 ====
+    def to_snapshot(self) -> Dict[str, Any]:
+        """
+        生成当前服务（analysis_type+session）下的视图标记快照。
+
+        Returns:
+            dict: { 'analysis_type': str, 'marked_views': {...}, 'stats': {...} }
+        """
+        try:
+            return {
+                'analysis_type': self.analysis_type,
+                'marked_views': dict(self.marked_views),
+                'stats': self.get_statistics(),
+            }
+        except Exception:
+            # 失败时返回基本结构，避免中断整体保存
+            return {
+                'analysis_type': self.analysis_type,
+                'marked_views': {},
+                'stats': {'total_count': 0, 'analysis_type': self.analysis_type}
+            }
+
+    def load_from_snapshot(self, snapshot: Dict[str, Any], merge: bool = True) -> bool:
+        """
+        从快照恢复到当前服务实例。
+
+        Args:
+            snapshot: 包含 'marked_views' 的字典
+            merge: 是否与现有数据合并
+
+        Returns:
+            bool: 是否成功恢复
+        """
+        try:
+            incoming = snapshot.get('marked_views', {}) or {}
+            if not merge:
+                self.marked_views.clear()
+            # 覆盖/合并同名视图
+            for name, data in incoming.items():
+                # 强制对齐分析类型
+                data['analysis_type'] = self.analysis_type
+                self.marked_views[name] = data
+            self._save_marked_views()
+            return True
+        except Exception as e:
+            logging.error(f"从快照恢复视图标记失败: {e}")
             return False
     
     def rename_view_mark(self, old_name: str, new_name: str) -> bool:
@@ -592,3 +795,61 @@ def cleanup_view_marking_services():
     
     _view_marking_services.clear()
     logging.info("所有视图标记服务已清理")
+
+
+# ==== 新增：面向全局会话的统一快照/恢复辅助 ====
+def get_view_marks_snapshot_for_session(session: Optional[TAVRStudySession]) -> Dict[str, Any]:
+    """
+    生成指定session下（按对象身份匹配）的所有分析类型的视图标记快照。
+
+    返回格式：
+    {
+      'by_analysis': {
+          'HALT': {analysis_type, marked_views, stats},
+          'RELM': {...},
+          ...
+      }
+    }
+    """
+    result: Dict[str, Any] = { 'by_analysis': {} }
+    try:
+        for key, svc in list(_view_marking_services.items()):
+            try:
+                if svc.session is session:
+                    result['by_analysis'][svc.analysis_type] = svc.to_snapshot()
+            except Exception:
+                continue
+    except Exception:
+        # 忽略快照生成中的异常，保持健壮性
+        pass
+    return result
+
+
+def restore_view_marks_from_snapshot(session: Optional[TAVRStudySession], snapshot: Dict[str, Any], merge: bool = True) -> bool:
+    """
+    根据快照恢复指定session下的视图标记。
+
+    - 会按analysis_type创建或获取对应的服务实例
+    - 将快照中的marked_views写入并保存
+
+    Returns:
+        bool: 是否整体成功（逐项与运算）
+    """
+    ok_all = True
+    try:
+        by_analysis = (snapshot or {}).get('by_analysis', {}) or {}
+        for analysis_type, snap in by_analysis.items():
+            try:
+                svc = get_view_marking_service(analysis_type, session)
+                # 设置会话，确保路径正确
+                if session is not None:
+                    svc.set_session(session)
+                ok = svc.load_from_snapshot(snap, merge=merge)
+                ok_all = ok_all and ok
+            except Exception as e:
+                logging.error(f"恢复分析 {analysis_type} 的视图标记失败: {e}")
+                ok_all = False
+    except Exception as e:
+        logging.error(f"从快照恢复视图标记总体失败: {e}")
+        return False
+    return ok_all
