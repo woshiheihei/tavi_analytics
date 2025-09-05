@@ -336,44 +336,75 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         return frame
     
     def _create_valve_info_section(self) -> qt.QWidget:
-        """创建瓣膜信息区域（SectionCard）"""
+        """创建瓣膜信息区域（SectionCard）
+        - 统一使用16px状态图标 + 文本，避免emoji大小不一
+        - 使用网格布局对齐“厂家/型号/应用”控件
+        """
         card = SectionCard(title="瓣膜信息", icon_text="🫀", variant="dashed", parent=self)
 
-        # 瓣膜信息显示标签（默认静音样式）
-        self.valve_info_label = qt.QLabel("瓣膜信息未设置")
+        # 状态行：左侧固定16px图标 + 文本
+        status_row = qt.QWidget()
+        status_layout = qt.QHBoxLayout(status_row)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(6)
+
+        self.valve_status_icon = qt.QLabel()
+        self.valve_status_icon.setFixedSize(16, 16)
+        # 初始设置为信息图标
+        try:
+            icon = qt.QApplication.style().standardIcon(qt.QStyle.SP_MessageBoxInformation)
+            self.valve_status_icon.setPixmap(icon.pixmap(16, 16))
+        except Exception:
+            pass
+
+        self.valve_info_label = qt.QLabel("请在下方选择瓣膜品牌和型号")
         self.valve_info_label.setStyleSheet(StyleManager.get_label_style("muted"))
-        card.add_widget(self.valve_info_label)
+        status_layout.addWidget(self.valve_status_icon)
+        status_layout.addWidget(self.valve_info_label)
+        status_layout.addStretch()
+        card.add_widget(status_row)
 
-        # 选择器行
+        # 选择器：使用网格布局，字段对齐更清晰
         self.valve_selector_frame = qt.QWidget()
-        selector_layout = qt.QHBoxLayout(self.valve_selector_frame)
-        selector_layout.setContentsMargins(0, 8, 0, 0)
-        selector_layout.setSpacing(8)
+        grid = qt.QGridLayout(self.valve_selector_frame)
+        grid.setContentsMargins(0, 8, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(6)
 
-        selector_label = qt.QLabel("瓣膜选择:")
-        selector_label.setStyleSheet(StyleManager.get_label_style("small"))
-        selector_layout.addWidget(selector_label)
-
-        # 厂家选择下拉框
+        # 厂家
+        brand_label = qt.QLabel("厂家")
+        brand_label.setStyleSheet(StyleManager.get_label_style("small"))
         self.manufacturer_combo = qt.QComboBox()
         self.manufacturer_combo.addItems([
             "Medtronic", "Edwards Lifesciences", "Venus Medtech",
             "MicroPort", "Peijia Medical"
         ])
-        selector_layout.addWidget(self.manufacturer_combo)
+        self.manufacturer_combo.setFixedHeight(28)
+        self.manufacturer_combo.setMinimumWidth(180)
 
-        # 型号选择下拉框
+        # 型号
+        model_label = qt.QLabel("型号")
+        model_label.setStyleSheet(StyleManager.get_label_style("small"))
         self.model_combo = qt.QComboBox()
-        selector_layout.addWidget(self.model_combo)
+        self.model_combo.setFixedHeight(28)
+        self.model_combo.setMinimumWidth(200)
 
-        # 设置按钮（统一按钮工厂样式）
+        # 应用按钮（保持统一高度/宽度）
         self.set_valve_btn = LayoutManager.create_button_with_style(
-            "应用", "toolbar", "sm", 32
+            "应用", "toolbar", "sm", 28
         )
-        self.set_valve_btn.setMinimumWidth(80)
-        selector_layout.addWidget(self.set_valve_btn)
+        self.set_valve_btn.setMinimumWidth(88)
 
-        selector_layout.addStretch()
+        # 放入网格：两列字段 + 操作区
+        grid.addWidget(brand_label, 0, 0)
+        grid.addWidget(self.manufacturer_combo, 0, 1)
+        grid.addWidget(model_label, 0, 2)
+        grid.addWidget(self.model_combo, 0, 3)
+        grid.addWidget(self.set_valve_btn, 0, 4)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(3, 1)
+        grid.setColumnStretch(4, 0)
+
         card.add_widget(self.valve_selector_frame)
 
         return card
@@ -832,18 +863,36 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             self._show_valve_info_error(f"更新失败: {e}")
     
     def _show_valve_info_success(self, message: str):
-        """显示成功的瓣膜信息"""
+        """显示成功的瓣膜信息（统一16px图标）"""
+        try:
+            icon = qt.QApplication.style().standardIcon(qt.QStyle.SP_DialogApplyButton)
+            if hasattr(self, 'valve_status_icon') and self.valve_status_icon:
+                self.valve_status_icon.setPixmap(icon.pixmap(16, 16))
+        except Exception:
+            pass
         self.valve_info_label.setText(message)
         self.valve_info_label.setStyleSheet(StyleManager.get_label_style("success"))
 
     def _show_valve_info_warning(self, message: str):
-        """显示警告的瓣膜信息"""
-        self.valve_info_label.setText(f"⚠️ {message}")
+        """显示警告的瓣膜信息（统一16px图标）"""
+        try:
+            icon = qt.QApplication.style().standardIcon(qt.QStyle.SP_MessageBoxWarning)
+            if hasattr(self, 'valve_status_icon') and self.valve_status_icon:
+                self.valve_status_icon.setPixmap(icon.pixmap(16, 16))
+        except Exception:
+            pass
+        self.valve_info_label.setText(message)
         self.valve_info_label.setStyleSheet(StyleManager.get_label_style("warning"))
 
     def _show_valve_info_error(self, message: str):
-        """显示错误的瓣膜信息"""
-        self.valve_info_label.setText(f"❌ {message}")
+        """显示错误的瓣膜信息（统一16px图标）"""
+        try:
+            icon = qt.QApplication.style().standardIcon(qt.QStyle.SP_MessageBoxCritical)
+            if hasattr(self, 'valve_status_icon') and self.valve_status_icon:
+                self.valve_status_icon.setPixmap(icon.pixmap(16, 16))
+        except Exception:
+            pass
+        self.valve_info_label.setText(message)
         self.valve_info_label.setStyleSheet(StyleManager.get_label_style("error"))
     
     
