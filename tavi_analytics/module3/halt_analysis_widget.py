@@ -32,6 +32,7 @@ try:
     from ..services.contour_positioning_service import get_contour_position_service
     from ..services.view_marking_service import get_view_marking_service  # 使用公共服务
     from ..utils.mpr_positioning.plane_position_manager import get_plane_position_manager
+    from ..widgets.section_card import SectionCard
 except ImportError:
     current_dir = os.path.dirname(__file__)
     parent_dir = os.path.dirname(current_dir)
@@ -47,6 +48,7 @@ except ImportError:
     from services.contour_positioning_service import get_contour_position_service
     from services.view_marking_service import get_view_marking_service
     from utils.mpr_positioning.plane_position_manager import get_plane_position_manager
+    from widgets.section_card import SectionCard
 
 
 class LeafletGradeRow(qt.QWidget):
@@ -195,21 +197,10 @@ class HaltAnalysisWidget(qt.QWidget):
         main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
         self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
-        # 主标题 - 与其他模块保持一致的特色样式
+        # 标题 - 与模块4一致的简洁大号样式
         title = qt.QLabel("HALT 瓣叶低密度增厚评估")
         title.setAlignment(qt.Qt.AlignCenter)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                font-weight: bold;
-                color: #2c3e50;
-                background-color: #d4f6d4;
-                padding: 6px 12px;
-                border: 1px solid #a3e4a3;
-                border-radius: 4px;
-                margin-bottom: 3px;
-            }
-        """)
+        title.setStyleSheet(StyleManager.get_label_style("large"))
         main_layout.addWidget(title)
 
         # 0. 分析控制区域（开始HALT分析）
@@ -230,87 +221,49 @@ class HaltAnalysisWidget(qt.QWidget):
         self._update_analysis_control_visibility()
     
     def _create_analysis_control_section(self, parent_layout):
-        """创建分析控制区域（仅保留开始按钮）"""
-        self.control_frame = qt.QFrame()
-        self.control_frame.setStyleSheet("""
-            QFrame {
-                background-color: #e8f4f8;
-                border: 1px solid #bee5eb;
-                border-radius: 4px;
-                padding: 6px;
-            }
-        """)
+        """创建分析控制区域（SectionCard + 开始按钮）"""
+        card = SectionCard(title="分析准备", icon_text="🧭", variant="dashed", parent=self)
 
-        control_layout = qt.QHBoxLayout(self.control_frame)
+        control_row = qt.QWidget()
+        control_layout = qt.QHBoxLayout(control_row)
         control_layout.setSpacing(6)
         control_layout.setContentsMargins(6, 6, 6, 6)
 
-        # 开始分析按钮
-        self.start_analysis_btn = qt.QPushButton("开始分析")
-        self.start_analysis_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 8px;
-                font-size: 11px;
-                font-weight: bold;
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                min-width: 60px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-            QPushButton:disabled {
-                background-color: #6c757d;
-            }
-        """)
+        # 开始分析按钮（统一按钮风格）
+        self.start_analysis_btn = LayoutManager.create_button_with_style("开始分析", "toolbar", "sm", 28)
         self.start_analysis_btn.clicked.connect(self._on_start_analysis)
         control_layout.addWidget(self.start_analysis_btn)
 
         control_layout.addStretch()
-
-        parent_layout.addWidget(self.control_frame)
+        card.add_widget(control_row)
+        parent_layout.addWidget(card)
+        self.control_frame = card  # 复用字段，便于可见性管理
     
     def _create_halt_status_and_grading_section(self, parent_layout):
-        """创建合并的HALT状态与分级区域（方案C）"""
-        # 主容器 - 统一的白色背景框
-        main_status_frame = qt.QFrame()
-        main_status_frame.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 8px;
-            }
-        """)
-        
-        main_status_layout = qt.QVBoxLayout(main_status_frame)
-        main_status_layout.setSpacing(8)  # 内部间距
-        
-        # === 第一部分：HALT状态选择 ===
+        """创建合并的HALT状态与分级区域（SectionCard）"""
+        card = SectionCard(title="HALT 状态与分级", icon_text="🧪", variant="dashed", parent=self)
+        main_status_layout = qt.QVBoxLayout()
+        main_status_layout.setSpacing(8)
+
         # 标题
         status_title = qt.QLabel("HALT状态与分级")
         status_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
         main_status_layout.addWidget(status_title)
-        
+
         # 状态选择按钮
         buttons_layout = qt.QHBoxLayout()
         buttons_layout.setSpacing(6)
-        
         self.overall_status_group = qt.QButtonGroup()
-        
-        # 样式定义
         button_configs = [
             ("无", "#d4f6d4", "#28a745"),
             ("有", "#fdeaea", "#dc3545"),
-            ("难以判定", "#fff8dc", "#ffc107")
+            ("难以判定", "#fff8dc", "#ffc107"),
         ]
-        
         self.status_buttons = {}
         for i, (status, bg_color, border_color) in enumerate(button_configs):
             button = qt.QRadioButton(status)
-            button.setStyleSheet(f"""
+            button.setStyleSheet(
+                f"""
                 QRadioButton {{
                     font-size: 11px;
                     font-weight: 500;
@@ -328,106 +281,93 @@ class HaltAnalysisWidget(qt.QWidget):
                 QRadioButton:hover {{
                     border: 2px solid {border_color};
                 }}
-            """)
-            
+                """
+            )
             self.overall_status_group.addButton(button, i)
             self.status_buttons[status] = button
             buttons_layout.addWidget(button)
-        
-        # 默认选择"无"
         self.status_buttons["无"].setChecked(True)
-        
-        # 连接信号
         self.overall_status_group.buttonClicked.connect(self._on_overall_status_changed)
-        
         buttons_layout.addStretch()
         main_status_layout.addLayout(buttons_layout)
-        
-        # === 分隔线（虚线，仅在"有"时显示）===
+
+        # 分隔线（仅在“有”时显示）
         self.dashed_separator = qt.QLabel()
         self.dashed_separator.setFixedHeight(1)
-        self.dashed_separator.setStyleSheet("""
+        self.dashed_separator.setStyleSheet(
+            """
             QLabel {
                 background-color: transparent;
                 border-top: 1px dashed #007bff;
                 margin: 4px 0px;
             }
-        """)
-        self.dashed_separator.setVisible(False)  # 初始隐藏
+            """
+        )
+        self.dashed_separator.setVisible(False)
         main_status_layout.addWidget(self.dashed_separator)
-        
-        # === 第二部分：分级区域（条件显示）===
-        # 分级容器 - 不额外套QFrame，直接在主容器内布局
+
+        # 分级区域（条件显示）
         self.grading_container = qt.QWidget()
         grading_layout = qt.QVBoxLayout(self.grading_container)
-        grading_layout.setContentsMargins(0, 0, 0, 0)  # 无额外边距
+        grading_layout.setContentsMargins(0, 0, 0, 0)
         grading_layout.setSpacing(4)
-        
-        # 分级标题和说明
+
         header_layout = qt.QHBoxLayout()
         header_layout.setSpacing(8)
-        
         grading_title = qt.QLabel("HALT分级")
-        grading_title.setStyleSheet("""
+        grading_title.setStyleSheet(
+            """
             QLabel {
-                font-size: 11px; 
-                font-weight: bold; 
-                color: #2c3e50; 
+                font-size: 11px;
+                font-weight: bold;
+                color: #2c3e50;
                 padding: 2px 0px;
             }
-        """)
+            """
+        )
         header_layout.addWidget(grading_title)
-        
-        # 内联说明和图例
         info_legend = qt.QLabel("(选择分级: 0 → ≤25% → 25-50% → 50%-75% → >75%)")
-        info_legend.setStyleSheet("""
+        info_legend.setStyleSheet(
+            """
             QLabel {
                 font-size: 9px;
                 color: #6c757d;
                 font-style: italic;
             }
-        """)
+            """
+        )
         header_layout.addWidget(info_legend)
         header_layout.addStretch()
-        
         grading_layout.addLayout(header_layout)
-        
-        # 分级表格
+
         self.leaflet_grade_rows = {}
         for leaflet in ["LC", "RC", "NC"]:
             row = LeafletGradeRow(leaflet)
             row.gradeChanged.connect(self._on_leaflet_grade_changed)
             self.leaflet_grade_rows[leaflet] = row
             grading_layout.addWidget(row)
-        
-        # === 第三部分：统计信息（简洁版，显示修复）===
-        # 简洁的统计信息 - 与瓣叶名称标签左对齐
+
         summary_layout = qt.QHBoxLayout()
-        summary_layout.setContentsMargins(0, 6, 0, 2)  # 左边距为0，与瓣叶名称标签左对齐
-        summary_layout.setSpacing(6)  # 与瓣叶行间距一致
-        
-        # 受累瓣叶个数 - 自适应宽度显示完整文字
+        summary_layout.setContentsMargins(0, 6, 0, 2)
+        summary_layout.setSpacing(6)
         self.affected_count_label = qt.QLabel("受累瓣叶: 0个")
         self.affected_count_label.setStyleSheet("font-size: 10px; font-weight: bold; color: #28a745;")
         summary_layout.addWidget(self.affected_count_label)
-        
-        # 最高分级 - 自适应宽度显示完整文字
         self.max_grade_label = qt.QLabel("最高分级: 0")
         self.max_grade_label.setStyleSheet("font-size: 10px; color: #6c757d; font-weight: 500;")
         summary_layout.addWidget(self.max_grade_label)
-        
         summary_layout.addStretch()
-        
         grading_layout.addLayout(summary_layout)
-        
-        # 初始状态：隐藏分级区域
+
         self.grading_container.setVisible(False)
         main_status_layout.addWidget(self.grading_container)
-        
-        parent_layout.addWidget(main_status_frame)
+
+        card.add_layout(main_status_layout)
+        parent_layout.addWidget(card)
     
     def _create_key_view_section(self, parent_layout):
-        """创建关键视图管理区域 - 使用公共组件"""
+        """创建关键视图管理区域 - 使用公共组件 + SectionCard"""
+        card = SectionCard(title="关键视图", icon_text="🔖", variant="dashed", parent=self)
         # 创建关键视图管理器组件
         self.key_view_manager = KeyViewManagerWidget(
             analysis_type="HALT",
@@ -442,56 +382,26 @@ class HaltAnalysisWidget(qt.QWidget):
         self.key_view_manager.viewDeleted.connect(self._on_view_deleted)
         self.key_view_manager.statusUpdated.connect(self._on_view_status_updated)
         
-        parent_layout.addWidget(self.key_view_manager)
+        card.add_widget(self.key_view_manager)
+        parent_layout.addWidget(card)
     
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
         actions_layout = qt.QHBoxLayout()
         actions_layout.setSpacing(6)  # 减小间距
         actions_layout.setContentsMargins(2, 6, 2, 2)  # 减小边距
-        
-        # 重置按钮 - 更紧凑
-        reset_btn = qt.QPushButton("重置")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                padding: 6px 12px;
-                font-size: 11px;
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-weight: 500;
-                min-width: 50px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
+
+        # 重置按钮 - 统一按钮风格
+        reset_btn = LayoutManager.create_button_with_style("重置", "toolbar", "sm", 28)
         reset_btn.clicked.connect(self._reset_analysis)
-        
-        # 导出结果按钮 - 更紧凑
-        export_btn = qt.QPushButton("导出结果")
-        export_btn.setStyleSheet("""
-            QPushButton {
-                padding: 6px 12px;
-                font-size: 11px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                font-weight: 500;
-                min-width: 70px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-        """)
+        # 导出结果按钮 - 统一按钮风格
+        export_btn = LayoutManager.create_button_with_style("导出结果", "toolbar", "sm", 28)
         export_btn.clicked.connect(self._export_results)
-        
+
         actions_layout.addWidget(reset_btn)
         actions_layout.addStretch()
         actions_layout.addWidget(export_btn)
-        
+
         parent_layout.addLayout(actions_layout)
     
     # 关键视图相关的回调函数
