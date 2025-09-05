@@ -91,12 +91,16 @@ class BaseAnalysisWidget(qt.QWidget):
     # ---- 公共UI片段 ----
     def _create_key_view_section(self, parent_layout):
         card = SectionCard(title="关键视图", icon_text="🔖", variant="dashed", parent=self)
+        # 使用内容型关键视图组件，并将操作按钮放入卡片Header
         self.key_view_manager = KeyViewManagerWidget(
             analysis_type=self.analysis_type,
             session=self.session,
             compact_mode=True,
             parent=self,
+            use_external_header=True,
         )
+        # 将“标记”按钮放到右上角，避免内容区出现空白
+        card.add_header_widget(self.key_view_manager.mark_btn, align_right=True)
         card.add_widget(self.key_view_manager)
         parent_layout.addWidget(card)
 
