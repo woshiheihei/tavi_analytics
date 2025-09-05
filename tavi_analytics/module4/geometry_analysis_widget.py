@@ -311,27 +311,17 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
             self.logger.error(f"检查瓣膜选择器状态失败: {e}")
     
     def _create_title_section(self) -> qt.QWidget:
-        """创建标题区域"""
+        """创建标题区域（精简版，仅保留简短标题）"""
         frame = qt.QWidget()
         layout = qt.QVBoxLayout(frame)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(0)
         
-        # 主标题
-        title_text = f"{self.level_type.title()} 几何形态分析"
+        title_text = f"{self.level_display_name}"
         title = qt.QLabel(title_text)
         title.setAlignment(qt.Qt.AlignCenter)
-        # 使用统一样式系统，避免内联配色干扰全局主题
         title.setStyleSheet(StyleManager.get_label_style("large"))
         layout.addWidget(title)
-        
-        # 描述
-        description_text = f"分析瓣膜支架 {self.level_type} 级别的几何形态参数"
-        description = qt.QLabel(description_text)
-        description.setAlignment(qt.Qt.AlignCenter)
-        description.setStyleSheet(StyleManager.get_label_style("small"))
-        description.setWordWrap(True)
-        layout.addWidget(description)
         
         return frame
     
