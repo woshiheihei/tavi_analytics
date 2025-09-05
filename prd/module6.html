@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>TAVR Analytics 报告生成（模块六）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding: 16px; }
+    h1 { font-size: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+    th { background: #f9fafb; }
+  </style>
+  </head>
+<body>
+  <h1>模块六 - 报告生成（静态样例）</h1>
+  <table>
+    <tr><th colspan="4">一、基本情况</th></tr>
+    <tr><td>受试者编号</td><td>TEST001</td><td>姓名</td><td>张三</td></tr>
+    <tr><td>年龄</td><td>70</td><td>性别</td><td>男</td></tr>
+    <tr><td>手术日期</td><td>2025-09-01</td><td>CT扫描日期</td><td>2025-09-03</td></tr>
+    <tr><td>图像质量</td><td>GOOD</td><td>随访时间点</td><td>1M</td></tr>
+    <tr><td>瓣膜品牌</td><td>XX</td><td>瓣膜型号</td><td>YY</td></tr>
+  </table>
+  <table>
+    <tr><th colspan="4">二、时相标记</th></tr>
+    <tr><td>舒张末期帧索引</td><td>10</td><td>舒张末期相位%</td><td>30</td></tr>
+    <tr><td>收缩末期帧索引</td><td>22</td><td>收缩末期相位%</td><td>75</td></tr>
+  </table>
+  <table>
+    <tr><th colspan="6">三、几何测量摘要</th></tr>
+    <tr><th>平面</th><th>周长(mm)</th><th>面积(mm²)</th><th>平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>
+    <tr><td>inflow</td><td>78.2</td><td>410.5</td><td>23.4</td><td>25.1</td><td>21.7</td></tr>
+  </table>
+  <table>
+    <tr><th colspan="4">四、交接对齐</th></tr>
+    <tr><td>RCA→RCC/LCC</td><td>120°</td><td>RCA→LCC/NCC</td><td>110°</td></tr>
+    <tr><td>RCA→NCC/RCC</td><td>130°</td><td></td><td></td></tr>
+  </table>
+  <p>真实报告由Slicer插件模块六生成。</p>
+</body>
+</html>

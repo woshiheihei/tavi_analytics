@@ -37,6 +37,11 @@
     "module5": {
       "enabled": true,
       "auto_export": false
+    },
+    "module6": {
+      "enabled": true,
+      "default_export_dir": "",
+      "open_after_export": false
     }
   },
   "data": {

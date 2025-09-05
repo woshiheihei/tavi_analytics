@@ -126,6 +126,19 @@ class tavi_analytics(ScriptedLoadableModule):
                 )
                 manager.register_module(module5_info)
                 logging.info("模块五注册成功")
+
+            # 注册模块六（报告生成）
+            if self._config.is_module_enabled("module6"):
+                from module6.module6_adapter import Module6Adapter
+                module6_info = ModuleInfo(
+                    name="module6",
+                    display_name="报告生成",
+                    module_class=Module6Adapter,
+                    dependencies=["module1"],
+                    enabled=True
+                )
+                manager.register_module(module6_info)
+                logging.info("模块六注册成功")
             
         except Exception as e:
             logging.error(f"初始化模块时出错: {e}")
