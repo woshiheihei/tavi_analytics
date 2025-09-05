@@ -147,33 +147,12 @@ class StyleManager:
         Returns:
             CSS样式字符串
         """
-        # 尺寸配置
+        # 尺寸配置（Qt样式表仅支持px等少量单位，且不支持height/width属性，改用min-*）
         size_config = {
-            "sm": {
-                "height": "2.25rem",  # 36px
-                "padding_x": Spacing.MD.value,
-                "padding_y": Spacing.XS.value,
-                "font_size": FontSize.SM.value
-            },
-            "default": {
-                "height": "2.5rem",   # 40px
-                "padding_x": Spacing.LG.value,
-                "padding_y": Spacing.SM.value,
-                "font_size": FontSize.SM.value
-            },
-            "lg": {
-                "height": "2.75rem",  # 44px
-                "padding_x": Spacing.XXL.value,
-                "padding_y": Spacing.SM.value,
-                "font_size": FontSize.BASE.value
-            },
-            "icon": {
-                "height": "2.5rem",   # 40px
-                "width": "2.5rem",    # 40px
-                "padding_x": "0",
-                "padding_y": "0",
-                "font_size": FontSize.SM.value
-            }
+            "sm": {"min_h": 28, "pad_x": 10, "pad_y": 4, "font_px": 12},
+            "default": {"min_h": 30, "pad_x": 12, "pad_y": 5, "font_px": 12},
+            "lg": {"min_h": 36, "pad_x": 16, "pad_y": 8, "font_px": 13},
+            "icon": {"min_h": 28, "min_w": 28, "pad_x": 0, "pad_y": 0, "font_px": 12},
         }
         
         # 类型配置
@@ -224,51 +203,44 @@ class StyleManager:
         
         size_cfg = size_config.get(size, size_config["default"])
         type_cfg = type_config.get(button_type, type_config["primary"])
-        
-        # 处理图标按钮的特殊情况
+
+        # 构建尺寸相关样式（Qt不支持height/width/outline/transform等）
         if size == "icon":
-            padding_style = f"width: {size_cfg['width']}; height: {size_cfg['height']};"
+            padding_style = f"min-width: {size_cfg['min_w']}px; min-height: {size_cfg['min_h']}px; padding: 0px;"
         else:
-            padding_style = f"height: {size_cfg['height']}; padding: {size_cfg['padding_y']} {size_cfg['padding_x']};"
-        
+            padding_style = f"min-height: {size_cfg['min_h']}px; padding: {size_cfg['pad_y']}px {size_cfg['pad_x']}px;"
+
         style = f"""
             QPushButton {{
                 background-color: {type_cfg["bg_color"]};
                 color: {type_cfg["text_color"]};
                 border: {type_cfg["border"]};
-                border-radius: {BorderRadius.DEFAULT.value};
+                border-radius: 6px;
                 {padding_style}
-                font-size: {size_cfg["font_size"]};
+                font-size: {size_cfg['font_px']}px;
                 font-weight: {FontWeight.MEDIUM.value};
                 text-align: center;
-                outline: none;
             }}
             QPushButton:hover {{
                 background-color: {type_cfg["hover_bg"]};
             }}
             QPushButton:pressed {{
                 background-color: {type_cfg["hover_bg"]};
-                transform: translateY(1px);
             }}
             QPushButton:disabled {{
                 background-color: {ThemeColor.MUTED.value};
                 color: {ThemeColor.MUTED_FOREGROUND.value};
                 border: 1px solid {ThemeColor.BORDER.value};
-                pointer-events: none;
-            }}
-            QPushButton:focus {{
-                outline: 2px solid {ThemeColor.RING.value};
-                outline-offset: 2px;
             }}
         """
         
         # 特殊处理 link 类型按钮
         if button_type == "link":
             style += f"""
-            QPushButton:hover {{
-                text-decoration: underline;
-                background-color: transparent;
-            }}
+                QPushButton:hover {{
+                    text-decoration: underline;
+                    background-color: transparent;
+                }}
             """
         
         return style

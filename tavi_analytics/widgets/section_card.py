@@ -28,12 +28,14 @@ class SectionCard(qt.QWidget):
         root = qt.QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 24)
         root.setSpacing(16)
+        self._root_layout = root
 
         # 标题栏
         header_container = qt.QWidget()
         header_layout = qt.QHBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(12)
+        self._header_layout = header_layout
 
         if icon_text:
             self.icon_label = qt.QLabel(icon_text)
@@ -119,12 +121,34 @@ class SectionCard(qt.QWidget):
             """
         )
 
-        # 标题与图标样式
+        # 紧凑模式：用于子 section（如 dashed 变体）
+        if use_dashed:
+            # 缩小内边距与间距
+            if hasattr(self, "_root_layout") and self._root_layout is not None:
+                self._root_layout.setContentsMargins(16, 12, 16, 16)
+                self._root_layout.setSpacing(12)
+            if hasattr(self, "_header_layout") and self._header_layout is not None:
+                self._header_layout.setSpacing(8)
+            icon_px = 20
+            icon_box = 32
+            title_px = 16
+            title_weight = "600"  # semibold
+        else:
+            icon_px = 28
+            icon_box = 48
+            title_px = 18
+            title_weight = "700"  # bold
+
+        # 更新图标尺寸
         if self.icon_label is not None:
+            try:
+                self.icon_label.setFixedSize(icon_box, icon_box)
+            except Exception:
+                pass
             self.icon_label.setStyleSheet(
                 f"""
                 QLabel {{
-                    font-size: 28px;
+                    font-size: {icon_px}px;
                     color: {icon_color};
                     background: transparent;
                     padding: 4px;
@@ -135,8 +159,8 @@ class SectionCard(qt.QWidget):
         self.title_label.setStyleSheet(
             f"""
             QLabel {{
-                font-size: 18px;
-                font-weight: bold;
+                font-size: {title_px}px;
+                font-weight: {title_weight};
                 color: {title_color};
                 background: transparent;
                 padding-left: 4px;

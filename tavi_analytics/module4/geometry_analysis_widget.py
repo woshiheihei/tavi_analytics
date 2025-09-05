@@ -387,13 +387,13 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         button_layout.setSpacing(8)
 
         self.locate_plane_btn = LayoutManager.create_button_with_style(
-            f"定位 {self.level_display_name} 平面", "primary", "default", 36
+            f"定位 {self.level_display_name} 平面", "primary", "sm", 28
         )
         self.locate_plane_btn.clicked.connect(self._on_locate_plane)
         button_layout.addWidget(self.locate_plane_btn)
 
         self.load_data_btn = LayoutManager.create_button_with_style(
-            "重新加载数据", "secondary", "default", 36
+            "重新加载数据", "secondary", "sm", 28
         )
         self.load_data_btn.clicked.connect(self._on_load_data)
         button_layout.addWidget(self.load_data_btn)
