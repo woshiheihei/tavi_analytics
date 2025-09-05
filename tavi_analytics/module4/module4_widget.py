@@ -14,6 +14,7 @@ try:
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
     # from ..widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
+    from ..widgets.valve_info_panel import ValveInfoPanel
     from .module4_logic import Module4Logic
     from .geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 except ImportError:
@@ -31,6 +32,7 @@ except ImportError:
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.compact_phase_toggle import CompactPhaseToggle
     # from widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
+    from widgets.valve_info_panel import ValveInfoPanel
     from module4_logic import Module4Logic
     from geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 
@@ -47,10 +49,21 @@ class Module4Widget(qt.QWidget):
         self.compact_phase_toggle = CompactPhaseToggle(session, self)
         self.compact_phase_toggle.phaseChanged.connect(self._on_phase_changed)
         
+        # 公共瓣膜信息面板（抽离公共组件）
+        self.valve_info_panel = ValveInfoPanel(session, self.logic, parent=self)
+
         # 创建几何形态分析组件，传入逻辑组件
         self.inflow_analysis = InflowAnalysisWidget(session, self.logic, parent=self)
         self.nadir_analysis = NadirAnalysisWidget(session, self.logic, parent=self)
         self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, self.logic, parent=self)
+
+        # 隐藏各Tab内的重复瓣膜信息卡片（使用公共面板）
+        for w in (self.inflow_analysis, self.nadir_analysis, self.commissure_level_analysis):
+            try:
+                if hasattr(w, '_valve_info_card') and w._valve_info_card:
+                    w._valve_info_card.setVisible(False)
+            except Exception:
+                pass
         
     # 模块四不再包含瓣膜叠加组件（迁移至模块五）
         
@@ -132,9 +145,10 @@ class Module4Widget(qt.QWidget):
         self.analysis_tabs.addTab(self.inflow_analysis, "Inflow")
         self.analysis_tabs.addTab(self.nadir_analysis, "Nadir")
         self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure")
-
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
+        # 公共瓣膜信息面板置于选项卡上方（仅一处展示）
+        main_layout.addWidget(self.valve_info_panel)
         # 直接将选项卡添加到主布局，风格与模块三一致
         main_layout.addWidget(self.analysis_tabs)
 
@@ -152,6 +166,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.set_session(session)
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.set_session(session)
+        if hasattr(self, 'valve_info_panel'):
+            self.valve_info_panel.set_session(session)
     # 瓣膜叠加组件已迁移，无需处理
         if self.logic:
             # 如需使用session，可在后续逻辑中扩展
@@ -174,6 +190,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.on_activated()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.on_activated()
+        if hasattr(self, 'valve_info_panel'):
+            self.valve_info_panel.on_activated()
         
         # 3D窗口居中显示
         self._center_3d_view()
@@ -186,6 +204,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.on_deactivated()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.on_deactivated()
+        if hasattr(self, 'valve_info_panel'):
+            self.valve_info_panel.cleanup()
 
     def _center_3d_view(self):
         """
@@ -275,6 +295,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.cleanup()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.cleanup()
+        if hasattr(self, 'valve_info_panel'):
+            self.valve_info_panel.cleanup()
     # 瓣膜叠加组件已迁移，无需处理
         if self.logic:
             self.logic.cleanup()

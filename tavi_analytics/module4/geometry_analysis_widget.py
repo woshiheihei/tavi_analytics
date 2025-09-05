@@ -90,8 +90,8 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         main_layout.addWidget(title_frame)
 
         # 瓣膜信息区域 - 使用统一 SectionCard
-        valve_info_card = self._create_valve_info_section()
-        main_layout.addWidget(valve_info_card)
+        self._valve_info_card = self._create_valve_info_section()
+        main_layout.addWidget(self._valve_info_card)
 
         # 控制按钮区域 - 使用统一 SectionCard
         control_card = self._create_control_section()
