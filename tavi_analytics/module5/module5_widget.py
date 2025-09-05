@@ -48,8 +48,9 @@ class Module5Widget(qt.QWidget):
         # 顶部标题（占位）
         container = qt.QWidget()
         v = qt.QVBoxLayout(container)
-        v.setContentsMargins(0, 40, 0, 40)
-        v.setSpacing(16)
+        # Tighten margins/spacing for compact overlay UI
+        v.setContentsMargins(0, 12, 0, 12)
+        v.setSpacing(12)
         v.setAlignment(qt.Qt.AlignTop | qt.Qt.AlignHCenter)
 
         styles = ComponentStyleFactory.get_main_ui_styles()

@@ -50,7 +50,7 @@ class ValveOverlayWidget(qt.QWidget):
     rotationChanged = qt.Signal(int)      # 旋转角度改变信号
     statusUpdated = qt.Signal(str)        # 状态更新信号
     
-    def __init__(self, session: Optional[TAVRStudySession] = None, parent=None):
+    def __init__(self, session: Optional[TAVRStudySession] = None, parent=None, compact: bool = True):
         """
         初始化瓣膜叠加组件
         
@@ -69,6 +69,7 @@ class ValveOverlayWidget(qt.QWidget):
         self.current_rotation = 0  # 当前旋转角度
         self.base_transform_matrix = None  # 基础叠加矩阵（不含旋转）
         self.cumulative_offset = [0.0, 0.0]  # 累计平面内偏移量 [x, y] in mm
+        self._compact = bool(compact)
 
         # 设置组件属性
         self.setObjectName("ValveOverlayWidget")
@@ -90,55 +91,96 @@ class ValveOverlayWidget(qt.QWidget):
         """设置用户界面"""
         main_layout = qt.QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(8)
-        
+        main_layout.setSpacing(4 if self._compact else 8)
+
         # 使用SectionCard包装
+        # 紧凑：改用更素的样式并缩小标题栏
+        variant = "neutral" if self._compact else "blue"
         self.section_card = SectionCard(
-            title="瓣膜支架叠加", 
-            icon_text="🩺", 
-            variant="blue",
-            parent=self
+            title="瓣膜支架叠加",
+            icon_text="🩺",
+            variant=variant,
+            parent=self,
+            header_compact=True
         )
-        
+
+        # 进一步压缩卡片的内边距与行间距
+        try:
+            self.section_card._root_layout.setContentsMargins(12, 10, 12, 12)
+            self.section_card._root_layout.setSpacing(8 if self._compact else 12)
+            self.section_card.body_layout.setSpacing(6 if self._compact else 8)
+        except Exception:
+            pass
+
         # 在卡片内容区创建控件
         self._create_controls()
-        
+
         main_layout.addWidget(self.section_card)
     
     def _create_controls(self):
         """创建控制组件"""
-        # 主操作按钮区域
+        # 主操作按钮区域（常显）
         self._create_action_section()
-        
-        # 透明度调节区域
+
+        # 透明度调节区域（常显）
         self._create_opacity_section()
-        
-        # 旋转控制区域
-        self._create_rotation_section()
-        
-        # 方向键微调区域
-        self._create_position_adjust_section()
-        
-        # 高级选项区域
-        self._create_advanced_section()
+
+        # 高级区域（旋转/微调/更多） -> 容器，可折叠
+        self.advanced_container = qt.QWidget()
+        adv_v = qt.QVBoxLayout(self.advanced_container)
+        adv_v.setContentsMargins(0, 0, 0, 0)
+        adv_v.setSpacing(6 if self._compact else 8)
+
+        rot = self._create_rotation_section(return_widget=True)
+        if rot is not None:
+            adv_v.addWidget(rot)
+
+        pos = self._create_position_adjust_section(return_widget=True)
+        if pos is not None:
+            adv_v.addWidget(pos)
+
+        more = self._create_advanced_section(return_widget=True)
+        if more is not None:
+            adv_v.addWidget(more)
+
+        self.section_card.add_widget(self.advanced_container)
+
+        # 紧凑模式下默认收起高级区域，并在标题栏放置一个小型切换按钮
+        self.advanced_container.setVisible(not self._compact)
+        self._install_header_toggle()
+
+    def _install_header_toggle(self):
+        try:
+            toggle = qt.QToolButton()
+            toggle.setText("高级")
+            toggle.setCheckable(True)
+            toggle.setChecked(not self._compact)
+            toggle.setAutoRaise(True)
+            toggle.setToolTip("显示/隐藏高级控制")
+            toggle.setStyleSheet("QToolButton{font-size:11px; padding:2px 6px; color:#2563eb;} QToolButton:checked{color:#1f2937;}")
+            toggle.toggled.connect(self.advanced_container.setVisible)
+            self.section_card.add_header_widget(toggle, align_right=True)
+            self._advanced_toggle = toggle
+        except Exception:
+            pass
     
     def _create_action_section(self):
         """创建主操作按钮区域"""
         action_layout = qt.QHBoxLayout()
-        action_layout.setSpacing(12)
-        
+        action_layout.setSpacing(8 if self._compact else 12)
+
         # 主操作按钮
         self.overlay_btn = qt.QPushButton("🔄 启用叠加")
         self.overlay_btn.setStyleSheet("""
             QPushButton {
-                padding: 10px 16px;
+                padding: 6px 10px;
                 background-color: #28a745;
                 color: white;
                 border: none;
                 border-radius: 6px;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: bold;
-                min-width: 120px;
+                min-width: 96px;
             }
             QPushButton:hover {
                 background-color: #218838;
@@ -150,10 +192,10 @@ class ValveOverlayWidget(qt.QWidget):
         """)
         self.overlay_btn.clicked.connect(self._toggle_overlay)
         self.overlay_btn.setEnabled(False)
-        
+
         action_layout.addWidget(self.overlay_btn)
         action_layout.addStretch()
-        
+
         self.section_card.add_layout(action_layout)
     
     def _create_opacity_section(self):
@@ -161,44 +203,44 @@ class ValveOverlayWidget(qt.QWidget):
         opacity_frame = qt.QFrame()
         opacity_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
                 border-radius: 6px;
-                padding: 8px;
+                padding: 6px;
             }
         """)
-        
+
         opacity_layout = qt.QVBoxLayout(opacity_frame)
-        opacity_layout.setSpacing(6)
-        
+        opacity_layout.setSpacing(4 if self._compact else 6)
+
         # 透明度标签
         opacity_header = qt.QHBoxLayout()
-        opacity_label = qt.QLabel("透明度调节")
+        opacity_label = qt.QLabel("透明度")
         opacity_label.setStyleSheet("""
             QLabel {
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: bold;
                 color: #495057;
                 background: transparent;
             }
         """)
-        
+
         self.opacity_value_label = qt.QLabel("60%")
         self.opacity_value_label.setStyleSheet("""
             QLabel {
-                font-size: 11px;
-                color: #007bff;
+                font-size: 10px;
+                color: #2563eb;
                 background: transparent;
                 font-weight: bold;
             }
         """)
-        
+
         opacity_header.addWidget(opacity_label)
         opacity_header.addStretch()
         opacity_header.addWidget(self.opacity_value_label)
-        
+
         opacity_layout.addLayout(opacity_header)
-        
+
         # 透明度滑块
         self.opacity_slider = qt.QSlider(qt.Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
@@ -207,76 +249,76 @@ class ValveOverlayWidget(qt.QWidget):
             QSlider::groove:horizontal {
                 border: 1px solid #bbb;
                 background: white;
-                height: 6px;
-                border-radius: 3px;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::sub-page:horizontal {
-                background: #007bff;
-                border: 1px solid #007bff;
-                height: 6px;
-                border-radius: 3px;
+                background: #2563eb;
+                border: 1px solid #2563eb;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::add-page:horizontal {
                 background: #dee2e6;
                 border: 1px solid #dee2e6;
-                height: 6px;
-                border-radius: 3px;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::handle:horizontal {
-                background: #007bff;
-                border: 1px solid #007bff;
-                width: 16px;
-                margin: -6px 0;
-                border-radius: 8px;
+                background: #2563eb;
+                border: 1px solid #2563eb;
+                width: 12px;
+                margin: -5px 0;
+                border-radius: 6px;
             }
         """)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.opacity_slider.setEnabled(False)
-        
+
         opacity_layout.addWidget(self.opacity_slider)
-        
+
         self.section_card.add_widget(opacity_frame)
     
-    def _create_rotation_section(self):
+    def _create_rotation_section(self, return_widget: bool = False):
         """创建旋转控制区域"""
         rotation_frame = qt.QFrame()
         rotation_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
                 border-radius: 6px;
-                padding: 8px;
+                padding: 6px;
             }
         """)
-        
+
         rotation_layout = qt.QVBoxLayout(rotation_frame)
-        rotation_layout.setSpacing(6)
-        
+        rotation_layout.setSpacing(4 if self._compact else 6)
+
         # 旋转标签和角度显示
         rotation_header = qt.QHBoxLayout()
         rotation_label = qt.QLabel("支架旋转")
         rotation_label.setStyleSheet("""
             QLabel {
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: bold;
             }
         """)
-        
+
         self.rotation_value_label = qt.QLabel("0°")
         self.rotation_value_label.setStyleSheet("""
             QLabel {
-                font-size: 11px;
+                font-size: 10px;
                 color: #6c757d;
                 font-weight: bold;
             }
         """)
-        
+
         rotation_header.addWidget(rotation_label)
         rotation_header.addStretch()
         rotation_header.addWidget(self.rotation_value_label)
-        
+
         rotation_layout.addLayout(rotation_header)
-        
+
         # 旋转滑块
         self.rotation_slider = qt.QSlider(qt.Qt.Horizontal)
         self.rotation_slider.setRange(-180, 180)
@@ -285,116 +327,118 @@ class ValveOverlayWidget(qt.QWidget):
             QSlider::groove:horizontal {
                 border: 1px solid #bbb;
                 background: white;
-                height: 6px;
-                border-radius: 3px;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::sub-page:horizontal {
-                background: #28a745;
-                border: 1px solid #28a745;
-                height: 6px;
-                border-radius: 3px;
+                background: #16a34a;
+                border: 1px solid #16a34a;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::add-page:horizontal {
                 background: #dee2e6;
                 border: 1px solid #dee2e6;
-                height: 6px;
-                border-radius: 3px;
+                height: 4px;
+                border-radius: 2px;
             }
             QSlider::handle:horizontal {
-                background: #28a745;
-                border: 1px solid #28a745;
-                width: 16px;
-                margin: -6px 0;
-                border-radius: 8px;
+                background: #16a34a;
+                border: 1px solid #16a34a;
+                width: 12px;
+                margin: -5px 0;
+                border-radius: 6px;
             }
         """)
         self.rotation_slider.valueChanged.connect(self._on_rotation_changed)
         self.rotation_slider.setEnabled(False)
-        
-        rotation_layout.addWidget(self.rotation_slider)
-        
-        # 添加说明文字
-        info_label = qt.QLabel("围绕当前切片法线方向旋转支架 (-180° ~ +180°)")
-        info_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                color: #6c757d;
-                font-style: italic;
-            }
-        """)
-        rotation_layout.addWidget(info_label)
-        
-        self.section_card.add_widget(rotation_frame)
 
-    def _create_position_adjust_section(self):
+        rotation_layout.addWidget(self.rotation_slider)
+
+        # 紧凑模式不显示说明行，使用 tooltip 替代
+        if not self._compact:
+            info_label = qt.QLabel("围绕当前切片法线方向旋转支架 (-180° ~ +180°)")
+            info_label.setStyleSheet("""
+                QLabel { font-size: 10px; color: #6c757d; font-style: italic; }
+            """)
+            rotation_layout.addWidget(info_label)
+        else:
+            rotation_frame.setToolTip("围绕切片法线旋转支架 (-180°~+180°)")
+
+        if return_widget:
+            return rotation_frame
+        else:
+            self.section_card.add_widget(rotation_frame)
+
+    def _create_position_adjust_section(self, return_widget: bool = False):
         """创建方向键微调区域"""
         adjust_frame = qt.QFrame()
         adjust_frame.setStyleSheet("""
             QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
                 border-radius: 6px;
-                padding: 12px;
+                padding: 8px;
             }
         """)
-        
+
         adjust_layout = qt.QVBoxLayout(adjust_frame)
-        adjust_layout.setSpacing(8)
-        
+        adjust_layout.setSpacing(6 if self._compact else 8)
+
         # 标题和步长设置
         header_layout = qt.QHBoxLayout()
-        adjust_label = qt.QLabel("平面内位置微调")
+        adjust_label = qt.QLabel("平面内微调")
         adjust_label.setStyleSheet("""
             QLabel {
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: bold;
             }
         """)
-        
+
         # 步长选择
         step_label = qt.QLabel("步长:")
-        step_label.setStyleSheet("font-size: 11px; color: #6c757d;")
-        
+        step_label.setStyleSheet("font-size: 10px; color: #6c757d;")
+
         self.step_combo = qt.QComboBox()
         self.step_combo.addItems(["0.5mm", "1.0mm", "2.0mm", "5.0mm"])
         self.step_combo.setCurrentText("1.0mm")
         self.step_combo.setStyleSheet("""
             QComboBox {
                 font-size: 10px;
-                padding: 2px 6px;
+                padding: 1px 6px;
                 border: 1px solid #ced4da;
                 border-radius: 3px;
                 background-color: white;
                 min-width: 60px;
             }
         """)
-        
+
         header_layout.addWidget(adjust_label)
         header_layout.addStretch()
         header_layout.addWidget(step_label)
         header_layout.addWidget(self.step_combo)
-        
+
         adjust_layout.addLayout(header_layout)
-        
+
         # 游戏手柄式方向键布局
         dpad_layout = qt.QGridLayout()
-        dpad_layout.setSpacing(4)
-        
+        dpad_layout.setSpacing(2 if self._compact else 4)
+
         # 创建方向按钮
         button_style = """
             QPushButton {
                 background-color: #ffffff;
                 border: 2px solid #007bff;
-                border-radius: 8px;
-                font-size: 16px;
+                border-radius: 6px;
+                font-size: 12px;
                 font-weight: bold;
                 color: #007bff;
-                width: 40px;
-                height: 40px;
-                min-width: 40px;
-                min-height: 40px;
-                max-width: 40px;
-                max-height: 40px;
+                width: 28px;
+                height: 28px;
+                min-width: 28px;
+                min-height: 28px;
+                max-width: 28px;
+                max-height: 28px;
             }
             QPushButton:hover {
                 background-color: #e3f2fd;
@@ -410,51 +454,51 @@ class ValveOverlayWidget(qt.QWidget):
                 color: #6c757d;
             }
         """
-        
+
         # 上键 (向上移动)
         self.up_btn = qt.QPushButton("▲")
         self.up_btn.setStyleSheet(button_style)
         self.up_btn.setToolTip("向上微调")
         self.up_btn.clicked.connect(lambda: self._adjust_position('up'))
         self.up_btn.setEnabled(False)
-        
+
         # 下键 (向下移动)
         self.down_btn = qt.QPushButton("▼")
         self.down_btn.setStyleSheet(button_style)
         self.down_btn.setToolTip("向下微调")
         self.down_btn.clicked.connect(lambda: self._adjust_position('down'))
         self.down_btn.setEnabled(False)
-        
+
         # 左键 (向左移动)
         self.left_btn = qt.QPushButton("◀")
         self.left_btn.setStyleSheet(button_style)
         self.left_btn.setToolTip("向左微调")
         self.left_btn.clicked.connect(lambda: self._adjust_position('left'))
         self.left_btn.setEnabled(False)
-        
+
         # 右键 (向右移动)
         self.right_btn = qt.QPushButton("▶")
         self.right_btn.setStyleSheet(button_style)
         self.right_btn.setToolTip("向右微调")
         self.right_btn.clicked.connect(lambda: self._adjust_position('right'))
         self.right_btn.setEnabled(False)
-        
+
         # 中心重置按钮
         self.center_btn = qt.QPushButton("●")
         self.center_btn.setStyleSheet("""
             QPushButton {
                 background-color: #ffffff;
                 border: 2px solid #28a745;
-                border-radius: 8px;
-                font-size: 14px;
+                border-radius: 6px;
+                font-size: 12px;
                 font-weight: bold;
                 color: #28a745;
-                width: 40px;
-                height: 40px;
-                min-width: 40px;
-                min-height: 40px;
-                max-width: 40px;
-                max-height: 40px;
+                width: 28px;
+                height: 28px;
+                min-width: 28px;
+                min-height: 28px;
+                max-width: 28px;
+                max-height: 28px;
             }
             QPushButton:hover {
                 background-color: #e8f5e8;
@@ -473,67 +517,70 @@ class ValveOverlayWidget(qt.QWidget):
         self.center_btn.setToolTip("重置到中心位置")
         self.center_btn.clicked.connect(self._reset_position_adjustment)
         self.center_btn.setEnabled(False)
-        
+
         # 菱形布局：上下左右+中心
         dpad_layout.addWidget(self.up_btn, 0, 1, qt.Qt.AlignCenter)     # 上
         dpad_layout.addWidget(self.left_btn, 1, 0, qt.Qt.AlignCenter)   # 左
         dpad_layout.addWidget(self.center_btn, 1, 1, qt.Qt.AlignCenter) # 中心
         dpad_layout.addWidget(self.right_btn, 1, 2, qt.Qt.AlignCenter)  # 右
         dpad_layout.addWidget(self.down_btn, 2, 1, qt.Qt.AlignCenter)   # 下
-        
+
         # 设置列和行的拉伸，确保按钮居中
         dpad_layout.setColumnStretch(0, 1)
         dpad_layout.setColumnStretch(1, 0)  # 中间列不拉伸
         dpad_layout.setColumnStretch(2, 1)
-        
+
         # 添加方向键到主布局
         dpad_container = qt.QWidget()
         dpad_container.setLayout(dpad_layout)
         adjust_layout.addWidget(dpad_container, qt.Qt.AlignCenter)
-        
+
         # 说明文字
         info_label = qt.QLabel("在当前切片平面内进行精确位置调整")
         info_label.setStyleSheet("""
             QLabel {
-                font-size: 10px;
+                font-size: 9px;
                 color: #6c757d;
                 font-style: italic;
-                margin-top: 4px;
+                margin-top: 2px;
             }
         """)
         info_label.setAlignment(qt.Qt.AlignCenter)
         adjust_layout.addWidget(info_label)
-        
+
         # 累计位移显示
         self.offset_label = qt.QLabel("偏移: (0.0, 0.0) mm")
         self.offset_label.setStyleSheet("""
             QLabel {
-                font-size: 10px;
+                font-size: 9px;
                 color: #495057;
-                background-color: #e9ecef;
+                background-color: #eef2f7;
                 border-radius: 3px;
-                padding: 4px 8px;
-                margin-top: 4px;
+                padding: 2px 6px;
+                margin-top: 2px;
             }
         """)
         self.offset_label.setAlignment(qt.Qt.AlignCenter)
         adjust_layout.addWidget(self.offset_label)
-        
-        self.section_card.add_widget(adjust_frame)
-        
+
+        if return_widget:
+            return adjust_frame
+        else:
+            self.section_card.add_widget(adjust_frame)
+
         # 初始化累计偏移量
         self.cumulative_offset = [0.0, 0.0]  # [x_offset, y_offset] in mm
 
-    def _create_advanced_section(self):
+    def _create_advanced_section(self, return_widget: bool = False):
         """创建高级选项区域"""
         advanced_layout = qt.QHBoxLayout()
-        advanced_layout.setSpacing(8)
-        
+        advanced_layout.setSpacing(6 if self._compact else 8)
+
         # 微调变换按钮
-        adjust_btn = qt.QPushButton("⚙️ 微调位置")
+        adjust_btn = qt.QPushButton("⚙️ 微调")
         adjust_btn.setStyleSheet("""
             QPushButton {
-                padding: 6px 12px;
+                padding: 4px 8px;
                 background-color: #6c757d;
                 color: white;
                 border: none;
@@ -553,12 +600,12 @@ class ValveOverlayWidget(qt.QWidget):
         adjust_btn.clicked.connect(self._open_transforms_module)
         self.adjust_btn = adjust_btn
         adjust_btn.setEnabled(False)
-        
+
         # 重置按钮
         reset_btn = qt.QPushButton("🔄 重置")
         reset_btn.setStyleSheet("""
             QPushButton {
-                padding: 6px 12px;
+                padding: 4px 8px;
                 background-color: #dc3545;
                 color: white;
                 border: none;
@@ -578,12 +625,21 @@ class ValveOverlayWidget(qt.QWidget):
         reset_btn.clicked.connect(self._reset_overlay)
         self.reset_btn = reset_btn
         reset_btn.setEnabled(False)
-        
+
         advanced_layout.addWidget(adjust_btn)
         advanced_layout.addWidget(reset_btn)
         advanced_layout.addStretch()
-        
-        self.section_card.add_layout(advanced_layout)
+
+        if return_widget:
+            container = qt.QWidget()
+            c_layout = qt.QHBoxLayout(container)
+            c_layout.setContentsMargins(0, 0, 0, 0)
+            c_layout.setSpacing(6 if self._compact else 8)
+            c_layout.addLayout(advanced_layout)
+            c_layout.addStretch()
+            return container
+        else:
+            self.section_card.add_layout(advanced_layout)
     
     def _check_valve_availability(self):
         """检查瓣膜数据可用性 - 后台检测，只输出日志"""
@@ -834,14 +890,14 @@ class ValveOverlayWidget(qt.QWidget):
             self.overlay_btn.setText("❌ 禁用叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px 16px;
+            padding: 6px 10px;
                     background-color: #dc3545;
                     color: white;
                     border: none;
                     border-radius: 6px;
-                    font-size: 13px;
+            font-size: 12px;
                     font-weight: bold;
-                    min-width: 120px;
+            min-width: 96px;
                 }
                 QPushButton:hover {
                     background-color: #c82333;
@@ -861,14 +917,14 @@ class ValveOverlayWidget(qt.QWidget):
             self.overlay_btn.setText("🔄 启用叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px 16px;
+            padding: 6px 10px;
                     background-color: #28a745;
                     color: white;
                     border: none;
                     border-radius: 6px;
-                    font-size: 13px;
+            font-size: 12px;
                     font-weight: bold;
-                    min-width: 120px;
+            min-width: 96px;
                 }
                 QPushButton:hover {
                     background-color: #218838;
@@ -990,7 +1046,9 @@ class ValveOverlayWidget(qt.QWidget):
         """在当前切片平面内进行位置微调"""
         try:
             # 获取步长
-            step_text = self.step_combo.currentText
+            # Support both method and property forms across Qt wrappers
+            current_text_attr = getattr(self.step_combo, 'currentText', '')
+            step_text = current_text_attr() if callable(current_text_attr) else str(current_text_attr)
             step_size = float(step_text.replace('mm', ''))
             
             # 更新累计偏移量
