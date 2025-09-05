@@ -14,7 +14,6 @@ try:
     from ..utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
     # from ..widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
-    from ..widgets.section_card import SectionCard
     from .module4_logic import Module4Logic
     from .geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 except ImportError:
@@ -32,7 +31,6 @@ except ImportError:
     from utils.layout_manager import LayoutManager, LayoutType, SizePolicy
     from widgets.compact_phase_toggle import CompactPhaseToggle
     # from widgets.valve_overlay_widget import ValveOverlayWidget, create_valve_overlay_widget
-    from widgets.section_card import SectionCard
     from module4_logic import Module4Logic
     from geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
 
@@ -115,25 +113,30 @@ class Module4Widget(qt.QWidget):
 
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()
-        # 分析区域 - 选项卡
+        # 分析区域 - 选项卡（参考模块三的样式，直接使用Tab）
         self.analysis_tabs = qt.QTabWidget()
         try:
             self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
             self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
         except Exception:
             pass
+        self.analysis_tabs.setStyleSheet(
+            """
+            QTabWidget::pane { border: 1px solid #dee2e6; border-radius: 4px; background-color: white; }
+            QTabBar::tab { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+            QTabBar::tab:selected { background-color: white; border-bottom-color: white; }
+            """
+        )
 
         # 创建并添加分析组件
         self.analysis_tabs.addTab(self.inflow_analysis, "Inflow")
         self.analysis_tabs.addTab(self.nadir_analysis, "Nadir")
-        self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure Level")
+        self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure")
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
-        # 使用卡片样式的容器展示分析区域，统一风格
-        analysis_card = SectionCard(title="几何形态分析", icon_text="📊", variant="blue", parent=self)
-        analysis_card.add_widget(self.analysis_tabs)
-        main_layout.addWidget(analysis_card)
+        # 直接将选项卡添加到主布局，风格与模块三一致
+        main_layout.addWidget(self.analysis_tabs)
 
         # 瓣膜叠加组件已迁移到模块五
 
