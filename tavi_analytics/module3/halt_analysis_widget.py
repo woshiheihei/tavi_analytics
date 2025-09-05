@@ -854,8 +854,15 @@ class HaltAnalysisWidget(qt.QWidget):
         return "\n".join(report)
     
     def _emit_status_changed(self):
-        """发出状态改变信号"""
-        self.statusChanged.emit(self.get_analysis_results())
+        """发出状态改变信号并同步到Session"""
+        results = self.get_analysis_results()
+        # 同步保存到Session，便于报告模块读取
+        try:
+            if self.session and hasattr(self.session, 'update_module3_result'):
+                self.session.update_module3_result('halt', results)
+        except Exception:
+            pass
+        self.statusChanged.emit(results)
     
     def get_analysis_results(self) -> Dict[str, Any]:
         """获取完整的分析结果"""
@@ -908,6 +915,12 @@ class HaltAnalysisWidget(qt.QWidget):
         
         # 可选：恢复所有切片的默认显示状态
         self._restore_default_slice_visibility()
+        # 停用时也持久化一次
+        try:
+            if self.session and hasattr(self.session, 'update_module3_result'):
+                self.session.update_module3_result('halt', self.get_analysis_results())
+        except Exception:
+            pass
     
     def cleanup(self):
         """清理资源"""

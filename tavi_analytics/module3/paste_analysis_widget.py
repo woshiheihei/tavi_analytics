@@ -72,6 +72,15 @@ class BaseAnalysisWidget(qt.QWidget):
 
     def on_deactivated(self):
         logging.info(f"{self.analysis_type}分析界面停用")
+        # 停用时也持久化一次
+        try:
+            if self.session and hasattr(self.session, 'update_module3_result'):
+                key_map = {'RELM': 'relm', 'SFD': 'sfd', 'PFD': 'pfd'}
+                key = key_map.get(self.analysis_type)
+                if key:
+                    self.session.update_module3_result(key, self.get_analysis_results())
+        except Exception:
+            pass
 
     def cleanup(self):
         if hasattr(self, "key_view_manager") and self.key_view_manager:
@@ -80,7 +89,17 @@ class BaseAnalysisWidget(qt.QWidget):
 
     # ---- 结果/事件 ----
     def _emit_status_changed(self):
-        self.statusChanged.emit(self.get_analysis_results())
+        results = self.get_analysis_results()
+        # 将子类结果存入Session（按analysis_type键）
+        try:
+            if self.session and hasattr(self.session, 'update_module3_result'):
+                key_map = {'RELM': 'relm', 'SFD': 'sfd', 'PFD': 'pfd'}
+                key = key_map.get(self.analysis_type)
+                if key:
+                    self.session.update_module3_result(key, results)
+        except Exception:
+            pass
+        self.statusChanged.emit(results)
 
     def get_analysis_results(self) -> Dict[str, Any]:
         return {"analysis_type": self.analysis_type, "status": "占位符"}

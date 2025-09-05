@@ -59,6 +59,7 @@ class Module6Widget(qt.QWidget):
             # 以更友好的排版渲染到预览（只做文本预览，导出用HTML模板）
             base = summary.get('base', {})
             angles = summary.get('angles', {})
+            m3 = summary.get('module3') or {}
             lines = []
             lines.append("一、基本情况")
             lines.append(f"  • 受试者编号: {base.get('patientID','')}")
@@ -70,6 +71,25 @@ class Module6Widget(qt.QWidget):
             lines.append(f"  • RCA→RCC/LCC: {angles.get('RCA_to_RCC_LCC', '')}°")
             lines.append(f"  • RCA→LCC/NCC: {angles.get('RCA_to_LCC_NCC', '')}°")
             lines.append(f"  • RCA→NCC/RCC: {angles.get('RCA_to_NCC_RCC', '')}°")
+            # 模块三概览
+            if any(m3.get(k) for k in ('halt','relm','sfd','pfd')):
+                lines.append("")
+                lines.append("三、模块三（瓣叶功能评估）")
+                halt = m3.get('halt') or {}
+                if halt:
+                    lines.append(f"  • HALT整体: {halt.get('overall_status','')}")
+                    lg = halt.get('leaflet_grades') or {}
+                    if lg:
+                        lines.append(f"    - LC/RC/NC: {lg.get('LC','-')} / {lg.get('RC','-')} / {lg.get('NC','-')}")
+                relm = m3.get('relm') or {}
+                if relm:
+                    lines.append(f"  • RELM: {relm.get('status','')}, 瓣叶: {relm.get('leaflet','')}")
+                sfd = m3.get('sfd') or {}
+                if sfd:
+                    lines.append(f"  • SFD: {sfd.get('status','')}, 受累窦: {', '.join(sfd.get('affected_sinuses') or [])}")
+                pfd = m3.get('pfd') or {}
+                if pfd:
+                    lines.append(f"  • PFD: {pfd.get('status','')}, 最大厚度: {pfd.get('max_thickness') if pfd.get('max_thickness') is not None else '-'} mm")
             self.preview.setPlainText("\n".join(lines))
         except Exception as e:
             logging.error(f"刷新报告预览失败: {e}")

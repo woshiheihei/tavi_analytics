@@ -139,6 +139,19 @@ class TAVRStudySession:
                 "RCA_to_LCC_NCC": 0.0,
                 "RCA_to_NCC_RCC": 0.0,
             }
+
+            # 模块三（瓣叶功能评估）分析结果存储
+            # 结构示例：
+            # {
+            #   'halt': {overall_status, leaflet_grades, ...},
+            #   'relm': {...}, 'sfd': {...}, 'pfd': {...}
+            # }
+            self.module3_results: Dict[str, Any] = {
+                'halt': None,
+                'relm': None,
+                'sfd': None,
+                'pfd': None,
+            }
             
             # 标记已初始化
             self._initialized = True
@@ -991,6 +1004,38 @@ class TAVRStudySession:
             'has_marked_phases': self.has_marked_phases(),
             'phase_summary': self.get_phase_summary()
         }
+
+    # ====== 模块三结果存取 ======
+    def set_module3_results(self, results: Dict[str, Any]):
+        """设置模块三分析结果的整体字典。
+
+        未提供的键保持原值，提供的键将被更新。
+        """
+        try:
+            if not isinstance(results, dict):
+                return
+            for k in ('halt', 'relm', 'sfd', 'pfd'):
+                if k in results:
+                    self.module3_results[k] = results[k]
+            self.logger.info("更新模块三分析结果")
+        except Exception as e:
+            self.logger.error(f"设置模块三结果失败: {e}")
+
+    def update_module3_result(self, key: str, value: Any):
+        """更新单项模块三结果。"""
+        try:
+            if key in ('halt', 'relm', 'sfd', 'pfd'):
+                self.module3_results[key] = value
+                self.logger.info(f"更新模块三结果: {key}")
+        except Exception as e:
+            self.logger.error(f"更新模块三单项结果失败: {e}")
+
+    def get_module3_results(self) -> Dict[str, Any]:
+        """获取模块三分析结果副本。"""
+        try:
+            return dict(self.module3_results)
+        except Exception:
+            return {'halt': None, 'relm': None, 'sfd': None, 'pfd': None}
     
     @classmethod
     def get_instance(cls) -> 'TAVRStudySession':

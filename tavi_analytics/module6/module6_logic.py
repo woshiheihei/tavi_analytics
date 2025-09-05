@@ -58,6 +58,14 @@ class Module6Logic:
         # 交接对齐角度（模块五保存于session）
         commissure_angles = s.get_commissure_alignment_angles()
 
+        # 模块三分析结果（HALT/RELM/SFD/PFD）
+        module3 = {}
+        try:
+            if hasattr(s, 'get_module3_results'):
+                module3 = s.get_module3_results() or {}
+        except Exception:
+            module3 = {}
+
         # 度量JSON若存在于项目 data/measurement.json，加载一次（可为空）
         measurement_json: Optional[Dict[str, Any]] = None
         try:
@@ -77,6 +85,7 @@ class Module6Logic:
             "planes": planes_summary,
             "measurements": all_measurements,
             "angles": commissure_angles,
+            "module3": module3,
             "raw_measurement_json": measurement_json,
         }
 
@@ -120,6 +129,7 @@ class Module6Logic:
         b = data.get('base', {})
         phases = data.get('phases', {})
         angles = data.get('angles', {})
+        module3 = data.get('module3', {}) or {}
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
         # 辅助函数
@@ -161,6 +171,7 @@ class Module6Logic:
 
         # 期像信息
         mp = phases.get('marked_phases', {}) if isinstance(phases, dict) else {}
+
         def _phase_row(name_key, label):
             p = mp.get(name_key, {})
             return f"<tr><td>{label}帧索引</td><td>{val(p.get('frame_index'))}</td><td>{label}相位%</td><td>{val(p.get('phase_percent'))}</td></tr>"
@@ -194,6 +205,61 @@ class Module6Logic:
             </table>
             """
 
+        # 模块三（HALT/RELM/SFD/PFD）
+        def _render_module3(m3: dict) -> str:
+            if not m3:
+                return ""
+            halt = m3.get('halt') or {}
+            relm = m3.get('relm') or {}
+            sfd = m3.get('sfd') or {}
+            pfd = m3.get('pfd') or {}
+
+            # HALT
+            halt_rows = []
+            if halt:
+                halt_rows.append(f"<tr><td>HALT整体</td><td colspan=3>{halt.get('overall_status','')}</td></tr>")
+                grades = halt.get('leaflet_grades') or {}
+                for leaflet in ('LC','RC','NC'):
+                    if leaflet in grades:
+                        halt_rows.append(f"<tr><td>HALT分级 {leaflet}</td><td colspan=3>{grades.get(leaflet)}</td></tr>")
+
+            # RELM
+            relm_rows = []
+            if relm:
+                relm_rows.append(f"<tr><td>RELM状态</td><td colspan=3>{relm.get('status','')}</td></tr>")
+                if relm.get('leaflet'):
+                    relm_rows.append(f"<tr><td>RELM瓣叶</td><td colspan=3>{relm.get('leaflet')}</td></tr>")
+
+            # SFD
+            sfd_rows = []
+            if sfd:
+                sfd_rows.append(f"<tr><td>SFD状态</td><td colspan=3>{sfd.get('status','')}</td></tr>")
+                sinuses = sfd.get('affected_sinuses') or []
+                if sinuses:
+                    sfd_rows.append(f"<tr><td>SFD受累窦</td><td colspan=3>{', '.join(sinuses)}</td></tr>")
+
+            # PFD
+            pfd_rows = []
+            if pfd:
+                pfd_rows.append(f"<tr><td>PFD状态</td><td colspan=3>{pfd.get('status','')}</td></tr>")
+                if pfd.get('max_thickness') is not None:
+                    pfd_rows.append(f"<tr><td>PFD最大厚度</td><td colspan=3>{pfd.get('max_thickness')} mm</td></tr>")
+
+            blocks = []
+            if halt_rows:
+                blocks.append("<tr><th colspan=4>五、HALT</th></tr>" + ''.join(halt_rows))
+            if relm_rows:
+                blocks.append("<tr><th colspan=4>六、RELM</th></tr>" + ''.join(relm_rows))
+            if sfd_rows:
+                blocks.append("<tr><th colspan=4>七、SFD</th></tr>" + ''.join(sfd_rows))
+            if pfd_rows:
+                blocks.append("<tr><th colspan=4>八、PFD</th></tr>" + ''.join(pfd_rows))
+            if not blocks:
+                return ""
+            return f"<table>{''.join(blocks)}</table>"
+
+        module3_html = _render_module3(module3)
+
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
         <body>
@@ -201,6 +267,7 @@ class Module6Logic:
         {base_html}
         {phase_html}
         {geo_html}
+        {module3_html}
         {angles_html}
         </body></html>
         """
