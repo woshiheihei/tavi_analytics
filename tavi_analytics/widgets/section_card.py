@@ -17,12 +17,15 @@ class SectionCard(qt.QWidget):
     - 支持多种配色风格（blue/purple/neutral）以匹配现有UI
     """
 
-    def __init__(self, title: str, icon_text: str = "", variant: str = "neutral", parent=None):
+    def __init__(self, title: str, icon_text: str = "", variant: str = "neutral", parent=None, header_compact: bool = False):
         super().__init__(parent)
 
         # 设置卡片基础属性
         self.setObjectName("SectionCard")
         self.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Maximum)
+
+        # 记录是否使用紧凑标题（独立于虚线变体，用于顶层但需要小标题的场景）
+        self._header_compact = bool(header_compact)
 
         # 根布局
         root = qt.QVBoxLayout(self)
@@ -120,13 +123,20 @@ class SectionCard(qt.QWidget):
             }}
             """
         )
-
-        # 紧凑模式：用于子 section（如 dashed 变体）
+        # 紧凑模式：
+        # - dashed 变体：缩小整体内边距与标题间距，并使用小号标题
+        # - header_compact（非 dashed）：仅缩小标题字号/图标，不改变整体内边距
         if use_dashed:
-            # 缩小内边距与间距
             if hasattr(self, "_root_layout") and self._root_layout is not None:
                 self._root_layout.setContentsMargins(16, 12, 16, 16)
                 self._root_layout.setSpacing(12)
+            if hasattr(self, "_header_layout") and self._header_layout is not None:
+                self._header_layout.setSpacing(8)
+            icon_px = 20
+            icon_box = 32
+            title_px = 16
+            title_weight = "600"  # semibold
+        elif getattr(self, "_header_compact", False):
             if hasattr(self, "_header_layout") and self._header_layout is not None:
                 self._header_layout.setSpacing(8)
             icon_px = 20

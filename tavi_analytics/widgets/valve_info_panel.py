@@ -58,7 +58,7 @@ class ValveInfoPanel(qt.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        card = SectionCard(title="瓣膜信息", icon_text="🫀", variant="neutral", parent=self)
+        card = SectionCard(title="瓣膜信息", icon_text="🫀", variant="neutral", parent=self, header_compact=True)
 
         # Status row
         status_row = qt.QWidget()
