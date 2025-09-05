@@ -32,6 +32,10 @@ class ThemeColor(Enum):
     # 主要色彩 (Primary) - 灰色主题
     PRIMARY = "#64748b"             # 主色 (slate-500)  
     PRIMARY_FOREGROUND = "#ffffff"  # 主色文字 (white)
+
+    # 品牌/操作主色（用于工具栏pill按钮激活态，避免影响全局PRIMARY灰主题）
+    BRAND_PRIMARY = "#2563eb"       # blue-600
+    BRAND_PRIMARY_HOVER = "#1d4ed8" # blue-700
     
     # 次要色彩 (Secondary)
     SECONDARY = "#f1f5f9"           # 次要色 (slate-100)
@@ -198,6 +202,15 @@ class StyleManager:
                 "hover_bg": "transparent",
                 "border": "1px solid transparent",
                 "shadow": "none"
+            },
+            # 工具栏按钮（参考提供参数）
+            "toolbar": {
+                "bg_color": "#f8f9fa",
+                "text_color": "#495057",
+                "hover_bg": "#e9ecef",
+                "border": "1px solid #ced4da",
+                "radius": "4px",
+                "shadow": "none"
             }
         }
         
@@ -210,16 +223,21 @@ class StyleManager:
         else:
             padding_style = f"min-height: {size_cfg['min_h']}px; padding: {size_cfg['pad_y']}px {size_cfg['pad_x']}px;"
 
+        # 尺寸/间距：toolbar按设计覆盖为 6px 12px
+        if button_type == "toolbar":
+            padding_style = "min-height: 28px; padding: 6px 12px;"
+
         style = f"""
             QPushButton {{
                 background-color: {type_cfg["bg_color"]};
                 color: {type_cfg["text_color"]};
                 border: {type_cfg["border"]};
-                border-radius: 6px;
+                border-radius: {type_cfg.get('radius', '6px')};
                 {padding_style}
                 font-size: {size_cfg['font_px']}px;
                 font-weight: {FontWeight.MEDIUM.value};
                 text-align: center;
+                cursor: pointinghand;
             }}
             QPushButton:hover {{
                 background-color: {type_cfg["hover_bg"]};
@@ -240,6 +258,20 @@ class StyleManager:
                 QPushButton:hover {{
                     text-decoration: underline;
                     background-color: transparent;
+                }}
+            """
+
+        # 工具栏pill按钮的选中态（用于setCheckable(True)的按钮）
+        if button_type == "toolbar":
+            style += f"""
+                QPushButton:checked {{
+                    background-color: {ThemeColor.BRAND_PRIMARY.value};
+                    color: {ThemeColor.PRIMARY_FOREGROUND.value};
+                    border: 2px solid #111827; /* 深色描边，贴近设计图效果 */
+                    border-radius: {type_cfg.get('radius', '10px')};
+                }}
+                QPushButton:checked:hover {{
+                    background-color: {ThemeColor.BRAND_PRIMARY_HOVER.value};
                 }}
             """
         

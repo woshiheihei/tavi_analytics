@@ -368,7 +368,7 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
 
         # 设置按钮（统一按钮工厂样式）
         self.set_valve_btn = LayoutManager.create_button_with_style(
-            "应用", "primary", "sm", 32
+            "应用", "toolbar", "sm", 32
         )
         self.set_valve_btn.setMinimumWidth(80)
         selector_layout.addWidget(self.set_valve_btn)
@@ -386,14 +386,15 @@ class BaseGeometryAnalysisWidget(qt.QWidget):
         button_layout = qt.QHBoxLayout()
         button_layout.setSpacing(8)
 
+        # 使用工具栏式圆角pill按钮风格
         self.locate_plane_btn = LayoutManager.create_button_with_style(
-            f"定位 {self.level_display_name} 平面", "primary", "sm", 28
+            f"定位 {self.level_display_name} 平面", "toolbar", "sm", 28
         )
         self.locate_plane_btn.clicked.connect(self._on_locate_plane)
         button_layout.addWidget(self.locate_plane_btn)
 
         self.load_data_btn = LayoutManager.create_button_with_style(
-            "重新加载数据", "secondary", "sm", 28
+            "重新加载数据", "toolbar", "sm", 28
         )
         self.load_data_btn.clicked.connect(self._on_load_data)
         button_layout.addWidget(self.load_data_btn)
