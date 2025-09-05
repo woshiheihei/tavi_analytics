@@ -75,9 +75,7 @@ class Module3Widget(qt.QWidget):
         
         # 同步两个期像选择组件的状态
         self._sync_phase_widgets(phase)
-        
-        # 自动刷新平面状态以显示当前期像下的可用平面
-        qt.QTimer.singleShot(100, self._on_refresh_plane_status)  # 延迟100ms刷新
+    # 快速定位关键平面组件已移除，无需刷新平面状态
     
     def _sync_phase_widgets(self, phase: str):
         """
@@ -105,168 +103,6 @@ class Module3Widget(qt.QWidget):
         """
         logging.debug(f"模块三期像状态更新: {status}")
     
-    def _on_switch_to_valve_plane(self):
-        """
-        切换到ValveStent_Bottom_Plane平面的回调方法
-        """
-        try:
-            if not self.logic:
-                logging.error("模块三逻辑未初始化")
-                return
-            
-            logging.info("开始切换到ValveStent_Bottom_Plane平面...")
-            
-            # 禁用按钮，防止重复点击
-            self.switch_to_valve_plane_btn.setEnabled(False)
-            self.switch_to_valve_plane_btn.setText("🔄 正在切换...")
-            
-            # 执行切换
-            success = self.logic.switch_to_valve_stent_bottom_contour()
-            
-            if success:
-                logging.info("成功切换到ValveStent_Bottom_Plane平面")
-                # 可以在这里添加成功提示
-                self.switch_to_valve_plane_btn.setText("✅ 切换完成")
-                # 2秒后恢复按钮文本
-                qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 瓣膜支架底部平面"))
-            else:
-                logging.error("切换到ValveStent_Bottom_Plane平面失败")
-                self.switch_to_valve_plane_btn.setText("❌ 切换失败")
-                # 2秒后恢复按钮文本
-                qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 瓣膜支架底部平面"))
-            
-        except Exception as e:
-            logging.error(f"切换到ValveStent_Bottom_Plane平面时出错: {e}")
-            self.switch_to_valve_plane_btn.setText("❌ 出错")
-            qt.QTimer.singleShot(2000, lambda: self.switch_to_valve_plane_btn.setText("🎯 瓣膜支架底部平面"))
-        finally:
-            # 重新启用按钮
-            self.switch_to_valve_plane_btn.setEnabled(True)
-    
-    def _on_switch_to_sinus_plane(self):
-        """
-        切换到SinusOfValsalva_Plane平面的回调方法
-        """
-        try:
-            if not self.logic:
-                logging.error("模块三逻辑未初始化")
-                return
-            
-            logging.info("开始切换到SinusOfValsalva_Plane平面...")
-            
-            # 禁用按钮，防止重复点击
-            self.switch_to_sinus_plane_btn.setEnabled(False)
-            self.switch_to_sinus_plane_btn.setText("🔄 正在切换...")
-            
-            # 执行切换
-            success = self.logic.switch_to_sinus_of_valsalva_plane()
-            
-            if success:
-                logging.info("成功切换到SinusOfValsalva_Plane平面")
-                self.switch_to_sinus_plane_btn.setText("✅ 切换完成")
-                qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 瓦氏窦平面"))
-            else:
-                logging.error("切换到SinusOfValsalva_Plane平面失败")
-                self.switch_to_sinus_plane_btn.setText("❌ 切换失败")
-                qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 瓦氏窦平面"))
-            
-        except Exception as e:
-            logging.error(f"切换到SinusOfValsalva_Plane平面时出错: {e}")
-            self.switch_to_sinus_plane_btn.setText("❌ 出错")
-            qt.QTimer.singleShot(2000, lambda: self.switch_to_sinus_plane_btn.setText("🫀 瓦氏窦平面"))
-        finally:
-            # 重新启用按钮
-            self.switch_to_sinus_plane_btn.setEnabled(True)
-    
-
-    
-    def _on_refresh_plane_status(self):
-        """
-        刷新平面状态的回调方法
-        """
-        try:
-            if not self.logic:
-                logging.error("模块三逻辑未初始化")
-                print("❌ 模块三逻辑未初始化")
-                return
-            
-            # 获取当前期像
-            current_phase = self.logic.get_current_phase()
-            phase_display = {
-                'end_diastole': '舒张末期',
-                'end_systole': '收缩末期'
-            }.get(current_phase, '未知期像')
-            
-            # 检查轮廓可用性
-            availability = self.logic.check_contour_availability()
-            
-            # 在日志和控制台中输出状态
-            logging.info(f"轮廓状态检查结果 (期像: {phase_display}):")
-            print(f"📋 轮廓状态检查结果 (期像: {phase_display}):")
-            
-            contour_names = {
-                'valve_stent_bottom': 'ValveStent_Bottom_Contour (瓣膜支架底部轮廓)',
-                'sinus_of_valsalva': 'SinusOfValsalva_Contour (窦部轮廓)'
-            }
-            
-            for contour_type, info in availability.items():
-                if contour_type in contour_names:
-                    contour_display_name = contour_names[contour_type]
-                    if info.get('available', False):
-                        status_icon = "✅"
-                        extra_info = ""
-                        if 'num_points' in info:
-                            extra_info = f" ({info['num_points']}个点)"
-                        # 显示期像感知的节点名称
-                        if 'phase_aware_name' in info:
-                            extra_info += f" [{info['phase_aware_name']}]"
-                        log_message = f"{status_icon} {contour_display_name}{extra_info}"
-                        logging.info(log_message)
-                        print(log_message)
-                    else:
-                        status_icon = "❌"
-                        # 显示期像感知的节点名称（如果有）
-                        missing_name = info.get('phase_aware_name', info.get('base_name', ''))
-                        log_message = f"{status_icon} {contour_display_name} - 未找到 [{missing_name}]"
-                        logging.info(log_message)
-                        print(log_message)
-            
-            # 根据状态启用/禁用按钮
-            self._update_button_states(availability)
-            
-        except Exception as e:
-            error_message = f"刷新平面状态时出错: {e}"
-            logging.error(error_message)
-            print(f"❌ {error_message}")
-    
-    def _update_button_states(self, availability):
-        """
-        根据平面可用性更新按钮状态
-        
-        Args:
-            availability: 平面可用性字典
-        """
-        try:
-            # 更新瓣膜支架底部平面按钮
-            if 'valve_stent_bottom' in availability:
-                is_available = availability['valve_stent_bottom'].get('available', False)
-                self.switch_to_valve_plane_btn.setEnabled(is_available)
-                if not is_available:
-                    self.switch_to_valve_plane_btn.setToolTip("当前期像下该平面不可用")
-                else:
-                    self.switch_to_valve_plane_btn.setToolTip("切换到瓣膜支架底部平面")
-            
-            # 更新Sinus Of Valsalva平面按钮
-            if 'sinus_of_valsalva' in availability:
-                is_available = availability['sinus_of_valsalva'].get('available', False)
-                self.switch_to_sinus_plane_btn.setEnabled(is_available)
-                if not is_available:
-                    self.switch_to_sinus_plane_btn.setToolTip("当前期像下该平面不可用")
-                else:
-                    self.switch_to_sinus_plane_btn.setToolTip("切换到瓦氏窦平面")
-            
-        except Exception as e:
-            logging.error(f"更新按钮状态时出错: {e}")
     
     def _setup_ui(self):
         # 使用统一布局与样式体系，和模块1、2保持一致
@@ -286,26 +122,7 @@ class Module3Widget(qt.QWidget):
         title_layout.addWidget(self.compact_phase_toggle)
         title_layout.addStretch()
 
-        # 平面切换控制区域
-        plane_control_frame = LayoutManager.create_section_frame("快速定位关键平面")
-        plane_control_layout = LayoutManager.create_layout(LayoutType.SECTION_CONTAINER, plane_control_frame)
-        buttons_widget = qt.QWidget()
-        buttons_layout = qt.QGridLayout(buttons_widget)
-        buttons_layout.setSpacing(10)
-
-        self.switch_to_valve_plane_btn = LayoutManager.create_button_with_style(
-            "🎯 瓣膜支架底部平面", "primary", "default", 45
-        )
-        self.switch_to_valve_plane_btn.clicked.connect(self._on_switch_to_valve_plane)
-
-        self.switch_to_sinus_plane_btn = LayoutManager.create_button_with_style(
-            "🫀 瓦氏窦平面", "secondary", "default", 45
-        )
-        self.switch_to_sinus_plane_btn.clicked.connect(self._on_switch_to_sinus_plane)
-
-        buttons_layout.addWidget(self.switch_to_valve_plane_btn, 0, 0)
-        buttons_layout.addWidget(self.switch_to_sinus_plane_btn, 0, 1)
-        plane_control_layout.addWidget(buttons_widget)
+        # 快速定位关键平面控制区域已移除
 
         # 分析区域 - 选项卡（去除外层"瓣叶功能评估"Section，直接使用Tab）
         self.analysis_tabs = qt.QTabWidget()
@@ -335,7 +152,6 @@ class Module3Widget(qt.QWidget):
         main_layout.addWidget(title_container)
         # 直接将选项卡添加到主布局
         main_layout.addWidget(self.analysis_tabs)
-        main_layout.addWidget(plane_control_frame)
         main_layout.addStretch()
 
     def set_session(self, session: TAVRStudySession):
@@ -387,8 +203,7 @@ class Module3Widget(qt.QWidget):
         # 3D窗口居中显示
         self._center_3d_view()
         
-        # 自动检查平面状态（仅输出到日志和控制台）
-        qt.QTimer.singleShot(500, self._on_refresh_plane_status)  # 延迟500ms执行，确保UI完全加载
+    # 快速定位关键平面组件已移除，不再检查平面状态
 
     def on_deactivated(self):
         logging.info("模块三已停用")
