@@ -155,6 +155,12 @@ class TAVRStudySession:
 
             # 人工瓣膜形态改变（报告-支架评估用），None=未填写，True=有，False=无
             self.stent_morphology_changed: Optional[bool] = None
+            # 报告-支架评估的手工覆盖值：
+            # 结构: { phase: { plane: { field_name: float } } }
+            # phase: 'end_diastole'|'end_systole'
+            # plane: 'inflow'|'nadir'|'commissure'|'outerskirt'
+            # field_name: 'perimeter'|'area'|'perimeter_derived_diameter'|'area_derived_diameter'|'longest_diameter'|'shortest_diameter'
+            self.stent_measurement_overrides: Dict[str, Dict[str, Dict[str, float]]] = {}
             
             # 标记已初始化
             self._initialized = True
@@ -1068,6 +1074,76 @@ class TAVRStudySession:
             return getattr(self, 'stent_morphology_changed', None)
         except Exception:
             return None
+
+    # ====== 支架评估测量覆盖（报告可编辑） ======
+    def set_stent_measurement_override(self, phase: str, plane: str, field: str, value: Optional[float]) -> bool:
+        """设置/清除某个支架平面测量覆盖值。
+
+        Args:
+            phase: 'end_diastole' 或 'end_systole'
+            plane: 'inflow'|'nadir'|'commissure'|'outerskirt'
+            field: 支持的字段名
+            value: 浮点数；若为None则删除该字段覆盖
+        """
+        try:
+            if phase not in ('end_diastole', 'end_systole'):
+                return False
+            if plane not in ('inflow', 'nadir', 'commissure', 'outerskirt'):
+                return False
+            allowed = {
+                'perimeter', 'area', 'perimeter_derived_diameter', 'area_derived_diameter',
+                'longest_diameter', 'shortest_diameter', 'average_diameter'
+            }
+            if field not in allowed:
+                return False
+            if phase not in self.stent_measurement_overrides:
+                self.stent_measurement_overrides[phase] = {}
+            if plane not in self.stent_measurement_overrides[phase]:
+                self.stent_measurement_overrides[phase][plane] = {}
+            if value is None:
+                # 删除字段覆盖
+                self.stent_measurement_overrides[phase][plane].pop(field, None)
+                if not self.stent_measurement_overrides[phase][plane]:
+                    self.stent_measurement_overrides[phase].pop(plane, None)
+                if not self.stent_measurement_overrides[phase]:
+                    self.stent_measurement_overrides.pop(phase, None)
+            else:
+                try:
+                    v = float(value)
+                except Exception:
+                    return False
+                self.stent_measurement_overrides[phase][plane][field] = v
+            self.logger.info(f"设置支架覆盖: {phase}/{plane}/{field} -> {value}")
+            return True
+        except Exception as e:
+            try:
+                self.logger.error(f"设置支架覆盖失败: {e}")
+            except Exception:
+                pass
+            return False
+
+    def get_stent_measurement_overrides(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+        try:
+            # 返回副本
+            return {ph: {pl: dict(vals) for pl, vals in planes.items()} for ph, planes in self.stent_measurement_overrides.items()}
+        except Exception:
+            return {}
+
+    def clear_stent_measurement_override(self, phase: Optional[str] = None, plane: Optional[str] = None):
+        """清理覆盖值；不传参数清理全部。"""
+        try:
+            if phase is None:
+                self.stent_measurement_overrides = {}
+                return
+            if phase in self.stent_measurement_overrides:
+                if plane is None:
+                    self.stent_measurement_overrides.pop(phase, None)
+                else:
+                    self.stent_measurement_overrides[phase].pop(plane, None)
+                    if not self.stent_measurement_overrides[phase]:
+                        self.stent_measurement_overrides.pop(phase, None)
+        except Exception:
+            pass
     
     @classmethod
     def get_instance(cls) -> 'TAVRStudySession':

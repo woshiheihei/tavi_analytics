@@ -63,11 +63,22 @@ class Module6Logic:
                         per_phase[phase] = None
                         continue
                     level_planes = mgr.get_level_planes()  # {'inflow': plane|None, 'nadir': plane|None, 'commissure': plane|None}
-                    def pack_plane(plane):
+                    overrides = s.get_stent_measurement_overrides() or {}
+                    def apply_overrides(phase_key: str, plane_key: str, packed: Dict[str, Any]) -> Dict[str, Any]:
+                        try:
+                            ph = overrides.get(phase_key) or {}
+                            ov = ph.get(plane_key) or {}
+                            if ov:
+                                packed.update({k: ov.get(k, packed.get(k)) for k in packed.keys()})
+                        except Exception:
+                            pass
+                        return packed
+
+                    def pack_plane(plane, phase_key: str, plane_key: str):
                         if not plane:
                             return None
                         m = plane.get_measurements() or {}
-                        return {
+                        packed = {
                             'perimeter': m.get('perimeter'),
                             'area': m.get('area'),
                             'perimeter_derived_diameter': m.get('perimeter_derived_diameter'),
@@ -78,10 +89,11 @@ class Module6Logic:
                             'height': getattr(plane, 'height', None),
                             'level_type': getattr(plane, 'level_type', None),
                         }
+                        return apply_overrides(phase_key, plane_key, packed)
                     per_phase[phase] = {
-                        'inflow': pack_plane(level_planes.get('inflow')),
-                        'nadir': pack_plane(level_planes.get('nadir')),
-                        'commissure': pack_plane(level_planes.get('commissure')),
+                        'inflow': pack_plane(level_planes.get('inflow'), phase, 'inflow'),
+                        'nadir': pack_plane(level_planes.get('nadir'), phase, 'nadir'),
+                        'commissure': pack_plane(level_planes.get('commissure'), phase, 'commissure'),
                         # 期相百分比（若有）
                         'phase_percent': (s.get_marked_phase(phase) or {}).get('phase_percent')
                     }
