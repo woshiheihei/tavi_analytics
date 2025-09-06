@@ -1,9 +1,10 @@
 """
-模块六界面 - 报告生成页面（仅保留左侧审核表单，不显示右侧预览）
+模块六界面 - 报告生成页面（重构为卡片化、专业风格，无右侧预览）
 
-功能:
-- 左侧审核关键字段（与样例表单一致的分区）
-- 一键导出HTML报告到用户选择的文件
+设计要点：
+- 参考模块三的 SectionCard 风格，采用卡片式分区，清晰、简洁、专业
+- 单列布局，顶部为动作区，下面依次为各 Section（基本情况 / 对齐角度 / 支架评估 / 报告摘要）
+- 不使用右侧预览；改为底部“报告摘要”卡片，以便快速总览（可选）
 """
 import logging
 from typing import Optional
@@ -11,6 +12,8 @@ import qt
 
 from core.session import TAVRStudySession
 from utils.layout_manager import LayoutManager, LayoutType
+from ui.styles import StyleManager
+from widgets.section_card import SectionCard
 from .module6_logic import Module6Logic
 
 
@@ -27,14 +30,16 @@ class Module6Widget(qt.QWidget):
     def _setup_ui(self):
         layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 标题与按钮
-        header = qt.QHBoxLayout()
-        export_btn = LayoutManager.create_button_with_style("导出HTML", button_type="primary", size="sm")
-        refresh_btn = LayoutManager.create_button_with_style("刷新", button_type="outline", size="sm")
-        header.addWidget(refresh_btn)
-        header.addWidget(export_btn)
-        header.addStretch(1)
-        layout.addLayout(header)
+        # 顶部动作区（工具栏风格按钮）
+        actions = qt.QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(8)
+        refresh_btn = LayoutManager.create_button_with_style("刷新", button_type="toolbar", size="sm", min_height=28)
+        export_btn = LayoutManager.create_button_with_style("导出HTML", button_type="toolbar", size="sm", min_height=28)
+        actions.addWidget(refresh_btn)
+        actions.addStretch(1)
+        actions.addWidget(export_btn)
+        layout.addLayout(actions)
 
         # 审核表单（全宽）
         form_container = qt.QWidget()
@@ -42,71 +47,139 @@ class Module6Widget(qt.QWidget):
         form_layout.setContentsMargins(0, 0, 0, 0)
         form_layout.setSpacing(8)
 
-        # Section A: 基本情况（只读）
-        self.base_group = qt.QGroupBox("一、基本情况（只读）")
+        # Section A: 基本情况（只读） - SectionCard（逐行展示）
+        base_card = SectionCard(title="一、基本情况", icon_text="🧾", variant="dashed", parent=self)
         base_form = qt.QFormLayout()
-        self.lbl_patient = qt.QLabel()
-        self.lbl_dates = qt.QLabel()
-        self.lbl_valve = qt.QLabel()
-        base_form.addRow("受试者/性别/年龄", self.lbl_patient)
-        base_form.addRow("手术/CT日期", self.lbl_dates)
-        base_form.addRow("瓣膜", self.lbl_valve)
-        self.base_group.setLayout(base_form)
-        form_layout.addWidget(self.base_group)
+        base_form.setContentsMargins(0, 0, 0, 0)
+        base_form.setSpacing(6)
+        # 值标签
+        self.lbl_patient_id = qt.QLabel(); self.lbl_patient_id.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_patient_name = qt.QLabel(); self.lbl_patient_name.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_sex = qt.QLabel(); self.lbl_sex.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_age = qt.QLabel(); self.lbl_age.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_surgery_date = qt.QLabel(); self.lbl_surgery_date.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_ct_date = qt.QLabel(); self.lbl_ct_date.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_valve_brand = qt.QLabel(); self.lbl_valve_brand.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_valve_model = qt.QLabel(); self.lbl_valve_model.setStyleSheet(StyleManager.get_label_style("default"))
 
-        # Section B: 交接对齐角度（可编辑）
-        self.angles_group = qt.QGroupBox("二、交接对齐角度（可编辑, °）")
+        # 逐行添加
+        base_form.addRow(qt.QLabel("受试者编号"), self.lbl_patient_id)
+        base_form.addRow(qt.QLabel("姓名"), self.lbl_patient_name)
+        base_form.addRow(qt.QLabel("性别"), self.lbl_sex)
+        base_form.addRow(qt.QLabel("年龄"), self.lbl_age)
+        base_form.addRow(qt.QLabel("手术日期"), self.lbl_surgery_date)
+        base_form.addRow(qt.QLabel("CT日期"), self.lbl_ct_date)
+        base_form.addRow(qt.QLabel("瓣膜品牌"), self.lbl_valve_brand)
+        base_form.addRow(qt.QLabel("瓣膜型号"), self.lbl_valve_model)
+        base_card.add_layout(base_form)
+        form_layout.addWidget(base_card)
+
+        # Section B: 交接对齐角度（可编辑） - SectionCard
+        angles_card = SectionCard(title="二、交接对齐角度（°）", icon_text="🧭", variant="dashed", parent=self)
         ang_form = qt.QFormLayout()
-        self.inp_angle_rcc_lcc = qt.QDoubleSpinBox(); self.inp_angle_rcc_lcc.setRange(0,360); self.inp_angle_rcc_lcc.setDecimals(1)
-        self.inp_angle_lcc_ncc = qt.QDoubleSpinBox(); self.inp_angle_lcc_ncc.setRange(0,360); self.inp_angle_lcc_ncc.setDecimals(1)
-        self.inp_angle_ncc_rcc = qt.QDoubleSpinBox(); self.inp_angle_ncc_rcc.setRange(0,360); self.inp_angle_ncc_rcc.setDecimals(1)
-        ang_form.addRow("RCA→RCC/LCC", self.inp_angle_rcc_lcc)
-        ang_form.addRow("RCA→LCC/NCC", self.inp_angle_lcc_ncc)
-        ang_form.addRow("RCA→NCC/RCC", self.inp_angle_ncc_rcc)
-        self.angles_group.setLayout(ang_form)
-        form_layout.addWidget(self.angles_group)
+        ang_form.setContentsMargins(0, 0, 0, 0)
+        ang_form.setSpacing(6)
+        self.inp_angle_rcc_lcc = qt.QDoubleSpinBox(); self.inp_angle_rcc_lcc.setRange(0,360); self.inp_angle_rcc_lcc.setDecimals(1); self.inp_angle_rcc_lcc.setSuffix(" °")
+        self.inp_angle_lcc_ncc = qt.QDoubleSpinBox(); self.inp_angle_lcc_ncc.setRange(0,360); self.inp_angle_lcc_ncc.setDecimals(1); self.inp_angle_lcc_ncc.setSuffix(" °")
+        self.inp_angle_ncc_rcc = qt.QDoubleSpinBox(); self.inp_angle_ncc_rcc.setRange(0,360); self.inp_angle_ncc_rcc.setDecimals(1); self.inp_angle_ncc_rcc.setSuffix(" °")
+        ang_form.addRow(qt.QLabel("RCA→RCC/LCC"), self.inp_angle_rcc_lcc)
+        ang_form.addRow(qt.QLabel("RCA→LCC/NCC"), self.inp_angle_lcc_ncc)
+        ang_form.addRow(qt.QLabel("RCA→NCC/RCC"), self.inp_angle_ncc_rcc)
+        angles_card.add_layout(ang_form)
+        form_layout.addWidget(angles_card)
 
-        # Section C: 人工瓣膜支架评估（可编辑）
-        self.stent_group = qt.QGroupBox("三、人工瓣膜支架评估（可编辑）")
+        # Section C: 人工瓣膜支架评估（可编辑） - SectionCard
+        stent_card = SectionCard(title="三、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
         stent_layout = qt.QVBoxLayout()
-        # 形态改变
-        row_morph = qt.QHBoxLayout()
-        row_morph.addWidget(qt.QLabel("是否存在人工瓣膜形态改变:"))
-        self.sel_morph = qt.QComboBox(); self.sel_morph.addItems(["未填写","无","有"])
-        row_morph.addWidget(self.sel_morph); row_morph.addStretch(1)
-        stent_layout.addLayout(row_morph)
 
-        # 平面覆盖编辑：两期像
+        # 形态改变评估
+        morph_group = qt.QGroupBox("形态改变评估")
+        morph_layout = qt.QFormLayout(morph_group)
+        morph_layout.setSpacing(8)
+        self.sel_morph = qt.QComboBox()
+        self.sel_morph.addItems(["未填写", "无形态改变", "存在形态改变"])
+        morph_layout.addRow(qt.QLabel("人工瓣膜形态是否改变:"), self.sel_morph)
+        stent_layout.addWidget(morph_group)
+
+        # 测量数据编辑：两期像
+        measurement_group = qt.QGroupBox("测量数据")
+        measurement_layout = qt.QVBoxLayout(measurement_group)
         self._phase_tabs = qt.QTabWidget()
+        
         for phase_key, phase_label in (("end_diastole","舒张末期"),("end_systole","收缩末期")):
-            tab = qt.QWidget(); tab_layout = qt.QFormLayout(tab)
+            tab = qt.QWidget()
+            tab_layout = qt.QVBoxLayout(tab)
+            tab_layout.setSpacing(12)
+            
             # 为四种平面创建行（按Sapien3规则由刷新时控制显示）
-            def mk_row():
-                w = qt.QWidget(); h = qt.QHBoxLayout(w); h.setContentsMargins(0,0,0,0)
-                ped = qt.QDoubleSpinBox(); ped.setRange(0, 200); ped.setDecimals(3); ped.setObjectName("ped")
-                aed = qt.QDoubleSpinBox(); aed.setRange(0, 200); aed.setDecimals(3); aed.setObjectName("aed")
-                dmax = qt.QDoubleSpinBox(); dmax.setRange(0, 200); dmax.setDecimals(3); dmax.setObjectName("dmax")
-                dmin = qt.QDoubleSpinBox(); dmin.setRange(0, 200); dmin.setDecimals(3); dmin.setObjectName("dmin")
-                for lab, sp in (("PED", ped),("AED", aed),("Dmax", dmax),("Dmin", dmin)):
-                    h.addWidget(qt.QLabel(lab)); h.addWidget(sp)
-                h.addStretch(1)
-                return w
+            def mk_measurement_section(plane_key, plane_label):
+                # 创建平面分组
+                plane_group = qt.QGroupBox(plane_label)
+                plane_layout = qt.QGridLayout(plane_group)
+                plane_layout.setSpacing(8)
+                
+                # 创建测量值输入框
+                ped = qt.QDoubleSpinBox()
+                ped.setRange(0, 200)
+                ped.setDecimals(3)
+                ped.setSuffix(" mm")
+                ped.setObjectName("ped")
+                
+                aed = qt.QDoubleSpinBox()
+                aed.setRange(0, 200)
+                aed.setDecimals(3)
+                aed.setSuffix(" mm")
+                aed.setObjectName("aed")
+                
+                dmax = qt.QDoubleSpinBox()
+                dmax.setRange(0, 200)
+                dmax.setDecimals(3)
+                dmax.setSuffix(" mm")
+                dmax.setObjectName("dmax")
+                
+                dmin = qt.QDoubleSpinBox()
+                dmin.setRange(0, 200)
+                dmin.setDecimals(3)
+                dmin.setSuffix(" mm")
+                dmin.setObjectName("dmin")
+                
+                # 使用网格布局，2列4行
+                plane_layout.addWidget(qt.QLabel("周长衍生直径 (PED):"), 0, 0)
+                plane_layout.addWidget(ped, 0, 1)
+                plane_layout.addWidget(qt.QLabel("面积衍生直径 (AED):"), 1, 0)
+                plane_layout.addWidget(aed, 1, 1)
+                plane_layout.addWidget(qt.QLabel("最大直径 (Dmax):"), 2, 0)
+                plane_layout.addWidget(dmax, 2, 1)
+                plane_layout.addWidget(qt.QLabel("最小直径 (Dmin):"), 3, 0)
+                plane_layout.addWidget(dmin, 3, 1)
+                
+                return plane_group
+            
             self.rows = getattr(self, 'rows', {})
-            for plane_key, plane_label in (("inflow","支架低端(inflow)"),("nadir","窦底(nadir)"),("outerskirt","外裙边(outerskirt)"),("commissure","对合平面(commissure)")):
-                widget = mk_row()
-                tab_layout.addRow(plane_label, widget)
-                self.rows[(phase_key, plane_key)] = widget
+            for plane_key, plane_label in (
+                ("inflow","支架低端 (Inflow)"),
+                ("nadir","窦底 (Nadir)"),
+                ("outerskirt","外裙边 (Outerskirt)"),
+                ("commissure","对合平面 (Commissure)")
+            ):
+                plane_widget = mk_measurement_section(plane_key, plane_label)
+                tab_layout.addWidget(plane_widget)
+                self.rows[(phase_key, plane_key)] = plane_widget
+            
+            tab_layout.addStretch(1)
             self._phase_tabs.addTab(tab, phase_label)
-        stent_layout.addWidget(self._phase_tabs)
+        
+        measurement_layout.addWidget(self._phase_tabs)
+        stent_layout.addWidget(measurement_group)
 
         # 应用覆盖按钮
         btns = qt.QHBoxLayout()
-        self.btn_apply = LayoutManager.create_button_with_style("应用修改", button_type="success", size="sm")
-        self.btn_clear_overrides = LayoutManager.create_button_with_style("清空覆盖", button_type="outline", size="sm")
+        self.btn_apply = LayoutManager.create_button_with_style("应用修改", button_type="toolbar", size="sm", min_height=28)
+        self.btn_clear_overrides = LayoutManager.create_button_with_style("清空覆盖", button_type="toolbar", size="sm", min_height=28)
         btns.addWidget(self.btn_apply); btns.addWidget(self.btn_clear_overrides); btns.addStretch(1)
         stent_layout.addLayout(btns)
-        self.stent_group.setLayout(stent_layout)
-        form_layout.addWidget(self.stent_group)
+        stent_card.add_layout(stent_layout)
+        form_layout.addWidget(stent_card)
 
         form_layout.addStretch(1)
         layout.addWidget(form_container, 1)
@@ -127,19 +200,29 @@ class Module6Widget(qt.QWidget):
             angles = summary.get('angles', {})
             stent = summary.get('stent_assessment') or {}
 
-            # 填充左侧基本情况
-            self.lbl_patient.setText(f"{base.get('patientName','')} / {base.get('sex','')} / {base.get('age','')}")
-            self.lbl_dates.setText(f"{base.get('surgeryDate','')} / {base.get('ctScanDate','')}")
-            self.lbl_valve.setText(f"{base.get('valveBrand','')} {base.get('valveModel','')}")
+            # 填充基本情况（逐行）
+            self.lbl_patient_id.setText(f"{base.get('patientID','')}")
+            self.lbl_patient_name.setText(f"{base.get('patientName','')}")
+            self.lbl_sex.setText(f"{base.get('sex','')}")
+            self.lbl_age.setText(f"{base.get('age','')}")
+            self.lbl_surgery_date.setText(f"{base.get('surgeryDate','')}")
+            self.lbl_ct_date.setText(f"{base.get('ctScanDate','')}")
+            self.lbl_valve_brand.setText(f"{base.get('valveBrand','')}")
+            self.lbl_valve_model.setText(f"{base.get('valveModel','')}")
 
             # 角度填充
             self.inp_angle_rcc_lcc.setValue(float(angles.get('RCA_to_RCC_LCC', 0.0) or 0.0))
             self.inp_angle_lcc_ncc.setValue(float(angles.get('RCA_to_LCC_NCC', 0.0) or 0.0))
             self.inp_angle_ncc_rcc.setValue(float(angles.get('RCA_to_NCC_RCC', 0.0) or 0.0))
 
-            # 形态改变选择
+            # 形态改变
             morph = stent.get('morphology_changed')
-            self.sel_morph.setCurrentIndex(0 if morph is None else (2 if morph else 1))
+            if morph is None:
+                self.sel_morph.setCurrentIndex(0)  # 未填写
+            elif morph:
+                self.sel_morph.setCurrentIndex(2)  # 存在形态改变
+            else:
+                self.sel_morph.setCurrentIndex(1)  # 无形态改变
 
             # 控制平面显示（Sapien3规则）
             brand = (base.get('valveBrand') or '').strip(); model = (base.get('valveModel') or '').strip()
@@ -174,6 +257,8 @@ class Module6Widget(qt.QWidget):
                     if (sp := get_spin(w, 'aed')): sp.setValue(float(m.get('area_derived_diameter') or 0.0))
                     if (sp := get_spin(w, 'dmax')): sp.setValue(float(m.get('longest_diameter') or 0.0))
                     if (sp := get_spin(w, 'dmin')): sp.setValue(float(m.get('shortest_diameter') or 0.0))
+
+            # 移除报告摘要生成与显示（不保留右侧或底部预览）
         except Exception as e:
             logging.error(f"刷新表单失败: {e}")
 
@@ -188,7 +273,12 @@ class Module6Widget(qt.QWidget):
             })
             # 形态改变
             idx = self.sel_morph.currentIndex()
-            self.session.set_stent_morphology_changed(None if idx == 0 else (True if idx == 2 else False))
+            if idx == 0:
+                self.session.set_stent_morphology_changed(None)  # 未填写
+            elif idx == 1:
+                self.session.set_stent_morphology_changed(False)  # 无形态改变
+            else:
+                self.session.set_stent_morphology_changed(True)  # 存在形态改变
             # 覆盖值
             def get_spin(widget, name):
                 return widget.findChild(qt.QDoubleSpinBox, name)
