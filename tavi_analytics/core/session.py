@@ -152,6 +152,9 @@ class TAVRStudySession:
                 'sfd': None,
                 'pfd': None,
             }
+
+            # 人工瓣膜形态改变（报告-支架评估用），None=未填写，True=有，False=无
+            self.stent_morphology_changed: Optional[bool] = None
             
             # 标记已初始化
             self._initialized = True
@@ -1036,6 +1039,35 @@ class TAVRStudySession:
             return dict(self.module3_results)
         except Exception:
             return {'halt': None, 'relm': None, 'sfd': None, 'pfd': None}
+
+    # ====== 人工瓣膜支架评估（报告字段） ======
+    def set_stent_morphology_changed(self, changed: Optional[bool]):
+        """
+        设置“是否存在人工瓣膜形态改变”。
+
+        Args:
+            changed: True/False 或 None（未填写）
+        """
+        try:
+            self.stent_morphology_changed = changed if (changed in (True, False, None)) else None
+            self.logger.info(f"更新支架形态改变标记: {self.stent_morphology_changed}")
+        except Exception as e:
+            try:
+                self.logger.error(f"设置支架形态改变标记失败: {e}")
+            except Exception:
+                pass
+
+    def get_stent_morphology_changed(self) -> Optional[bool]:
+        """
+        获取“是否存在人工瓣膜形态改变”标记。
+
+        Returns:
+            Optional[bool]: True/False 或 None（未填写）
+        """
+        try:
+            return getattr(self, 'stent_morphology_changed', None)
+        except Exception:
+            return None
     
     @classmethod
     def get_instance(cls) -> 'TAVRStudySession':

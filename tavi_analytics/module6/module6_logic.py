@@ -51,8 +51,46 @@ class Module6Logic:
         # 时相标记
         phases = s.get_phase_summary()
 
-        # 几何测量（来自当前活动/各期像轮廓管理器）
+        # 几何测量（来自各期像的多层级平面管理器）：按期像汇总 inflow/nadir/commissure
         planes_summary = s.get_planes_summary()
+        per_phase = {}
+        try:
+            # 遍历两期像
+            for phase in ('end_diastole', 'end_systole'):
+                try:
+                    mgr = s.get_phase_contour_manager(phase)
+                    if not mgr:
+                        per_phase[phase] = None
+                        continue
+                    level_planes = mgr.get_level_planes()  # {'inflow': plane|None, 'nadir': plane|None, 'commissure': plane|None}
+                    def pack_plane(plane):
+                        if not plane:
+                            return None
+                        m = plane.get_measurements() or {}
+                        return {
+                            'perimeter': m.get('perimeter'),
+                            'area': m.get('area'),
+                            'perimeter_derived_diameter': m.get('perimeter_derived_diameter'),
+                            'area_derived_diameter': m.get('area_derived_diameter'),
+                            'longest_diameter': m.get('longest_diameter'),
+                            'shortest_diameter': m.get('shortest_diameter'),
+                            'average_diameter': m.get('average_diameter'),
+                            'height': getattr(plane, 'height', None),
+                            'level_type': getattr(plane, 'level_type', None),
+                        }
+                    per_phase[phase] = {
+                        'inflow': pack_plane(level_planes.get('inflow')),
+                        'nadir': pack_plane(level_planes.get('nadir')),
+                        'commissure': pack_plane(level_planes.get('commissure')),
+                        # 期相百分比（若有）
+                        'phase_percent': (s.get_marked_phase(phase) or {}).get('phase_percent')
+                    }
+                except Exception:
+                    per_phase[phase] = None
+        except Exception:
+            per_phase = {}
+
+        # 兼容旧接口：保留全部测量平面聚合（如有）
         all_measurements = s.get_all_plane_measurements() or {}
 
         # 交接对齐角度（模块五保存于session）
@@ -84,6 +122,10 @@ class Module6Logic:
             "phases": phases,
             "planes": planes_summary,
             "measurements": all_measurements,
+            "stent_assessment": {
+                "per_phase": per_phase,
+                "morphology_changed": s.get_stent_morphology_changed(),
+            },
             "angles": commissure_angles,
             "module3": module3,
             "raw_measurement_json": measurement_json,
@@ -130,6 +172,7 @@ class Module6Logic:
         phases = data.get('phases', {})
         angles = data.get('angles', {})
         module3 = data.get('module3', {}) or {}
+        stent = data.get('stent_assessment') or {}
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
         # 辅助函数
@@ -267,7 +310,95 @@ class Module6Logic:
         {base_html}
         {phase_html}
         {geo_html}
+        {self._render_stent_assessment_section(stent, b)}
         {module3_html}
         {angles_html}
         </body></html>
         """
+
+    def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any]) -> str:
+        """渲染“人工瓣膜支架评估” 区块。
+
+        规则：
+        - 记录两个期像（舒张末期/收缩末期）的各平面(inflow/nadir/commissure)测量；
+        - Sapien3 额外显示 outerskirt plane；而 inflow plane 对于 Sapien3 可省略（按用户要求：inflow plane，Sapien3无需填写；outerskirt plane，仅Sapien3填写）。
+        - 等效径：周长平均径=PED，面积平均径=AED。
+        """
+        if not stent or not isinstance(stent, dict):
+            return ""
+
+        def val(x):
+            return "" if x is None else str(x)
+
+        brand = (base or {}).get('valveBrand', '').strip()
+        model = (base or {}).get('valveModel', '').strip()
+        is_sapien3 = ('sapien' in model.lower()) or ('sapien' in brand.lower())
+
+        morph = stent.get('morphology_changed')
+        morph_txt = ''
+        if morph is True:
+            morph_txt = '有'
+        elif morph is False:
+            morph_txt = '无'
+        else:
+            morph_txt = ''
+
+        per_phase = stent.get('per_phase') or {}
+
+        # 渲染一个期像的表格
+        def render_phase_table(phase_key: str, phase_label: str) -> str:
+            p = per_phase.get(phase_key) or {}
+            phase_percent = p.get('phase_percent')
+            planes = {
+                'inflow': ('支架低端平面 (inflow)', not is_sapien3),  # Sapien3无需填写 -> 隐藏
+                'nadir': ('支架瓣叶窦底平面 (nadir)', True),
+                'outerskirt': ('外裙边平面 (outerskirt)', is_sapien3),  # 仅Sapien3填写
+                'commissure': ('支架瓣叶对合平面 (commissure level)', True),
+            }
+
+            # 合成outerskirt数据：当前数据模型未明确提供，尝试从nadir或相邻高度代替为空占位
+            plane_data = dict(p)
+            if 'outerskirt' not in plane_data:
+                plane_data['outerskirt'] = None
+
+            rows = []
+            header = (
+                "<tr><th>平面</th><th>周长(mm)</th><th>周长平均径(mm)</th><th>面积(mm²)</th>"
+                "<th>面积平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>"
+            )
+            for key, (label, show) in planes.items():
+                if not show:
+                    continue
+                m = plane_data.get(key)
+                if not m:
+                    rows.append(
+                        f"<tr><td>{label}</td><td colspan=6></td></tr>"
+                    )
+                else:
+                    rows.append(
+                        "<tr>"
+                        f"<td>{label}</td>"
+                        f"<td>{val(m.get('perimeter'))}</td>"
+                        f"<td>{val(m.get('perimeter_derived_diameter'))}</td>"
+                        f"<td>{val(m.get('area'))}</td>"
+                        f"<td>{val(m.get('area_derived_diameter'))}</td>"
+                        f"<td>{val(m.get('longest_diameter'))}</td>"
+                        f"<td>{val(m.get('shortest_diameter'))}</td>"
+                        "</tr>"
+                    )
+
+            title = f"人工瓣膜支架评估（{phase_label}，测量期相: {val(phase_percent)}%）"
+            morph_line = f"<tr><td>是否存在人工瓣膜形态改变</td><td colspan=6>{morph_txt}</td></tr>" if morph_txt else ""
+
+            return (
+                "<table>"
+                f"<tr><th colspan=7>{title}</th></tr>"
+                f"{morph_line}"
+                f"{header}{''.join(rows)}"
+                "</table>"
+            )
+
+        parts = []
+        parts.append(render_phase_table('end_diastole', '舒张末期'))
+        parts.append(render_phase_table('end_systole', '收缩末期'))
+        return ''.join(parts)

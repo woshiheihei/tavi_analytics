@@ -60,6 +60,7 @@ class Module6Widget(qt.QWidget):
             base = summary.get('base', {})
             angles = summary.get('angles', {})
             m3 = summary.get('module3') or {}
+            stent = summary.get('stent_assessment') or {}
             lines = []
             lines.append("一、基本情况")
             lines.append(f"  • 受试者编号: {base.get('patientID','')}")
@@ -90,6 +91,49 @@ class Module6Widget(qt.QWidget):
                 pfd = m3.get('pfd') or {}
                 if pfd:
                     lines.append(f"  • PFD: {pfd.get('status','')}, 最大厚度: {pfd.get('max_thickness') if pfd.get('max_thickness') is not None else '-'} mm")
+
+            # 简要：人工瓣膜支架评估（新增预览）
+            try:
+                lines.append("")
+                lines.append("四、人工瓣膜支架评估（简要）")
+                morph = stent.get('morphology_changed')
+                morph_txt = '有' if morph is True else ('无' if morph is False else '未填写')
+                lines.append(f"  • 是否存在人工瓣膜形态改变: {morph_txt}")
+                per_phase = stent.get('per_phase') or {}
+                brand = (base.get('valveBrand') or '').strip()
+                model = (base.get('valveModel') or '').strip()
+                is_sapien3 = ('sapien' in model.lower()) or ('sapien' in brand.lower())
+
+                def add_phase_block(key: str, label: str):
+                    p = per_phase.get(key) or {}
+                    pp = p.get('phase_percent')
+                    lines.append(f"  • {label} (测量期相: {pp if pp is not None else '-'}%)")
+                    # 平面依次：inflow(非Sapien3显示)、nadir、outerskirt(Sapien3显示)、commissure
+                    plane_defs = [
+                        ('inflow', '支架低端(inflow)', (not is_sapien3)),
+                        ('nadir', '窦底(nadir)', True),
+                        ('outerskirt', '外裙边(outerskirt)', is_sapien3),
+                        ('commissure', '对合平面(commissure)', True),
+                    ]
+                    for k, label_cn, show in plane_defs:
+                        if not show:
+                            continue
+                        m = p.get(k)
+                        if not m:
+                            continue
+                        ped = m.get('perimeter_derived_diameter')
+                        aed = m.get('area_derived_diameter')
+                        dmax = m.get('longest_diameter')
+                        dmin = m.get('shortest_diameter')
+                        lines.append(
+                            f"    - {label_cn}: PED {ped if ped is not None else '-'} mm, "
+                            f"AED {aed if aed is not None else '-'} mm, Dmax {dmax if dmax is not None else '-'} mm, Dmin {dmin if dmin is not None else '-'} mm"
+                        )
+
+                add_phase_block('end_diastole', '舒张末期')
+                add_phase_block('end_systole', '收缩末期')
+            except Exception:
+                pass
             self.preview.setPlainText("\n".join(lines))
         except Exception as e:
             logging.error(f"刷新报告预览失败: {e}")
