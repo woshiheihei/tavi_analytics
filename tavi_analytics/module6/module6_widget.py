@@ -88,8 +88,53 @@ class Module6Widget(qt.QWidget):
         angles_card.add_layout(ang_form)
         form_layout.addWidget(angles_card)
 
-        # Section C: 人工瓣膜支架评估（可编辑） - SectionCard
-        stent_card = SectionCard(title="三、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
+        # Section C: 瓣膜功能评估（只读） - SectionCard
+        valve_func_card = SectionCard(title="三、瓣膜功能评估", icon_text="💓", variant="dashed", parent=self)
+        valve_func_layout = qt.QVBoxLayout()
+
+        # HALT分析
+        halt_group = qt.QGroupBox("HALT (高度衰减瓣叶增厚)")
+        halt_layout = qt.QFormLayout(halt_group)
+        halt_layout.setSpacing(6)
+        self.lbl_halt_overall = qt.QLabel(); self.lbl_halt_overall.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_halt_lc = qt.QLabel(); self.lbl_halt_lc.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_halt_rc = qt.QLabel(); self.lbl_halt_rc.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_halt_nc = qt.QLabel(); self.lbl_halt_nc.setStyleSheet(StyleManager.get_label_style("default"))
+        halt_layout.addRow(qt.QLabel("整体状态:"), self.lbl_halt_overall)
+        halt_layout.addRow(qt.QLabel("左冠瓣叶 (LC):"), self.lbl_halt_lc)
+        halt_layout.addRow(qt.QLabel("右冠瓣叶 (RC):"), self.lbl_halt_rc)
+        halt_layout.addRow(qt.QLabel("无冠瓣叶 (NC):"), self.lbl_halt_nc)
+        valve_func_layout.addWidget(halt_group)
+
+        # RELM分析
+        relm_group = qt.QGroupBox("RELM (瓣叶活动度减退)")
+        relm_layout = qt.QFormLayout(relm_group)
+        relm_layout.setSpacing(6)
+        self.lbl_relm_status = qt.QLabel(); self.lbl_relm_status.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_relm_leaflet = qt.QLabel(); self.lbl_relm_leaflet.setStyleSheet(StyleManager.get_label_style("default"))
+        relm_layout.addRow(qt.QLabel("RELM状态:"), self.lbl_relm_status)
+        relm_layout.addRow(qt.QLabel("受累瓣叶:"), self.lbl_relm_leaflet)
+        valve_func_layout.addWidget(relm_group)
+
+        # SFD和PFD分析
+        filling_group = qt.QGroupBox("充盈缺损分析")
+        filling_layout = qt.QFormLayout(filling_group)
+        filling_layout.setSpacing(6)
+        self.lbl_sfd_status = qt.QLabel(); self.lbl_sfd_status.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_sfd_sinuses = qt.QLabel(); self.lbl_sfd_sinuses.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_pfd_status = qt.QLabel(); self.lbl_pfd_status.setStyleSheet(StyleManager.get_label_style("default"))
+        self.lbl_pfd_thickness = qt.QLabel(); self.lbl_pfd_thickness.setStyleSheet(StyleManager.get_label_style("default"))
+        filling_layout.addRow(qt.QLabel("SFD (窦内充盈缺损) 状态:"), self.lbl_sfd_status)
+        filling_layout.addRow(qt.QLabel("SFD 受累主动脉窦:"), self.lbl_sfd_sinuses)
+        filling_layout.addRow(qt.QLabel("PFD (瓣叶下充盈缺损) 状态:"), self.lbl_pfd_status)
+        filling_layout.addRow(qt.QLabel("PFD 最大厚度:"), self.lbl_pfd_thickness)
+        valve_func_layout.addWidget(filling_group)
+
+        valve_func_card.add_layout(valve_func_layout)
+        form_layout.addWidget(valve_func_card)
+
+        # Section D: 人工瓣膜支架评估（可编辑） - SectionCard
+        stent_card = SectionCard(title="四、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
         stent_layout = qt.QVBoxLayout()
 
         # 形态改变评估
@@ -214,6 +259,40 @@ class Module6Widget(qt.QWidget):
             self.inp_angle_rcc_lcc.setValue(float(angles.get('RCA_to_RCC_LCC', 0.0) or 0.0))
             self.inp_angle_lcc_ncc.setValue(float(angles.get('RCA_to_LCC_NCC', 0.0) or 0.0))
             self.inp_angle_ncc_rcc.setValue(float(angles.get('RCA_to_NCC_RCC', 0.0) or 0.0))
+
+            # 瓣膜功能评估（模块三结果）
+            module3 = summary.get('module3', {}) or {}
+            
+            # HALT分析结果
+            halt = module3.get('halt', {}) or {}
+            self.lbl_halt_overall.setText(halt.get('overall_status', ''))
+            halt_grades = halt.get('leaflet_grades', {}) or {}
+            self.lbl_halt_lc.setText(halt_grades.get('LC', ''))
+            self.lbl_halt_rc.setText(halt_grades.get('RC', ''))
+            self.lbl_halt_nc.setText(halt_grades.get('NC', ''))
+
+            # RELM分析结果
+            relm = module3.get('relm', {}) or {}
+            self.lbl_relm_status.setText(relm.get('status', ''))
+            self.lbl_relm_leaflet.setText(relm.get('leaflet', ''))
+
+            # SFD分析结果
+            sfd = module3.get('sfd', {}) or {}
+            self.lbl_sfd_status.setText(sfd.get('status', ''))
+            sfd_sinuses = sfd.get('affected_sinuses', [])
+            if isinstance(sfd_sinuses, list):
+                self.lbl_sfd_sinuses.setText(', '.join(sfd_sinuses))
+            else:
+                self.lbl_sfd_sinuses.setText(str(sfd_sinuses) if sfd_sinuses else '')
+
+            # PFD分析结果  
+            pfd = module3.get('pfd', {}) or {}
+            self.lbl_pfd_status.setText(pfd.get('status', ''))
+            pfd_thickness = pfd.get('max_thickness')
+            if pfd_thickness is not None:
+                self.lbl_pfd_thickness.setText(f"{pfd_thickness} mm")
+            else:
+                self.lbl_pfd_thickness.setText('')
 
             # 形态改变
             morph = stent.get('morphology_changed')
