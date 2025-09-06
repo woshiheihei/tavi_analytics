@@ -74,22 +74,8 @@ class Module6Widget(qt.QWidget):
         base_card.add_layout(base_form)
         form_layout.addWidget(base_card)
 
-        # Section B: 交接对齐角度（可编辑） - SectionCard
-        angles_card = SectionCard(title="二、交接对齐角度（°）", icon_text="🧭", variant="dashed", parent=self)
-        ang_form = qt.QFormLayout()
-        ang_form.setContentsMargins(0, 0, 0, 0)
-        ang_form.setSpacing(6)
-        self.inp_angle_rcc_lcc = qt.QDoubleSpinBox(); self.inp_angle_rcc_lcc.setRange(0,360); self.inp_angle_rcc_lcc.setDecimals(1); self.inp_angle_rcc_lcc.setSuffix(" °")
-        self.inp_angle_lcc_ncc = qt.QDoubleSpinBox(); self.inp_angle_lcc_ncc.setRange(0,360); self.inp_angle_lcc_ncc.setDecimals(1); self.inp_angle_lcc_ncc.setSuffix(" °")
-        self.inp_angle_ncc_rcc = qt.QDoubleSpinBox(); self.inp_angle_ncc_rcc.setRange(0,360); self.inp_angle_ncc_rcc.setDecimals(1); self.inp_angle_ncc_rcc.setSuffix(" °")
-        ang_form.addRow(qt.QLabel("RCA→RCC/LCC"), self.inp_angle_rcc_lcc)
-        ang_form.addRow(qt.QLabel("RCA→LCC/NCC"), self.inp_angle_lcc_ncc)
-        ang_form.addRow(qt.QLabel("RCA→NCC/RCC"), self.inp_angle_ncc_rcc)
-        angles_card.add_layout(ang_form)
-        form_layout.addWidget(angles_card)
-
-        # Section C: 瓣膜功能评估（只读） - SectionCard（统一两列排版：每行两组“标签-数值”对）
-        valve_func_card = SectionCard(title="三、瓣膜功能评估", variant="dashed", parent=self)
+        # Section B: 瓣膜功能评估（只读） - SectionCard（统一两列排版：每行两组“标签-数值”对）
+        valve_func_card = SectionCard(title="二、瓣膜功能评估", variant="dashed", parent=self)
         valve_func_layout = qt.QVBoxLayout()
         valve_func_layout.setSpacing(16)
 
@@ -246,8 +232,8 @@ class Module6Widget(qt.QWidget):
         valve_func_card.add_layout(valve_func_layout)
         form_layout.addWidget(valve_func_card)
 
-        # Section D: 人工瓣膜支架评估（可编辑） - SectionCard
-        stent_card = SectionCard(title="四、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
+        # Section C: 人工瓣膜支架评估（可编辑） - SectionCard
+        stent_card = SectionCard(title="三、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
         stent_layout = qt.QVBoxLayout()
 
         # 形态改变评估
@@ -263,44 +249,44 @@ class Module6Widget(qt.QWidget):
         measurement_group = qt.QGroupBox("测量数据")
         measurement_layout = qt.QVBoxLayout(measurement_group)
         self._phase_tabs = qt.QTabWidget()
-        
+
         for phase_key, phase_label in (("end_diastole","舒张末期"),("end_systole","收缩末期")):
             tab = qt.QWidget()
             tab_layout = qt.QVBoxLayout(tab)
             tab_layout.setSpacing(12)
-            
+
             # 为四种平面创建行（按Sapien3规则由刷新时控制显示）
             def mk_measurement_section(plane_key, plane_label):
                 # 创建平面分组
                 plane_group = qt.QGroupBox(plane_label)
                 plane_layout = qt.QGridLayout(plane_group)
                 plane_layout.setSpacing(8)
-                
+
                 # 创建测量值输入框
                 ped = qt.QDoubleSpinBox()
                 ped.setRange(0, 200)
                 ped.setDecimals(3)
                 ped.setSuffix(" mm")
                 ped.setObjectName("ped")
-                
+
                 aed = qt.QDoubleSpinBox()
                 aed.setRange(0, 200)
                 aed.setDecimals(3)
                 aed.setSuffix(" mm")
                 aed.setObjectName("aed")
-                
+
                 dmax = qt.QDoubleSpinBox()
                 dmax.setRange(0, 200)
                 dmax.setDecimals(3)
                 dmax.setSuffix(" mm")
                 dmax.setObjectName("dmax")
-                
+
                 dmin = qt.QDoubleSpinBox()
                 dmin.setRange(0, 200)
                 dmin.setDecimals(3)
                 dmin.setSuffix(" mm")
                 dmin.setObjectName("dmin")
-                
+
                 # 使用网格布局，2列4行
                 plane_layout.addWidget(qt.QLabel("周长衍生直径 (PED):"), 0, 0)
                 plane_layout.addWidget(ped, 0, 1)
@@ -310,9 +296,9 @@ class Module6Widget(qt.QWidget):
                 plane_layout.addWidget(dmax, 2, 1)
                 plane_layout.addWidget(qt.QLabel("最小直径 (Dmin):"), 3, 0)
                 plane_layout.addWidget(dmin, 3, 1)
-                
+
                 return plane_group
-            
+
             self.rows = getattr(self, 'rows', {})
             for plane_key, plane_label in (
                 ("inflow","支架低端 (Inflow)"),
@@ -323,21 +309,41 @@ class Module6Widget(qt.QWidget):
                 plane_widget = mk_measurement_section(plane_key, plane_label)
                 tab_layout.addWidget(plane_widget)
                 self.rows[(phase_key, plane_key)] = plane_widget
-            
+
             tab_layout.addStretch(1)
             self._phase_tabs.addTab(tab, phase_label)
-        
+
         measurement_layout.addWidget(self._phase_tabs)
         stent_layout.addWidget(measurement_group)
 
-        # 应用覆盖按钮
-        btns = qt.QHBoxLayout()
-        self.btn_apply = LayoutManager.create_button_with_style("应用修改", button_type="toolbar", size="sm", min_height=28)
-        self.btn_clear_overrides = LayoutManager.create_button_with_style("清空覆盖", button_type="toolbar", size="sm", min_height=28)
-        btns.addWidget(self.btn_apply); btns.addWidget(self.btn_clear_overrides); btns.addStretch(1)
-        stent_layout.addLayout(btns)
         stent_card.add_layout(stent_layout)
         form_layout.addWidget(stent_card)
+
+        # Section D: 交接对齐角度（可编辑） - SectionCard（移动至最后）
+        angles_card = SectionCard(title="四、交接对齐角度（°）", icon_text="🧭", variant="dashed", parent=self)
+        ang_form = qt.QFormLayout()
+        ang_form.setContentsMargins(0, 0, 0, 0)
+        ang_form.setSpacing(6)
+        self.inp_angle_rcc_lcc = qt.QDoubleSpinBox(); self.inp_angle_rcc_lcc.setRange(0,360); self.inp_angle_rcc_lcc.setDecimals(1); self.inp_angle_rcc_lcc.setSuffix(" °")
+        self.inp_angle_lcc_ncc = qt.QDoubleSpinBox(); self.inp_angle_lcc_ncc.setRange(0,360); self.inp_angle_lcc_ncc.setDecimals(1); self.inp_angle_lcc_ncc.setSuffix(" °")
+        self.inp_angle_ncc_rcc = qt.QDoubleSpinBox(); self.inp_angle_ncc_rcc.setRange(0,360); self.inp_angle_ncc_rcc.setDecimals(1); self.inp_angle_ncc_rcc.setSuffix(" °")
+        ang_form.addRow(qt.QLabel("RCA→RCC/LCC"), self.inp_angle_rcc_lcc)
+        ang_form.addRow(qt.QLabel("RCA→LCC/NCC"), self.inp_angle_lcc_ncc)
+        ang_form.addRow(qt.QLabel("RCA→NCC/RCC"), self.inp_angle_ncc_rcc)
+        angles_card.add_layout(ang_form)
+        form_layout.addWidget(angles_card)
+
+        # 底部操作区：与交接对齐角度统一，放置“应用修改 / 清空覆盖”
+        sep = qt.QFrame(); sep.setFrameShape(qt.QFrame.HLine); sep.setFrameShadow(qt.QFrame.Sunken)
+        form_layout.addWidget(sep)
+        bottom_actions = qt.QHBoxLayout()
+        bottom_actions.setSpacing(8)
+        self.btn_apply = LayoutManager.create_button_with_style("应用修改", button_type="toolbar", size="sm", min_height=28)
+        self.btn_clear_overrides = LayoutManager.create_button_with_style("清空覆盖", button_type="toolbar", size="sm", min_height=28)
+        bottom_actions.addWidget(self.btn_apply)
+        bottom_actions.addWidget(self.btn_clear_overrides)
+        bottom_actions.addStretch(1)
+        form_layout.addLayout(bottom_actions)
 
         form_layout.addStretch(1)
         layout.addWidget(form_container, 1)
