@@ -88,47 +88,160 @@ class Module6Widget(qt.QWidget):
         angles_card.add_layout(ang_form)
         form_layout.addWidget(angles_card)
 
-        # Section C: 瓣膜功能评估（只读） - SectionCard
-        valve_func_card = SectionCard(title="三、瓣膜功能评估", icon_text="💓", variant="dashed", parent=self)
+        # Section C: 瓣膜功能评估（只读） - SectionCard（统一两列排版：每行两组“标签-数值”对）
+        valve_func_card = SectionCard(title="三、瓣膜功能评估", variant="dashed", parent=self)
         valve_func_layout = qt.QVBoxLayout()
+        valve_func_layout.setSpacing(16)
+
+        # 统一字段样式
+        label_style = "QLabel { font-weight: 500; color: #495057; min-width: 88px; }"
+        data_field_style = """
+            QLabel {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 6px 10px;
+                font-size: 13px;
+            }
+        """
 
         # HALT分析
-        halt_group = qt.QGroupBox("HALT (高度衰减瓣叶增厚)")
-        halt_layout = qt.QFormLayout(halt_group)
-        halt_layout.setSpacing(6)
-        self.lbl_halt_overall = qt.QLabel(); self.lbl_halt_overall.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_halt_lc = qt.QLabel(); self.lbl_halt_lc.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_halt_rc = qt.QLabel(); self.lbl_halt_rc.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_halt_nc = qt.QLabel(); self.lbl_halt_nc.setStyleSheet(StyleManager.get_label_style("default"))
-        halt_layout.addRow(qt.QLabel("整体状态:"), self.lbl_halt_overall)
-        halt_layout.addRow(qt.QLabel("左冠瓣叶 (LC):"), self.lbl_halt_lc)
-        halt_layout.addRow(qt.QLabel("右冠瓣叶 (RC):"), self.lbl_halt_rc)
-        halt_layout.addRow(qt.QLabel("无冠瓣叶 (NC):"), self.lbl_halt_nc)
-        valve_func_layout.addWidget(halt_group)
+        halt_container = qt.QWidget()
+        halt_main_layout = qt.QVBoxLayout(halt_container)
+        halt_main_layout.setContentsMargins(16, 12, 16, 12)
+        halt_main_layout.setSpacing(10)
 
-        # RELM分析
-        relm_group = qt.QGroupBox("RELM (瓣叶活动度减退)")
-        relm_layout = qt.QFormLayout(relm_group)
-        relm_layout.setSpacing(6)
-        self.lbl_relm_status = qt.QLabel(); self.lbl_relm_status.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_relm_leaflet = qt.QLabel(); self.lbl_relm_leaflet.setStyleSheet(StyleManager.get_label_style("default"))
-        relm_layout.addRow(qt.QLabel("RELM状态:"), self.lbl_relm_status)
-        relm_layout.addRow(qt.QLabel("受累瓣叶:"), self.lbl_relm_leaflet)
-        valve_func_layout.addWidget(relm_group)
+        halt_title = qt.QLabel("HALT (高度衰减瓣叶增厚)")
+        halt_title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #495057;
+                padding: 6px 0px;
+                border-bottom: 1px solid #dee2e6;
+                margin-bottom: 10px;
+            }
+        """)
+        halt_main_layout.addWidget(halt_title)
 
-        # SFD和PFD分析
-        filling_group = qt.QGroupBox("充盈缺损分析")
-        filling_layout = qt.QFormLayout(filling_group)
-        filling_layout.setSpacing(6)
-        self.lbl_sfd_status = qt.QLabel(); self.lbl_sfd_status.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_sfd_sinuses = qt.QLabel(); self.lbl_sfd_sinuses.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_pfd_status = qt.QLabel(); self.lbl_pfd_status.setStyleSheet(StyleManager.get_label_style("default"))
-        self.lbl_pfd_thickness = qt.QLabel(); self.lbl_pfd_thickness.setStyleSheet(StyleManager.get_label_style("default"))
-        filling_layout.addRow(qt.QLabel("SFD (窦内充盈缺损) 状态:"), self.lbl_sfd_status)
-        filling_layout.addRow(qt.QLabel("SFD 受累主动脉窦:"), self.lbl_sfd_sinuses)
-        filling_layout.addRow(qt.QLabel("PFD (瓣叶下充盈缺损) 状态:"), self.lbl_pfd_status)
-        filling_layout.addRow(qt.QLabel("PFD 最大厚度:"), self.lbl_pfd_thickness)
-        valve_func_layout.addWidget(filling_group)
+        halt_grid = qt.QGridLayout()
+        halt_grid.setSpacing(10)
+        halt_grid.setColumnStretch(1, 1)
+        halt_grid.setColumnStretch(3, 1)
+
+        # 整体状态（仅一组，右侧留空以保持两组对齐）
+        overall_lbl = qt.QLabel("整体状态"); overall_lbl.setStyleSheet(label_style)
+        self.lbl_halt_overall = qt.QLabel(); self.lbl_halt_overall.setStyleSheet(data_field_style)
+        halt_grid.addWidget(overall_lbl, 0, 0)
+        halt_grid.addWidget(self.lbl_halt_overall, 0, 1)
+        halt_grid.addWidget(qt.QLabel(""), 0, 2)
+        halt_grid.addWidget(qt.QLabel(""), 0, 3)
+
+        # 瓣叶分级（两组一行）
+        lc_lbl = qt.QLabel("左冠 (LC)"); lc_lbl.setStyleSheet(label_style)
+        self.lbl_halt_lc = qt.QLabel(); self.lbl_halt_lc.setStyleSheet(data_field_style)
+        rc_lbl = qt.QLabel("右冠 (RC)"); rc_lbl.setStyleSheet(label_style)
+        self.lbl_halt_rc = qt.QLabel(); self.lbl_halt_rc.setStyleSheet(data_field_style)
+        nc_lbl = qt.QLabel("无冠 (NC)"); nc_lbl.setStyleSheet(label_style)
+        self.lbl_halt_nc = qt.QLabel(); self.lbl_halt_nc.setStyleSheet(data_field_style)
+
+        halt_grid.addWidget(lc_lbl, 1, 0)
+        halt_grid.addWidget(self.lbl_halt_lc, 1, 1)
+        halt_grid.addWidget(rc_lbl, 1, 2)
+        halt_grid.addWidget(self.lbl_halt_rc, 1, 3)
+        halt_grid.addWidget(nc_lbl, 2, 0)
+        halt_grid.addWidget(self.lbl_halt_nc, 2, 1)
+        halt_grid.addWidget(qt.QLabel(""), 2, 2)
+        halt_grid.addWidget(qt.QLabel(""), 2, 3)
+
+        halt_main_layout.addLayout(halt_grid)
+        valve_func_layout.addWidget(halt_container)
+
+        # RELM分析（同样采用两组一行）
+        relm_container = qt.QWidget()
+        relm_main_layout = qt.QVBoxLayout(relm_container)
+        relm_main_layout.setContentsMargins(16, 12, 16, 12)
+        relm_main_layout.setSpacing(10)
+
+        relm_title = qt.QLabel("RELM (瓣叶活动度减退)")
+        relm_title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #495057;
+                padding: 6px 0px;
+                border-bottom: 1px solid #dee2e6;
+                margin-bottom: 10px;
+            }
+        """)
+        relm_main_layout.addWidget(relm_title)
+
+        relm_grid = qt.QGridLayout()
+        relm_grid.setSpacing(10)
+        relm_grid.setColumnStretch(1, 1)
+        relm_grid.setColumnStretch(3, 1)
+
+        relm_status_lbl = qt.QLabel("状态"); relm_status_lbl.setStyleSheet(label_style)
+        self.lbl_relm_status = qt.QLabel(); self.lbl_relm_status.setStyleSheet(data_field_style)
+        relm_leaflet_lbl = qt.QLabel("受累瓣叶"); relm_leaflet_lbl.setStyleSheet(label_style)
+        self.lbl_relm_leaflet = qt.QLabel(); self.lbl_relm_leaflet.setStyleSheet(data_field_style)
+
+        relm_grid.addWidget(relm_status_lbl, 0, 0)
+        relm_grid.addWidget(self.lbl_relm_status, 0, 1)
+        relm_grid.addWidget(relm_leaflet_lbl, 0, 2)
+        relm_grid.addWidget(self.lbl_relm_leaflet, 0, 3)
+
+        relm_main_layout.addLayout(relm_grid)
+        valve_func_layout.addWidget(relm_container)
+
+        # 充盈缺损分析（两行，每行两组）
+        filling_container = qt.QWidget()
+        filling_main_layout = qt.QVBoxLayout(filling_container)
+        filling_main_layout.setContentsMargins(16, 12, 16, 12)
+        filling_main_layout.setSpacing(10)
+
+        filling_title = qt.QLabel("充盈缺损分析")
+        filling_title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #495057;
+                padding: 6px 0px;
+                border-bottom: 1px solid #dee2e6;
+                margin-bottom: 10px;
+            }
+        """)
+        filling_main_layout.addWidget(filling_title)
+
+        filling_grid = qt.QGridLayout()
+        filling_grid.setSpacing(10)
+        filling_grid.setColumnStretch(1, 1)
+        filling_grid.setColumnStretch(3, 1)
+
+        # 第1行：SFD状态 & PFD状态
+        sfd_status_lbl = qt.QLabel("SFD 状态"); sfd_status_lbl.setStyleSheet(label_style)
+        self.lbl_sfd_status = qt.QLabel(); self.lbl_sfd_status.setStyleSheet(data_field_style)
+        pfd_status_lbl = qt.QLabel("PFD 状态"); pfd_status_lbl.setStyleSheet(label_style)
+        self.lbl_pfd_status = qt.QLabel(); self.lbl_pfd_status.setStyleSheet(data_field_style)
+
+        filling_grid.addWidget(sfd_status_lbl, 0, 0)
+        filling_grid.addWidget(self.lbl_sfd_status, 0, 1)
+        filling_grid.addWidget(pfd_status_lbl, 0, 2)
+        filling_grid.addWidget(self.lbl_pfd_status, 0, 3)
+
+        # 第2行：SFD受累窦 & PFD最大厚度
+        sfd_sinuses_lbl = qt.QLabel("SFD 受累窦"); sfd_sinuses_lbl.setStyleSheet(label_style)
+        self.lbl_sfd_sinuses = qt.QLabel(); self.lbl_sfd_sinuses.setStyleSheet(data_field_style)
+        pfd_thickness_lbl = qt.QLabel("PFD 最大厚度"); pfd_thickness_lbl.setStyleSheet(label_style)
+        self.lbl_pfd_thickness = qt.QLabel(); self.lbl_pfd_thickness.setStyleSheet(data_field_style)
+
+        filling_grid.addWidget(sfd_sinuses_lbl, 1, 0)
+        filling_grid.addWidget(self.lbl_sfd_sinuses, 1, 1)
+        filling_grid.addWidget(pfd_thickness_lbl, 1, 2)
+        filling_grid.addWidget(self.lbl_pfd_thickness, 1, 3)
+
+        filling_main_layout.addLayout(filling_grid)
+        valve_func_layout.addWidget(filling_container)
 
         valve_func_card.add_layout(valve_func_layout)
         form_layout.addWidget(valve_func_card)
