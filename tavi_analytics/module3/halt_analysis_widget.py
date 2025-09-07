@@ -193,9 +193,12 @@ class HaltAnalysisWidget(qt.QWidget):
         main_layout = qt.QVBoxLayout(self)
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(8)
-        # 根据内容提供最小尺寸，便于父容器按内容扩展
-        main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-        self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+        # 与SFD/PFD对齐：默认约束 + 垂直方向可扩展，避免Tab切换时高度抖动
+        try:
+            main_layout.setSizeConstraint(qt.QLayout.SetDefaultConstraint)
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Expanding)
+        except Exception:
+            pass
 
         # 标题 - 与模块4一致的简洁大号样式
         title = qt.QLabel("HALT 瓣叶低密度增厚评估")

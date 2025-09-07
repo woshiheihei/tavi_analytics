@@ -108,8 +108,9 @@ class Module3Widget(qt.QWidget):
         # 使用统一布局与样式体系，和模块1、2保持一致
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
         try:
-            main_layout.setSizeConstraint(qt.QLayout.SetMinimumSize)
-            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+            # 让容器可扩展，避免随选项卡内容高度变化而整体抖动
+            main_layout.setSizeConstraint(qt.QLayout.SetDefaultConstraint)
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Expanding)
         except Exception:
             pass
 
@@ -127,7 +128,8 @@ class Module3Widget(qt.QWidget):
         # 分析区域 - 选项卡（去除外层"瓣叶功能评估"Section，直接使用Tab）
         self.analysis_tabs = qt.QTabWidget()
         try:
-            self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
+            # 让选项卡内容区域按可用空间扩展，避免因不同页面sizeHint不同而跳动
+            self.analysis_tabs.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Expanding)
             self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
         except Exception:
             pass
@@ -155,8 +157,8 @@ class Module3Widget(qt.QWidget):
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
-        # 直接将选项卡添加到主布局
-        main_layout.addWidget(self.analysis_tabs)
+        # 直接将选项卡添加到主布局并给予伸缩因子占满空间
+        main_layout.addWidget(self.analysis_tabs, 1)
         main_layout.addStretch()
 
     def set_session(self, session: TAVRStudySession):

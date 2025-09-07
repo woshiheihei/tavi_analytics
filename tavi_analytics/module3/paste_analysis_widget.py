@@ -59,6 +59,11 @@ class BaseAnalysisWidget(qt.QWidget):
         self.analysis_type = analysis_type
         self.session = session
         self.setObjectName(f"{analysis_type}AnalysisWidget")
+        # 统一每个选项卡页面的尺寸策略，避免在切换Tab时因sizeHint不同导致父容器高度抖动
+        try:
+            self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Expanding)
+        except Exception:
+            pass
         logging.info(f"{analysis_type}分析界面初始化")
 
     # ---- 生命周期/会话 ----
@@ -126,6 +131,11 @@ class BaseAnalysisWidget(qt.QWidget):
     def _create_action_buttons(self, parent_layout, include_status_btn: bool = True):
         actions = qt.QHBoxLayout()
         actions.setSpacing(8)
+        # 与 HALT 页面对齐的边距，减少视觉抖动
+        try:
+            actions.setContentsMargins(2, 6, 2, 2)
+        except Exception:
+            pass
         reset_btn = LayoutManager.create_button_with_style("重置", "toolbar", "sm", 28)
         reset_btn.clicked.connect(self.reset_analysis)
         actions.addWidget(reset_btn)
@@ -160,6 +170,10 @@ class RelmAnalysisWidget(BaseAnalysisWidget):
 
     def _setup_ui(self):
         layout = qt.QVBoxLayout(self)
+        try:
+            layout.setSizeConstraint(qt.QLayout.SetDefaultConstraint)
+        except Exception:
+            pass
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
@@ -227,6 +241,10 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
 
     def _setup_ui(self):
         layout = qt.QVBoxLayout(self)
+        try:
+            layout.setSizeConstraint(qt.QLayout.SetDefaultConstraint)
+        except Exception:
+            pass
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
