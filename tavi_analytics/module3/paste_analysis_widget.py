@@ -53,12 +53,18 @@ class BaseAnalysisWidget(qt.QWidget):
     """分析界面基类 - 标准化接口"""
 
     statusChanged = qt.Signal(dict)
+    # 新增：分析状态改变（not_started | in_progress | completed）
+    analysisStateChanged = qt.Signal(str)
+    # 新增：请求父组件切换到下一个分析Tab
+    nextRequested = qt.Signal()
 
     def __init__(self, analysis_type: str, session: TAVRStudySession, parent=None):
         super().__init__(parent)
         self.analysis_type = analysis_type
         self.session = session
         self.setObjectName(f"{analysis_type}AnalysisWidget")
+        # 统一分析状态，默认未开始
+        self._analysis_state = "not_started"
         # 统一每个选项卡页面的尺寸策略，避免在切换Tab时因sizeHint不同导致父容器高度抖动
         try:
             self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Expanding)
@@ -106,6 +112,18 @@ class BaseAnalysisWidget(qt.QWidget):
             pass
         self.statusChanged.emit(results)
 
+    # ---- 分析状态（统一对外发射信号）----
+    def set_analysis_state(self, state: str):
+        if state not in ("not_started", "in_progress", "completed"):
+            return
+        if getattr(self, "_analysis_state", None) == state:
+            return
+        self._analysis_state = state
+        try:
+            self.analysisStateChanged.emit(state)
+        except Exception:
+            pass
+
     def get_analysis_results(self) -> Dict[str, Any]:
         return {"analysis_type": self.analysis_type, "status": "占位符"}
 
@@ -128,7 +146,7 @@ class BaseAnalysisWidget(qt.QWidget):
         card.add_widget(self.key_view_manager)
         parent_layout.addWidget(card)
 
-    def _create_action_buttons(self, parent_layout, include_status_btn: bool = True):
+    def _create_action_buttons(self, parent_layout, include_status_btn: bool = True, next_label=None):
         actions = qt.QHBoxLayout()
         actions.setSpacing(8)
         # 与 HALT 页面对齐的边距，减少视觉抖动
@@ -140,10 +158,12 @@ class BaseAnalysisWidget(qt.QWidget):
         reset_btn.clicked.connect(self.reset_analysis)
         actions.addWidget(reset_btn)
         actions.addStretch()
+        # 替换为“分析下一个”按钮
         if include_status_btn:
-            status_btn = LayoutManager.create_button_with_style("查看状态", "toolbar", "sm", 28)
-            status_btn.clicked.connect(self._show_status)
-            actions.addWidget(status_btn)
+            label_text = next_label if next_label else "分析下一个"
+            next_btn = LayoutManager.create_button_with_style(label_text, "toolbar", "sm", 28)
+            next_btn.clicked.connect(self._analyze_next)
+            actions.addWidget(next_btn)
         parent_layout.addLayout(actions)
 
     def _show_status(self):
@@ -157,6 +177,46 @@ class BaseAnalysisWidget(qt.QWidget):
                 continue
             lines.append(f"{k}: {v}")
         qt.QMessageBox.information(self, f"{self.analysis_type} 分析状态", "\n".join(lines))
+
+    def _analyze_next(self):
+        """将当前分析标记为完成后执行后续动作（SFD→PFD，PFD→Module4）"""
+        # 标记完成
+        try:
+            self.set_analysis_state("completed")
+        except Exception:
+            pass
+        # 首选：通过信号请求父组件切换
+        try:
+            self.nextRequested.emit()
+        except Exception:
+            pass
+        # 备选：父组件旧的回调路径
+        parent = self.parent()
+        while parent is not None and not hasattr(parent, "on_child_analysis_state_changed"):
+            parent = parent.parent() if hasattr(parent, "parent") else None
+        if parent is not None:
+            try:
+                parent.on_child_analysis_state_changed(self, "completed", go_next=True)
+            except Exception:
+                pass
+        # PFD：尝试跳到模块四
+        if getattr(self, 'analysis_type', '') == 'PFD':
+            try:
+                import slicer  # type: ignore
+                plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
+                if plugin and hasattr(plugin, 'main_ui') and plugin.main_ui:
+                    plugin.main_ui.switch_to_module("module4")
+                    return
+            except Exception:
+                pass
+
+    def _find_tab_widget(self):
+        parent = self.parent()
+        while parent is not None:
+            if isinstance(parent, qt.QTabWidget):
+                return parent
+            parent = parent.parent() if hasattr(parent, "parent") else None
+        return None
 
 
 class RelmAnalysisWidget(BaseAnalysisWidget):
@@ -285,6 +345,7 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
             self.status_group.addButton(b, i)
             self.status_buttons[text] = b
             btns.addWidget(b)
+
         self.status_buttons["无"].setChecked(True)
         self.status_group.buttonClicked.connect(self._on_status_changed)
         btns.addStretch()
@@ -297,7 +358,8 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
 
         # 关键视图 + 操作
         self._create_key_view_section(layout)
-        self._create_action_buttons(layout)
+        # SFD页：按钮显示为“继续分析PFD”
+        self._create_action_buttons(layout, next_label="继续分析PFD")
 
     def _create_analysis_control_section(self, parent_layout):
         card = SectionCard(title="分析准备", icon_text="🧭", variant="dashed", parent=self)
@@ -410,6 +472,8 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         if hasattr(self, "control_frame"):
             self.control_frame.setVisible(False)
         logging.info("SFD分析准备完成")
+        # 更新状态：进行中
+        self.set_analysis_state("in_progress")
 
     def _reset_analysis_buttons(self):
         if hasattr(self, "start_analysis_btn"):
@@ -455,6 +519,8 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         if hasattr(self, "sinus_widget"):
             self.sinus_widget.setVisible(False)
         self._emit_status_changed()
+        # 更新状态：未开始
+        self.set_analysis_state("not_started")
 
 
 class PfdAnalysisWidget(BaseAnalysisWidget):
@@ -519,7 +585,39 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         layout.addWidget(card)
 
         self._create_key_view_section(layout)
-        self._create_action_buttons(layout)
+        # PFD页：按钮显示为“继续分析瓣膜支架几何形态评估”
+        self._create_action_buttons(layout, next_label="继续分析瓣膜支架几何形态评估")
+
+    def _analyze_next(self):
+        """PFD页：完成后跳转到模块四；否则退回到基类默认行为"""
+        try:
+            self.set_analysis_state("completed")
+        except Exception:
+            pass
+        # 更新父Tab文本
+        parent = self.parent()
+        while parent is not None and not hasattr(parent, "on_child_analysis_state_changed"):
+            parent = parent.parent() if hasattr(parent, "parent") else None
+        if parent is not None:
+            try:
+                parent.on_child_analysis_state_changed(self, "completed", go_next=True)
+            except Exception:
+                pass
+        # 尝试切换到模块四（瓣膜支架几何形态评估）
+        try:
+            import slicer  # type: ignore
+            plugin = slicer.modules.tavi_analytics.widgetRepresentation().self()
+            if plugin and hasattr(plugin, 'main_ui') and plugin.main_ui:
+                plugin.main_ui.switch_to_module("module4")
+                return
+        except Exception:
+            pass
+        # 兜底：尝试本地Tab切换（若存在）
+        tw = self._find_tab_widget()
+        if tw:
+            idx = tw.indexOf(self)
+            if idx >= 0 and (idx + 1) < tw.count():
+                tw.setCurrentIndex(idx + 1)
 
     def _create_analysis_control_section(self, parent_layout):
         card = SectionCard(title="分析准备", icon_text="🧭", variant="dashed", parent=self)
@@ -605,6 +703,8 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         if hasattr(self, "control_frame"):
             self.control_frame.setVisible(False)
         logging.info("PFD分析准备完成")
+        # 更新状态：进行中
+        self.set_analysis_state("in_progress")
 
     def _reset_analysis_buttons(self):
         if hasattr(self, "start_analysis_btn"):
@@ -648,6 +748,8 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         if hasattr(self, "thickness_widget"):
             self.thickness_widget.setVisible(False)
         self._emit_status_changed()
+        # 更新状态：未开始
+        self.set_analysis_state("not_started")
 
 
 class Module3AnalysisWidget(qt.QWidget):

@@ -142,7 +142,7 @@ class Module3Widget(qt.QWidget):
         )
 
         # 创建并添加分析组件
-        self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
+        self.analysis_tabs.addTab(self.halt_analysis, "HALT分析 · 未分析")
 
         # 功能开关：暂时隐藏 RELM 分析（未设计完成）
         SHOW_RELM = False
@@ -152,14 +152,89 @@ class Module3Widget(qt.QWidget):
 
         self.sfd_analysis = SfdAnalysisWidget(self.session, parent=self)
         self.pfd_analysis = PfdAnalysisWidget(self.session, parent=self)
-        self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
-        self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
+        self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析 · 未分析")
+        self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析 · 未分析")
+
+        # 监听子页面状态变化，动态更新Tab标题
+        try:
+            self.halt_analysis.analysisStateChanged.connect(lambda s: self._update_tab_text(self.halt_analysis, "HALT分析", s))
+            # 新增：HALT 请求跳转下一页
+            if hasattr(self.halt_analysis, 'nextRequested'):
+                self.halt_analysis.nextRequested.connect(lambda: self._switch_to_next_of(self.halt_analysis))
+        except Exception:
+            pass
+        try:
+            self.sfd_analysis.analysisStateChanged.connect(lambda s: self._update_tab_text(self.sfd_analysis, "SFD分析", s))
+            self.pfd_analysis.analysisStateChanged.connect(lambda s: self._update_tab_text(self.pfd_analysis, "PFD分析", s))
+            # 新增：SFD/PFD 请求跳转下一页
+            if hasattr(self.sfd_analysis, 'nextRequested'):
+                self.sfd_analysis.nextRequested.connect(lambda: self._switch_to_next_of(self.sfd_analysis))
+            if hasattr(self.pfd_analysis, 'nextRequested'):
+                self.pfd_analysis.nextRequested.connect(lambda: self._switch_to_next_of(self.pfd_analysis))
+        except Exception:
+            pass
 
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
         # 直接将选项卡添加到主布局并给予伸缩因子占满空间
         main_layout.addWidget(self.analysis_tabs, 1)
         main_layout.addStretch()
+
+    def _status_badge(self, state: str) -> str:
+        mapping = {
+            'not_started': '未分析',
+            'in_progress': '正在分析',
+            'completed': '分析完成'
+        }
+        return mapping.get(state, '未分析')
+
+    def _update_tab_text(self, child_widget: qt.QWidget, base: str, state: str):
+        try:
+            idx = self.analysis_tabs.indexOf(child_widget)
+            if idx >= 0:
+                self.analysis_tabs.setTabText(idx, f"{base} · {self._status_badge(state)}")
+        except Exception:
+            pass
+
+    def on_child_analysis_state_changed(self, child_widget: qt.QWidget, state: str, go_next: bool = False):
+        """供子页面调用：更新tab文本并可选切换到下一个tab"""
+        base_map = {
+            id(self.halt_analysis): "HALT分析",
+            id(getattr(self, 'sfd_analysis', None)): "SFD分析",
+            id(getattr(self, 'pfd_analysis', None)): "PFD分析",
+        }
+        base = base_map.get(id(child_widget), "分析")
+        self._update_tab_text(child_widget, base, state)
+        if go_next:
+            try:
+                idx = self.analysis_tabs.indexOf(child_widget)
+                # 兼容 count 为属性或方法
+                try:
+                    count_attr = getattr(self.analysis_tabs, 'count', 0)
+                    tab_count = count_attr() if callable(count_attr) else int(count_attr)
+                except Exception:
+                    tab_count = 0
+                if idx >= 0 and (idx + 1) < tab_count:
+                    self.analysis_tabs.setCurrentIndex(idx + 1)
+            except Exception:
+                pass
+
+    def _switch_to_next_of(self, child_widget: qt.QWidget):
+        try:
+            idx = self.analysis_tabs.indexOf(child_widget)
+        except Exception:
+            idx = -1
+        # 兼容 count 为属性或方法
+        try:
+            count_attr = getattr(self.analysis_tabs, 'count', 0)
+            tab_count = count_attr() if callable(count_attr) else int(count_attr)
+        except Exception:
+            tab_count = 0
+        if idx >= 0 and (idx + 1) < tab_count:
+            try:
+                self.analysis_tabs.setCurrentIndex(idx + 1)
+            except Exception:
+                pass
 
     def set_session(self, session: TAVRStudySession):
         self.session = session

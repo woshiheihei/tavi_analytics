@@ -170,23 +170,39 @@ class HaltAnalysisWidget(qt.QWidget):
     
     # 信号：状态改变
     statusChanged = qt.Signal(dict)  # 发出完整的HALT分析状态
+    # 新增：分析状态（not_started | in_progress | completed）
+    analysisStateChanged = qt.Signal(str)
+    # 新增：请求父组件切换到下一个分析Tab
+    nextRequested = qt.Signal()
     
     def __init__(self, session: TAVRStudySession, parent=None):
         super().__init__(parent)
         self.session = session
-        
+
         # 服务组件
         self.contour_service = get_contour_position_service()
         self.view_marking_service = get_view_marking_service("HALT", session)  # 使用公共服务
-        
+
         # 分析状态
         self.analysis_started = False
+        self._analysis_state = "not_started"
         self.overall_halt_status = "无"  # 无/有/难以判定
-        self.leaflet_grades: Dict[str, str] = {"LC": "0", "RC": "0", "NC": "0"}
-        
+        self.leaflet_grades = {"LC": "0", "RC": "0", "NC": "0"}
+
         self.setObjectName("HaltAnalysisWidget")
         self._setup_ui()
         logging.info("HaltAnalysisWidget 初始化完成（重构版本）")
+
+    def set_analysis_state(self, state: str):
+        if state not in ("not_started", "in_progress", "completed"):
+            return
+        if getattr(self, "_analysis_state", None) == state:
+            return
+        self._analysis_state = state
+        try:
+            self.analysisStateChanged.emit(state)
+        except Exception:
+            pass
     
     def _setup_ui(self):
         """设置HALT分析主界面"""
@@ -399,6 +415,10 @@ class HaltAnalysisWidget(qt.QWidget):
         actions_layout.setContentsMargins(2, 6, 2, 2)  # 减小边距
 
         # 重置按钮 - 统一按钮风格
+        # 导出结果按钮 - 统一按钮风格
+
+        # 新增：继续分析按钮（跳到SFD）
+
         reset_btn = LayoutManager.create_button_with_style("重置", "toolbar", "sm", 28)
         reset_btn.clicked.connect(self._reset_analysis)
         # 导出结果按钮 - 统一按钮风格
@@ -407,10 +427,13 @@ class HaltAnalysisWidget(qt.QWidget):
 
         actions_layout.addWidget(reset_btn)
         actions_layout.addStretch()
+        # 新增：继续分析按钮（跳到SFD）
+        next_btn = LayoutManager.create_button_with_style("继续分析SFD", "toolbar", "sm", 28)
+        next_btn.clicked.connect(self._analyze_next)
+        actions_layout.addWidget(next_btn)
         actions_layout.addWidget(export_btn)
-
-        parent_layout.addLayout(actions_layout)
     
+        parent_layout.addLayout(actions_layout)
     # 关键视图相关的回调函数
     def _on_view_marked(self, view_name: str):
         """视图被标记时的回调"""
@@ -503,16 +526,17 @@ class HaltAnalysisWidget(qt.QWidget):
     def _complete_analysis_preparation(self):
         """完成分析准备"""
         self.analysis_started = True
-        
+
         # 隐藏分析控制区域
         self.control_frame.setVisible(False)
-        
+
         # 默认显示axial切片在3D视图中
         self._show_axial_slice_in_3d()
-        
+
         # 更新其他区域的可见性
         self._update_analysis_control_visibility()
-        
+        # 更新状态：进行中
+        self.set_analysis_state("in_progress")
         logging.info("HALT分析准备完成")
     
     def _reset_analysis_buttons(self):
@@ -774,6 +798,8 @@ class HaltAnalysisWidget(qt.QWidget):
             self._update_visibility()
             self._update_analysis_control_visibility()
             self._emit_status_changed()
+            # 更新状态
+            self.set_analysis_state("not_started")
             
             # 重新显示axial切片
             self._show_axial_slice_in_3d()
@@ -957,3 +983,24 @@ class HaltAnalysisWidget(qt.QWidget):
             
         except Exception as e:
             logging.error(f"恢复默认切片显示状态失败: {e}")
+
+    def _analyze_next(self):
+        """将当前分析标记为完成并切换到下一个Tab（如可用）"""
+        try:
+            self.set_analysis_state("completed")
+        except Exception:
+            pass
+        # 首选：通过信号通知父组件切换Tab（最稳妥）
+        try:
+            self.nextRequested.emit()
+        except Exception:
+            pass
+        # 备选：通知父组件（兼容旧路径）
+        parent = self.parent()
+        while parent is not None and not hasattr(parent, "on_child_analysis_state_changed"):
+            parent = parent.parent() if hasattr(parent, "parent") else None
+        if parent is not None:
+            try:
+                parent.on_child_analysis_state_changed(self, "completed", go_next=True)
+            except Exception:
+                pass
