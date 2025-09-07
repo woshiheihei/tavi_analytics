@@ -128,7 +128,7 @@ class Module6Logic:
         try:
             data = self.collect_summary()
             # PDF导出不展示“几何测量摘要”
-            html = self._render_html(data, include_geometry=False, group_leaflet_eval=True)
+            html = self._render_html(data, include_geometry=False, include_phases=False, group_leaflet_eval=True)
             doc = qt.QTextDocument(); doc.setHtml(html)
             printer = qt.QPrinter(); printer.setOutputFormat(qt.QPrinter.PdfFormat); printer.setOutputFileName(out_path)
             try:
@@ -147,8 +147,8 @@ class Module6Logic:
             if not server_url:
                 return {"success": False, "message": "未配置PDF渲染服务"}
             data = self.collect_summary()
-            # 服务器端PDF不展示“几何测量摘要”，并将HALT/RELM/SFD/PFD归入“人工瓣膜瓣叶评估”
-            html = self._render_html(data, include_geometry=False, group_leaflet_eval=True)
+            # 服务器端PDF不展示“几何测量摘要”，并将HALT/RELM/SFD/PFD归入“人工瓣膜瓣叶评估”；同时移除“时相标记”
+            html = self._render_html(data, include_geometry=False, include_phases=False, group_leaflet_eval=True)
             req = urllib.request.Request(
                 url=server_url.rstrip('/') + '/render/pdf',
                 data=json.dumps({
@@ -188,7 +188,7 @@ class Module6Logic:
             return {"success": False, "message": str(e)}
 
     # ============== HTML渲染 ==============
-    def _render_html(self, data: Dict[str, Any], *, include_geometry: bool = True, group_leaflet_eval: bool = False) -> str:
+    def _render_html(self, data: Dict[str, Any], *, include_geometry: bool = True, include_phases: bool = True, group_leaflet_eval: bool = False) -> str:
         b = data.get('base', {})
         phases = data.get('phases', {})
         angles = data.get('angles', {})
@@ -228,7 +228,7 @@ class Module6Logic:
 
         angles_html = f"""
         <table>
-          <tr><th colspan=4>四、交接对齐 (Commissure alignment)</th></tr>
+          <tr><th colspan=4>四、交接对齐（commissure alignment）</th></tr>
           <tr><td>RCA→RCC/LCC</td><td>{self._fmt2(angles.get('RCA_to_RCC_LCC'))} °</td>
               <td>RCA→LCC/NCC</td><td>{self._fmt2(angles.get('RCA_to_LCC_NCC'))} °</td></tr>
           <tr><td>RCA→NCC/RCC</td><td>{self._fmt2(angles.get('RCA_to_NCC_RCC'))} °</td><td></td><td></td></tr>
@@ -236,16 +236,20 @@ class Module6Logic:
         """
 
         mp = phases.get('marked_phases', {}) if isinstance(phases, dict) else {}
+
         def _phase_row(name_key, label):
             p = mp.get(name_key, {})
             return f"<tr><td>{label}帧索引</td><td>{val(p.get('frame_index'))}</td><td>{label}相位%</td><td>{self._fmt2(p.get('phase_percent'))}</td></tr>"
-        phase_html = f"""
-        <table>
-          <tr><th colspan=4>二、时相标记</th></tr>
-          {_phase_row('end_diastole', '舒张末期')}
-          {_phase_row('end_systole', '收缩末期')}
-        </table>
-        """
+
+        phase_html = ""
+        if include_phases:
+            phase_html = f"""
+            <table>
+              <tr><th colspan=4>二、时相标记</th></tr>
+              {_phase_row('end_diastole', '舒张末期')}
+              {_phase_row('end_systole', '收缩末期')}
+            </table>
+            """
 
         # measurement.json 摘要（可选）
         geo_html = ""
@@ -268,8 +272,13 @@ class Module6Logic:
                 </table>
                 """
 
-        module3_html = self._render_leaflet_evaluation(module3) if group_leaflet_eval else self._render_module3(module3)
-        stent_html = self._render_stent_assessment_section(stent, b)
+        # PDF路径下（group_leaflet_eval=True且include_phases=False）需要二、三标题
+        if group_leaflet_eval and not include_phases:
+            module3_html = self._render_leaflet_evaluation(module3, title_prefix="二、")
+            stent_html = self._render_stent_assessment_section(stent, b, section_prefix="三、")
+        else:
+            module3_html = self._render_leaflet_evaluation(module3) if group_leaflet_eval else self._render_module3(module3)
+            stent_html = self._render_stent_assessment_section(stent, b)
 
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
@@ -281,8 +290,8 @@ class Module6Logic:
         {base_html}
         {phase_html}
         {geo_html}
-        {stent_html}
         {module3_html}
+        {stent_html}
         {angles_html}
         </body></html>
         """
@@ -336,7 +345,7 @@ class Module6Logic:
             return ""
         return f"<table>{''.join(blocks)}</table>"
 
-    def _render_leaflet_evaluation(self, m3: Dict[str, Any]) -> str:
+    def _render_leaflet_evaluation(self, m3: Dict[str, Any], title_prefix: str = "") -> str:
         """将 HALT/RELM/SFD/PFD 归为一个章节：人工瓣膜瓣叶评估（用于PDF）。"""
         if not m3:
             return ""
@@ -380,11 +389,12 @@ class Module6Logic:
 
         if not rows:
             return ""
+        title = f"{title_prefix}人工瓣膜瓣叶评估" if title_prefix else "人工瓣膜瓣叶评估"
         return "<table>" \
-               "<tr><th colspan=4>人工瓣膜瓣叶评估</th></tr>" \
+               f"<tr><th colspan=4>{title}</th></tr>" \
                + ''.join(rows) + "</table>"
 
-    def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any]) -> str:
+    def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any], section_prefix: str = "") -> str:
         if not stent or not isinstance(stent, dict):
             return ""
         def val(x):
@@ -395,6 +405,7 @@ class Module6Logic:
         morph = stent.get('morphology_changed')
         morph_txt = '有' if morph is True else ('无' if morph is False else '')
         per_phase = stent.get('per_phase') or {}
+        header_html = f"<table><tr><th colspan=7>{section_prefix}人工瓣膜支架评估</th></tr></table>" if section_prefix else ""
         def render_phase_table(phase_key: str, phase_label: str) -> str:
             p = per_phase.get(phase_key) or {}
             phase_percent = p.get('phase_percent')
@@ -443,7 +454,7 @@ class Module6Logic:
             render_phase_table('end_diastole', '舒张末期'),
             render_phase_table('end_systole', '收缩末期'),
         ]
-        return ''.join(parts)
+        return header_html + ''.join(parts)
 
     # ============== 工具方法 ==============
     def _fmt_date(self, d):
