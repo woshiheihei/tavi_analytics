@@ -115,7 +115,8 @@ class Module6Logic:
     def export_html(self, out_path: str) -> Dict[str, Any]:
         try:
             data = self.collect_summary()
-            html = self._render_html(data)
+            # HTML导出保留“几何测量摘要”
+            html = self._render_html(data, include_geometry=True)
             os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
             with open(out_path, 'w', encoding='utf-8') as f:
                 f.write(html)
@@ -126,7 +127,8 @@ class Module6Logic:
     def export_pdf(self, out_path: str) -> Dict[str, Any]:
         try:
             data = self.collect_summary()
-            html = self._render_html(data)
+            # PDF导出不展示“几何测量摘要”
+            html = self._render_html(data, include_geometry=False, group_leaflet_eval=True)
             doc = qt.QTextDocument(); doc.setHtml(html)
             printer = qt.QPrinter(); printer.setOutputFormat(qt.QPrinter.PdfFormat); printer.setOutputFileName(out_path)
             try:
@@ -145,7 +147,8 @@ class Module6Logic:
             if not server_url:
                 return {"success": False, "message": "未配置PDF渲染服务"}
             data = self.collect_summary()
-            html = self._render_html(data)
+            # 服务器端PDF不展示“几何测量摘要”，并将HALT/RELM/SFD/PFD归入“人工瓣膜瓣叶评估”
+            html = self._render_html(data, include_geometry=False, group_leaflet_eval=True)
             req = urllib.request.Request(
                 url=server_url.rstrip('/') + '/render/pdf',
                 data=json.dumps({
@@ -185,7 +188,7 @@ class Module6Logic:
             return {"success": False, "message": str(e)}
 
     # ============== HTML渲染 ==============
-    def _render_html(self, data: Dict[str, Any]) -> str:
+    def _render_html(self, data: Dict[str, Any], *, include_geometry: bool = True, group_leaflet_eval: bool = False) -> str:
         b = data.get('base', {})
         phases = data.get('phases', {})
         angles = data.get('angles', {})
@@ -246,25 +249,26 @@ class Module6Logic:
 
         # measurement.json 摘要（可选）
         geo_html = ""
-        meas = data.get('measurements') or {}
-        if isinstance(meas, dict) and meas:
-            rows = []
-            for key, m in meas.items():
-                if not isinstance(m, dict):
-                    continue
-                rows.append(
-                    f"<tr><td>{key}</td><td>{self._fmt2(m.get('perimeter'))}</td><td>{self._fmt2(m.get('area'))}</td>"
-                    f"<td>{self._fmt2(m.get('average_diameter'))}</td><td>{self._fmt2(m.get('longest_diameter'))}</td><td>{self._fmt2(m.get('shortest_diameter'))}</td></tr>"
-                )
-            geo_html = f"""
-            <table>
-              <tr><th colspan=6>三、几何测量摘要</th></tr>
-              <tr><th>平面</th><th>周长(mm)</th><th>面积(mm²)</th><th>平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>
-              {''.join(rows)}
-            </table>
-            """
+        if include_geometry:
+            meas = data.get('measurements') or {}
+            if isinstance(meas, dict) and meas:
+                rows = []
+                for key, m in meas.items():
+                    if not isinstance(m, dict):
+                        continue
+                    rows.append(
+                        f"<tr><td>{key}</td><td>{self._fmt2(m.get('perimeter'))}</td><td>{self._fmt2(m.get('area'))}</td>"
+                        f"<td>{self._fmt2(m.get('average_diameter'))}</td><td>{self._fmt2(m.get('longest_diameter'))}</td><td>{self._fmt2(m.get('shortest_diameter'))}</td></tr>"
+                    )
+                geo_html = f"""
+                <table>
+                  <tr><th colspan=6>三、几何测量摘要</th></tr>
+                  <tr><th>平面</th><th>周长(mm)</th><th>面积(mm²)</th><th>平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>
+                  {''.join(rows)}
+                </table>
+                """
 
-        module3_html = self._render_module3(module3)
+        module3_html = self._render_leaflet_evaluation(module3) if group_leaflet_eval else self._render_module3(module3)
         stent_html = self._render_stent_assessment_section(stent, b)
 
         return f"""
@@ -331,6 +335,54 @@ class Module6Logic:
         if not blocks:
             return ""
         return f"<table>{''.join(blocks)}</table>"
+
+    def _render_leaflet_evaluation(self, m3: Dict[str, Any]) -> str:
+        """将 HALT/RELM/SFD/PFD 归为一个章节：人工瓣膜瓣叶评估（用于PDF）。"""
+        if not m3:
+            return ""
+        halt = m3.get('halt') or {}
+        relm = m3.get('relm') or {}
+        sfd = m3.get('sfd') or {}
+        pfd = m3.get('pfd') or {}
+
+        rows: list[str] = []
+
+        # HALT
+        if halt:
+            rows.append("<tr><th colspan=4>HALT</th></tr>")
+            rows.append(f"<tr><td>整体</td><td colspan=3>{halt.get('overall_status','')}</td></tr>")
+            grades = halt.get('leaflet_grades') or {}
+            for leaflet in ('LC','RC','NC'):
+                if leaflet in grades:
+                    rows.append(f"<tr><td>分级 {leaflet}</td><td colspan=3>{grades.get(leaflet)}</td></tr>")
+
+        # RELM
+        if relm:
+            rows.append("<tr><th colspan=4>RELM</th></tr>")
+            rows.append(f"<tr><td>状态</td><td colspan=3>{relm.get('status','')}</td></tr>")
+            if relm.get('leaflet'):
+                rows.append(f"<tr><td>受累瓣叶</td><td colspan=3>{relm.get('leaflet')}</td></tr>")
+
+        # SFD
+        if sfd:
+            rows.append("<tr><th colspan=4>SFD</th></tr>")
+            rows.append(f"<tr><td>状态</td><td colspan=3>{sfd.get('status','')}</td></tr>")
+            sinuses = sfd.get('affected_sinuses') or []
+            if sinuses:
+                rows.append(f"<tr><td>受累窦</td><td colspan=3>{', '.join(sinuses)}</td></tr>")
+
+        # PFD
+        if pfd:
+            rows.append("<tr><th colspan=4>PFD</th></tr>")
+            rows.append(f"<tr><td>状态</td><td colspan=3>{pfd.get('status','')}</td></tr>")
+            if pfd.get('max_thickness') is not None:
+                rows.append(f"<tr><td>最大厚度</td><td colspan=3>{self._fmt2(pfd.get('max_thickness'))} mm</td></tr>")
+
+        if not rows:
+            return ""
+        return "<table>" \
+               "<tr><th colspan=4>人工瓣膜瓣叶评估</th></tr>" \
+               + ''.join(rows) + "</table>"
 
     def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any]) -> str:
         if not stent or not isinstance(stent, dict):

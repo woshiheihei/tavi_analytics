@@ -7,6 +7,7 @@
 - 不使用右侧预览；改为底部“报告摘要”卡片，以便快速总览（可选）
 """
 import logging
+import os
 from typing import Optional
 import qt
 
@@ -520,6 +521,18 @@ class Module6Widget(qt.QWidget):
             dlg.setAcceptMode(qt.QFileDialog.AcceptSave)
             dlg.setNameFilter("HTML (*.html)")
             dlg.selectFile("tavr_report.html")
+            # 默认保存目录：Windows 下载目录（带回退）
+            try:
+                downloads_dir = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DownloadLocation)
+                if not downloads_dir:
+                    downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            except Exception:
+                downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            try:
+                if downloads_dir and os.path.isdir(downloads_dir):
+                    dlg.setDirectory(downloads_dir)
+            except Exception:
+                pass
             if not dlg.exec_():
                 return
             files = dlg.selectedFiles()
@@ -546,6 +559,18 @@ class Module6Widget(qt.QWidget):
             dlg.setAcceptMode(qt.QFileDialog.AcceptSave)
             dlg.setNameFilter("PDF (*.pdf)")
             dlg.selectFile("tavr_report.pdf")
+            # 默认保存目录：Windows 下载目录（带回退）
+            try:
+                downloads_dir = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DownloadLocation)
+                if not downloads_dir:
+                    downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            except Exception:
+                downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            try:
+                if downloads_dir and os.path.isdir(downloads_dir):
+                    dlg.setDirectory(downloads_dir)
+            except Exception:
+                pass
             if not dlg.exec_():
                 return
             files = dlg.selectedFiles()
