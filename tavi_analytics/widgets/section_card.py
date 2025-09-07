@@ -141,15 +141,20 @@ class SectionCard(qt.QWidget):
         # - dashed 变体：缩小整体内边距与标题间距，并使用小号标题
         # - header_compact（非 dashed）：仅缩小标题字号/图标，不改变整体内边距
         if use_dashed:
+            # 更紧凑的卡片与标题间距，适合“虚线”分区
             if hasattr(self, "_root_layout") and self._root_layout is not None:
                 self._root_layout.setContentsMargins(16, 12, 16, 16)
                 self._root_layout.setSpacing(12)
             if hasattr(self, "_header_layout") and self._header_layout is not None:
-                self._header_layout.setSpacing(8)
+                # 原为 8，缩小为 4，减少图标与标题之间的可见空隙
+                self._header_layout.setSpacing(4)
             icon_px = 20
-            icon_box = 32
+            # 原为 32，缩小为 28，进一步压缩水平占位
+            icon_box = 28
             title_px = 16
             title_weight = "600"  # semibold
+            icon_padding = 0
+            title_padding_left = 2
         elif getattr(self, "_header_compact", False):
             if hasattr(self, "_header_layout") and self._header_layout is not None:
                 self._header_layout.setSpacing(8)
@@ -157,11 +162,18 @@ class SectionCard(qt.QWidget):
             icon_box = 32
             title_px = 16
             title_weight = "600"  # semibold
+            icon_padding = 2
+            title_padding_left = 3
         else:
+            # 非 dashed：也适度收紧标题区的间距与内边距
+            if hasattr(self, "_header_layout") and self._header_layout is not None:
+                self._header_layout.setSpacing(8)  # 原为 12
             icon_px = 28
-            icon_box = 48
+            icon_box = 40  # 原为 48
             title_px = 18
             title_weight = "700"  # bold
+            icon_padding = 2  # 原为 4
+            title_padding_left = 2  # 原为 4
 
         # 更新图标尺寸
         if self.icon_label is not None:
@@ -175,7 +187,7 @@ class SectionCard(qt.QWidget):
                     font-size: {icon_px}px;
                     color: {icon_color};
                     background: transparent;
-                    padding: 4px;
+                    padding: {icon_padding}px;
                 }}
                 """
             )
@@ -187,7 +199,7 @@ class SectionCard(qt.QWidget):
                 font-weight: {title_weight};
                 color: {title_color};
                 background: transparent;
-                padding-left: 4px;
+                padding-left: {title_padding_left}px;
             }}
             """
         )

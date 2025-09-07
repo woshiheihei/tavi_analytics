@@ -113,11 +113,11 @@ class KeyViewManagerWidget(qt.QWidget):
                 header_layout.addWidget(title)
             header_layout.addStretch()
 
-        mark_text = "📌" if self.compact_mode else "📌 标记 (Ctrl+M)"
+        mark_text = "📌 标记 " if self.compact_mode else "📌 标记 (Ctrl+M)"
         self.mark_btn = qt.QPushButton(mark_text)
         if self.compact_mode:
             self.mark_btn.setStyleSheet("""
-                QPushButton { padding: 4px 8px; background-color: #28a745; color: white; border: none; border-radius: 3px; font-weight: 500; font-size: 10px; min-width: 30px; }
+                QPushButton { padding: 4px 8px; background-color: #28a745; color: white; border: none; border-radius: 3px; font-weight: 500; font-size: 10px; }
                 QPushButton:hover { background-color: #218838; }
             """)
         else:
@@ -386,7 +386,7 @@ class KeyViewManagerWidget(qt.QWidget):
         confirm_btn.setDefault(True)
         
         def on_confirm():
-            view_name = name_input.text.strip()
+            view_name = name_input.text().strip()
             if not view_name:
                 qt.QMessageBox.warning(dialog, "警告", "请输入视图名称！")
                 return
@@ -607,7 +607,7 @@ class KeyViewManagerWidget(qt.QWidget):
             has_phase_info = view_phase is not None
             
             # 提供视觉反馈
-            original_text = self.mark_btn.text
+            original_text = self.mark_btn.text()
             self.mark_btn.setEnabled(False)
             
             # 阶段1：如果有期像信息，显示期像恢复状态
@@ -626,7 +626,7 @@ class KeyViewManagerWidget(qt.QWidget):
             logging.error(f"恢复视图失败: {e}")
             # 确保original_text有值，避免UnboundLocalError
             if original_text is None:
-                original_text = "📌 标记 (Ctrl+M)" if not self.compact_mode else "📌"
+                original_text = "📌 标记 (Ctrl+M)" if not self.compact_mode else "📌 标记"
             self._on_view_restore_error(str(e), original_text)
     
     def _continue_restore_mpr_position(self, view_name: str, original_text: str, has_phase_info: bool):
