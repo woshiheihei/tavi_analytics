@@ -9,6 +9,9 @@ from __future__ import annotations
 import json
 import os
 import datetime
+import base64
+import urllib.request
+import urllib.error
 from typing import Dict, Any, Optional
 import qt
 
@@ -184,6 +187,63 @@ class Module6Logic:
         except Exception as e:
             return {"success": False, "message": str(e)}
 
+    def export_pdf_via_server(self, out_path: str, server_url: Optional[str] = None, timeout: int = 120) -> Dict[str, Any]:
+        """通过后端浏览器渲染服务导出PDF（推荐）。
+
+        优先从环境变量 PDF_SERVER 读取服务地址，或从 config.json 的 services.pdf_server_url 读取。
+        请求采用 inline_base64 返回PDF字节，客户端写入 out_path。
+        """
+        try:
+            data = self.collect_summary()
+            html = self._render_html(data)
+
+            server = server_url or os.getenv("PDF_SERVER") or self._get_pdf_server_url_from_config()
+            if not server:
+                return {"success": False, "message": "未配置 PDF 渲染服务地址。请设置环境变量 PDF_SERVER 或在 config.json 的 services.pdf_server_url 中配置。"}
+            server = server.rstrip('/')
+            payload = {
+                "html": html,
+                "format": "A4",
+                "margin_top": "12mm",
+                "margin_right": "12mm",
+                "margin_bottom": "12mm",
+                "margin_left": "12mm",
+                "print_background": True,
+                "prefer_css_page_size": True,
+                "inline_base64": True,
+            }
+            req = urllib.request.Request(
+                url=f"{server}/render/pdf",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                status = resp.getcode()
+                body = resp.read()
+            if status >= 400:
+                return {"success": False, "message": f"渲染服务错误 HTTP {status}"}
+            try:
+                res = json.loads(body.decode("utf-8"))
+            except Exception:
+                return {"success": False, "message": "渲染服务返回无法解析"}
+            if not res.get("success"):
+                return {"success": False, "message": res.get("message", "渲染失败")}
+            b64 = res.get("base64")
+            if not b64:
+                return {"success": False, "message": "渲染服务未返回PDF数据"}
+            pdf_bytes = base64.b64decode(b64)
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            with open(out_path, "wb") as f:
+                f.write(pdf_bytes)
+            return {"success": True, "path": out_path, "size": len(pdf_bytes)}
+        except urllib.error.HTTPError as e:
+            return {"success": False, "message": f"HTTP错误: {e.code} {e.reason}"}
+        except urllib.error.URLError as e:
+            return {"success": False, "message": f"无法连接渲染服务: {e.reason}"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
     # ------- 内部帮助 ------
     def _fmt_date(self, d):
         try:
@@ -196,6 +256,24 @@ class Module6Logic:
     def _guess_repo_root(self) -> Optional[str]:
         # 以本文件向上两级为仓库根
         return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    def _get_pdf_server_url_from_config(self) -> Optional[str]:
+        try:
+            root = self._guess_repo_root()
+            if not root:
+                return None
+            cfg_path = os.path.join(root, 'tavi_analytics', 'config.json')
+            if not os.path.exists(cfg_path):
+                return None
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            return (
+                (cfg.get('services') or {}).get('pdf_server_url')
+                or (cfg.get('server') or {}).get('pdf_server_url')
+                or None
+            )
+        except Exception:
+            return None
 
     def _safe_get(self, obj: Dict[str, Any], *keys, default: Any = ""):
         cur = obj

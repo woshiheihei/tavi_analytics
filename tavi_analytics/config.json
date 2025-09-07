@@ -61,5 +61,8 @@
     "debug_mode": false,
     "show_debug_info": false,
     "profiling_enabled": false
+  },
+  "services": {
+    "pdf_server_url": "http://localhost:8080"
   }
 }

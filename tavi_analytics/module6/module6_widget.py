@@ -553,7 +553,10 @@ class Module6Widget(qt.QWidget):
                 return
             out_path = files[0]
 
-            result = self.logic.export_pdf(out_path)
+            # 优先走服务器端渲染（浏览器引擎），失败则回退到本地Qt方案
+            result = self.logic.export_pdf_via_server(out_path)
+            if not result.get("success"):
+                result = self.logic.export_pdf(out_path)
             if result.get("success"):
                 qt.QMessageBox.information(self, "导出完成", f"已导出到:\n{result.get('path')}")
             else:
