@@ -246,10 +246,10 @@ class HaltAnalysisWidget(qt.QWidget):
         """创建合并的HALT状态与分级区域（SectionCard）"""
         card = SectionCard(title="HALT 状态与分级", icon_text="🧪", variant="dashed", parent=self)
         main_status_layout = qt.QVBoxLayout()
-        main_status_layout.setSpacing(8)
+        main_status_layout.setSpacing(10)
 
         # 标题
-        status_title = qt.QLabel("HALT状态与分级")
+        status_title = qt.QLabel("1. HALT状态")
         status_title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
         main_status_layout.addWidget(status_title)
 
