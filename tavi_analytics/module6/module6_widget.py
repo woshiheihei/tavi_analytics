@@ -35,9 +35,11 @@ class Module6Widget(qt.QWidget):
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(8)
         refresh_btn = LayoutManager.create_button_with_style("刷新", button_type="toolbar", size="sm", min_height=28)
+        export_pdf_btn = LayoutManager.create_button_with_style("导出PDF", button_type="toolbar", size="sm", min_height=28)
         export_btn = LayoutManager.create_button_with_style("导出HTML", button_type="toolbar", size="sm", min_height=28)
         actions.addWidget(refresh_btn)
         actions.addStretch(1)
+        actions.addWidget(export_pdf_btn)
         actions.addWidget(export_btn)
         layout.addLayout(actions)
 
@@ -351,6 +353,7 @@ class Module6Widget(qt.QWidget):
         # 连接
         refresh_btn.clicked.connect(self._refresh_preview)
         export_btn.clicked.connect(self._export_html)
+        export_pdf_btn.clicked.connect(self._export_pdf)
         self.btn_apply.clicked.connect(self._apply_changes)
         self.btn_clear_overrides.clicked.connect(self._clear_overrides)
 
@@ -531,6 +534,32 @@ class Module6Widget(qt.QWidget):
                 qt.QMessageBox.critical(self, "导出失败", result.get("message", "未知错误"))
         except Exception as e:
             logging.exception("导出HTML失败")
+            try:
+                qt.QMessageBox.critical(self, "导出失败", str(e))
+            except Exception:
+                pass
+
+    def _export_pdf(self):
+        try:
+            # 选择输出路径
+            dlg = qt.QFileDialog(self)
+            dlg.setAcceptMode(qt.QFileDialog.AcceptSave)
+            dlg.setNameFilter("PDF (*.pdf)")
+            dlg.selectFile("tavr_report.pdf")
+            if not dlg.exec_():
+                return
+            files = dlg.selectedFiles()
+            if not files:
+                return
+            out_path = files[0]
+
+            result = self.logic.export_pdf(out_path)
+            if result.get("success"):
+                qt.QMessageBox.information(self, "导出完成", f"已导出到:\n{result.get('path')}")
+            else:
+                qt.QMessageBox.critical(self, "导出失败", result.get("message", "未知错误"))
+        except Exception as e:
+            logging.exception("导出PDF失败")
             try:
                 qt.QMessageBox.critical(self, "导出失败", str(e))
             except Exception:

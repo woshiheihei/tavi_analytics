@@ -10,6 +10,7 @@ import json
 import os
 import datetime
 from typing import Dict, Any, Optional
+import qt
 
 from core.session import TAVRStudySession
 
@@ -155,6 +156,34 @@ class Module6Logic:
             f.write(html)
         return {"success": True, "path": out_path}
 
+    def export_pdf(self, out_path: str) -> Dict[str, Any]:
+        """导出PDF报告（直接生成PDF，免去浏览器打印步骤）。"""
+        try:
+            data = self.collect_summary()
+            html = self._render_html(data)
+
+            doc = qt.QTextDocument()
+            doc.setHtml(html)
+
+            printer = qt.QPrinter()
+            # 页面设置：A4、边距 12mm
+            printer.setOutputFormat(qt.QPrinter.PdfFormat)
+            printer.setOutputFileName(out_path)
+            try:
+                printer.setPaperSize(qt.QPrinter.A4)
+            except Exception:
+                pass
+            try:
+                # setPageMargins(margins, unit) in some Qt versions
+                printer.setPageMargins(12, 12, 12, 12, qt.QPrinter.Millimeter)
+            except Exception:
+                pass
+
+            doc.print(printer)
+            return {"success": True, "path": out_path}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
     # ------- 内部帮助 ------
     def _fmt_date(self, d):
         try:
@@ -199,7 +228,17 @@ class Module6Logic:
         th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
         th { background: #f9fafb; }
         .section { margin-top: 18px; }
-        small { color: #6b7280; }
+                small { color: #6b7280; }
+                .toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0 16px; }
+                .btn { border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+                .btn-primary { background: #2563eb; color: #fff; border-color: #1d4ed8; }
+                .btn:hover { filter: brightness(0.98); }
+                @page { size: A4; margin: 12mm; }
+                @media print {
+                    .no-print { display: none !important; }
+                    body { padding: 0; }
+                    th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
         """
 
         # 基本信息
@@ -319,12 +358,16 @@ class Module6Logic:
         <html><head><meta charset='utf-8'><style>{css}</style></head>
         <body>
         <h1>TAVR Analytics 报告 <small>{now}</small></h1>
+        <div class='toolbar no-print'>
+            <button class='btn btn-primary' onclick="window.print()">下载 PDF</button>
+        </div>
         {base_html}
         {phase_html}
         {geo_html}
         {self._render_stent_assessment_section(stent, b)}
         {module3_html}
         {angles_html}
+        
         </body></html>
         """
 
