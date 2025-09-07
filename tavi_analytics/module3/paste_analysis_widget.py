@@ -665,15 +665,20 @@ class Module3AnalysisWidget(qt.QWidget):
             """
         )
 
-        self.relm_widget = RelmAnalysisWidget(self.session, self.logic.get_relm_logic(), self)
+        # 功能开关：临时隐藏 RELM 分析
+        SHOW_RELM = False
+
+        if SHOW_RELM:
+            self.relm_widget = RelmAnalysisWidget(self.session, self.logic.get_relm_logic(), self)
+            self.relm_widget.statusChanged.connect(self._on_child_status_changed)
+            self.analysis_tabs.addTab(self.relm_widget, "RELM分析")
+
         self.sfd_widget = SfdAnalysisWidget(self.session, self.logic.get_sfd_logic(), self)
         self.pfd_widget = PfdAnalysisWidget(self.session, self.logic.get_pfd_logic(), self)
 
-        self.relm_widget.statusChanged.connect(self._on_child_status_changed)
         self.sfd_widget.statusChanged.connect(self._on_child_status_changed)
         self.pfd_widget.statusChanged.connect(self._on_child_status_changed)
 
-        self.analysis_tabs.addTab(self.relm_widget, "RELM分析")
         self.analysis_tabs.addTab(self.sfd_widget, "SFD分析")
         self.analysis_tabs.addTab(self.pfd_widget, "PFD分析")
 
@@ -710,7 +715,8 @@ class Module3AnalysisWidget(qt.QWidget):
         )
         if reply == qt.QMessageBox.Yes:
             self.logic.reset_all_analyses()
-            self.relm_widget.reset_analysis()
+            if hasattr(self, 'relm_widget'):
+                self.relm_widget.reset_analysis()
             self.sfd_widget.reset_analysis()
             self.pfd_widget.reset_analysis()
             logging.info("所有模块三分析已重置")
@@ -763,24 +769,28 @@ class Module3AnalysisWidget(qt.QWidget):
     def set_session(self, session: TAVRStudySession):
         self.session = session
         self.logic.set_session(session)
-        self.relm_widget.set_session(session)
+        if hasattr(self, 'relm_widget'):
+            self.relm_widget.set_session(session)
         self.sfd_widget.set_session(session)
         self.pfd_widget.set_session(session)
 
     def on_activated(self):
         logging.info("模块三分析界面激活")
-        self.relm_widget.on_activated()
+        if hasattr(self, 'relm_widget'):
+            self.relm_widget.on_activated()
         self.sfd_widget.on_activated()
         self.pfd_widget.on_activated()
 
     def on_deactivated(self):
         logging.info("模块三分析界面停用")
-        self.relm_widget.on_deactivated()
+        if hasattr(self, 'relm_widget'):
+            self.relm_widget.on_deactivated()
         self.sfd_widget.on_deactivated()
         self.pfd_widget.on_deactivated()
 
     def cleanup(self):
-        self.relm_widget.cleanup()
+        if hasattr(self, 'relm_widget'):
+            self.relm_widget.cleanup()
         self.sfd_widget.cleanup()
         self.pfd_widget.cleanup()
         self.logic.cleanup()

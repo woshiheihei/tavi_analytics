@@ -18,6 +18,9 @@ import qt
 
 from core.session import TAVRStudySession
 
+# Feature flag: temporarily hide RELM presentation across report outputs
+SHOW_RELM: bool = False
+
 
 class Module6Logic:
     def __init__(self, session: TAVRStudySession):
@@ -305,7 +308,7 @@ class Module6Logic:
         sfd = m3.get('sfd') or {}
         pfd = m3.get('pfd') or {}
 
-        halt_rows = []
+        halt_rows: list[str] = []
         if halt:
             halt_rows.append(f"<tr><td>HALT整体</td><td colspan=3>{halt.get('overall_status','')}</td></tr>")
             grades = halt.get('leaflet_grades') or {}
@@ -313,26 +316,26 @@ class Module6Logic:
                 if leaflet in grades:
                     halt_rows.append(f"<tr><td>HALT分级 {leaflet}</td><td colspan=3>{grades.get(leaflet)}</td></tr>")
 
-        relm_rows = []
-        if relm:
+        relm_rows: list[str] = []
+        if SHOW_RELM and relm:
             relm_rows.append(f"<tr><td>RELM状态</td><td colspan=3>{relm.get('status','')}</td></tr>")
             if relm.get('leaflet'):
                 relm_rows.append(f"<tr><td>RELM瓣叶</td><td colspan=3>{relm.get('leaflet')}</td></tr>")
 
-        sfd_rows = []
+        sfd_rows: list[str] = []
         if sfd:
             sfd_rows.append(f"<tr><td>SFD状态</td><td colspan=3>{sfd.get('status','')}</td></tr>")
             sinuses = sfd.get('affected_sinuses') or []
             if sinuses:
                 sfd_rows.append(f"<tr><td>SFD受累窦</td><td colspan=3>{', '.join(sinuses)}</td></tr>")
 
-        pfd_rows = []
+        pfd_rows: list[str] = []
         if pfd:
             pfd_rows.append(f"<tr><td>PFD状态</td><td colspan=3>{pfd.get('status','')}</td></tr>")
             if pfd.get('max_thickness') is not None:
                 pfd_rows.append(f"<tr><td>PFD最大厚度</td><td colspan=3>{self._fmt2(pfd.get('max_thickness'))} mm</td></tr>")
 
-        blocks = []
+        blocks: list[str] = []
         if halt_rows:
             blocks.append("<tr><th colspan=4>五、HALT</th></tr>" + ''.join(halt_rows))
         if relm_rows:
@@ -365,8 +368,8 @@ class Module6Logic:
                 if leaflet in grades:
                     rows.append(f"<tr><td>分级 {leaflet}</td><td colspan=3>{grades.get(leaflet)}</td></tr>")
 
-        # RELM
-        if relm:
+        # RELM（按开关控制是否渲染）
+        if SHOW_RELM and relm:
             rows.append("<tr><th colspan=4>RELM</th></tr>")
             rows.append(f"<tr><td>状态</td><td colspan=3>{relm.get('status','')}</td></tr>")
             if relm.get('leaflet'):

@@ -140,11 +140,16 @@ class Module3Widget(qt.QWidget):
         )
 
         # 创建并添加分析组件
-        self.relm_analysis = RelmAnalysisWidget(self.session, parent=self)
+        self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
+
+        # 功能开关：暂时隐藏 RELM 分析（未设计完成）
+        SHOW_RELM = False
+        if SHOW_RELM:
+            self.relm_analysis = RelmAnalysisWidget(self.session, parent=self)
+            self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
+
         self.sfd_analysis = SfdAnalysisWidget(self.session, parent=self)
         self.pfd_analysis = PfdAnalysisWidget(self.session, parent=self)
-        self.analysis_tabs.addTab(self.halt_analysis, "HALT分析")
-        self.analysis_tabs.addTab(self.relm_analysis, "RELM分析")
         self.analysis_tabs.addTab(self.sfd_analysis, "SFD分析")
         self.analysis_tabs.addTab(self.pfd_analysis, "PFD分析")
 

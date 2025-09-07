@@ -92,8 +92,8 @@ class RelmAnalysisLogic(BaseAnalysisLogic):
         self.measurement_data.clear()
         logging.info("RELM分析已重置")
     
-    def set_leaflet(self, leaflet: str):
-        """设置当前瓣叶"""
+    def set_leaflet(self, leaflet: Optional[str]):
+        """设置当前瓣叶；允许为None表示未选择"""
         self.current_leaflet = leaflet
         logging.info(f"RELM分析选择瓣叶: {leaflet}")
     

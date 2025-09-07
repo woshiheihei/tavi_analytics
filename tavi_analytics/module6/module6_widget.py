@@ -146,42 +146,31 @@ class Module6Widget(qt.QWidget):
         halt_main_layout.addLayout(halt_grid)
         valve_func_layout.addWidget(halt_container)
 
-        # RELM分析（同样采用两组一行）
-        relm_container = qt.QWidget()
-        relm_main_layout = qt.QVBoxLayout(relm_container)
-        relm_main_layout.setContentsMargins(16, 12, 16, 12)
-        relm_main_layout.setSpacing(10)
-
-        relm_title = qt.QLabel("RELM (瓣叶活动度减退)")
-        relm_title.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: 600;
-                color: #495057;
-                padding: 6px 0px;
-                border-bottom: 1px solid #dee2e6;
-                margin-bottom: 10px;
-            }
-        """)
-        relm_main_layout.addWidget(relm_title)
-
-        relm_grid = qt.QGridLayout()
-        relm_grid.setSpacing(10)
-        relm_grid.setColumnStretch(1, 1)
-        relm_grid.setColumnStretch(3, 1)
-
-        relm_status_lbl = qt.QLabel("状态"); relm_status_lbl.setStyleSheet(label_style)
-        self.lbl_relm_status = qt.QLabel(); self.lbl_relm_status.setStyleSheet(data_field_style)
-        relm_leaflet_lbl = qt.QLabel("受累瓣叶"); relm_leaflet_lbl.setStyleSheet(label_style)
-        self.lbl_relm_leaflet = qt.QLabel(); self.lbl_relm_leaflet.setStyleSheet(data_field_style)
-
-        relm_grid.addWidget(relm_status_lbl, 0, 0)
-        relm_grid.addWidget(self.lbl_relm_status, 0, 1)
-        relm_grid.addWidget(relm_leaflet_lbl, 0, 2)
-        relm_grid.addWidget(self.lbl_relm_leaflet, 0, 3)
-
-        relm_main_layout.addLayout(relm_grid)
-        valve_func_layout.addWidget(relm_container)
+    # RELM 分析：暂时隐藏（功能未设计完成）
+    # 如需恢复显示，将以下代码块还原，并在 _refresh_preview 中同步填充
+    # relm_container = qt.QWidget()
+    # relm_main_layout = qt.QVBoxLayout(relm_container)
+    # relm_main_layout.setContentsMargins(16, 12, 16, 12)
+    # relm_main_layout.setSpacing(10)
+    # relm_title = qt.QLabel("RELM (瓣叶活动度减退)")
+    # relm_title.setStyleSheet("""
+    #     QLabel { font-size: 14px; font-weight: 600; color: #495057; padding: 6px 0px; border-bottom: 1px solid #dee2e6; margin-bottom: 10px; }
+    # """)
+    # relm_main_layout.addWidget(relm_title)
+    # relm_grid = qt.QGridLayout()
+    # relm_grid.setSpacing(10)
+    # relm_grid.setColumnStretch(1, 1)
+    # relm_grid.setColumnStretch(3, 1)
+    # relm_status_lbl = qt.QLabel("状态"); relm_status_lbl.setStyleSheet(label_style)
+    # self.lbl_relm_status = qt.QLabel(); self.lbl_relm_status.setStyleSheet(data_field_style)
+    # relm_leaflet_lbl = qt.QLabel("受累瓣叶"); relm_leaflet_lbl.setStyleSheet(label_style)
+    # self.lbl_relm_leaflet = qt.QLabel(); self.lbl_relm_leaflet.setStyleSheet(data_field_style)
+    # relm_grid.addWidget(relm_status_lbl, 0, 0)
+    # relm_grid.addWidget(self.lbl_relm_status, 0, 1)
+    # relm_grid.addWidget(relm_leaflet_lbl, 0, 2)
+    # relm_grid.addWidget(self.lbl_relm_leaflet, 0, 3)
+    # relm_main_layout.addLayout(relm_grid)
+    # valve_func_layout.addWidget(relm_container)
 
         # 充盈缺损分析（两行，每行两组）
         filling_container = qt.QWidget()
@@ -394,10 +383,12 @@ class Module6Widget(qt.QWidget):
             self.lbl_halt_rc.setText(halt_grades.get('RC', ''))
             self.lbl_halt_nc.setText(halt_grades.get('NC', ''))
 
-            # RELM分析结果
-            relm = module3.get('relm', {}) or {}
-            self.lbl_relm_status.setText(relm.get('status', ''))
-            self.lbl_relm_leaflet.setText(relm.get('leaflet', ''))
+            # RELM 分析结果：暂不展示（功能未设计完成）
+            # relm = module3.get('relm', {}) or {}
+            # if hasattr(self, 'lbl_relm_status'):
+            #     self.lbl_relm_status.setText(relm.get('status', ''))
+            # if hasattr(self, 'lbl_relm_leaflet'):
+            #     self.lbl_relm_leaflet.setText(relm.get('leaflet', ''))
 
             # SFD分析结果
             sfd = module3.get('sfd', {}) or {}
