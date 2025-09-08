@@ -397,6 +397,28 @@ class ValveOverlayWidget(qt.QWidget):
         unit = qt.QLabel("单位: °")
         unit.setStyleSheet("QLabel { font-size: 10px; color: #6c757d; }")
         header.addWidget(title)
+        
+        # 角度测量按钮（调用 Slicer Markups 的 Angle 工具）
+        measure_btn = qt.QPushButton("📐 角度测量")
+        measure_btn.setToolTip("启动 Markups 角度工具，在视图中依次点击三个点完成测量。")
+        measure_btn.setStyleSheet(
+            """
+            QPushButton {
+                padding: 2px 8px;
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #1d4ed8; }
+            QPushButton:pressed { background-color: #1e40af; }
+            """
+        )
+        measure_btn.clicked.connect(self._launch_markups_angle_measurement)
+        header.addStretch()
+        header.addWidget(measure_btn)
         header.addStretch()
         header.addWidget(unit)
         v.addLayout(header)
@@ -447,6 +469,40 @@ class ValveOverlayWidget(qt.QWidget):
         }
 
         self.section_card.add_widget(frame)
+
+    def _launch_markups_angle_measurement(self):
+        """启动 3D Slicer Markups 模块中的角度测量工具，并弹出简要指引。"""
+        try:
+            import slicer
+            # 创建或激活一个 Angle 节点
+            unique_name = slicer.mrmlScene.GetUniqueNameByString("CommissureAngle")
+            angle_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsAngleNode", unique_name)
+
+            # 设为当前放置目标并切换到单次放置模式（Angle 需要依次放置3个点）
+            app_logic = slicer.app.applicationLogic()
+            selection_node = app_logic.GetSelectionNode()
+            if hasattr(selection_node, 'SetActivePlaceNodeID'):
+                selection_node.SetActivePlaceNodeID(angle_node.GetID())
+            # 兼容方式：声明即将放置的类型
+            if hasattr(selection_node, 'SetReferenceActivePlaceNodeClassName'):
+                selection_node.SetReferenceActivePlaceNodeClassName("vtkMRMLMarkupsAngleNode")
+
+            interaction_node = app_logic.GetInteractionNode()
+            interaction_node.SwitchToSinglePlaceMode()
+
+            # 轻提示
+            qt.QMessageBox.information(
+                self,
+                "角度测量",
+                "请在视图中依次点击三个点：第一臂点、顶点、第二臂点。\n\n"
+                "提示：按 Esc 可取消放置；完成后可在 Markups 列表中查看角度值。"
+            )
+        except Exception as e:
+            logging.error(f"启动角度测量失败: {e}")
+            try:
+                qt.QMessageBox.warning(self, "角度测量", f"启动角度测量失败：{e}")
+            except Exception:
+                pass
 
     def _on_commissure_angles_changed(self, *_args):
         """任一角度变更时，同步内部状态并发出信号"""
