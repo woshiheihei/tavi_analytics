@@ -371,8 +371,6 @@ class ValveOverlayWidget(qt.QWidget):
         header = qt.QHBoxLayout()
         title = qt.QLabel("交接对齐测量")
         title.setStyleSheet("QLabel { font-size: 11px; font-weight: bold; }")
-        unit = qt.QLabel("单位: °")
-        unit.setStyleSheet("QLabel { font-size: 10px; color: #6c757d; }")
         header.addWidget(title)
         
         # 角度测量按钮（调用 Slicer Markups 的 Angle 工具）
@@ -396,8 +394,6 @@ class ValveOverlayWidget(qt.QWidget):
         measure_btn.clicked.connect(self._launch_markups_angle_measurement)
         header.addStretch()
         header.addWidget(measure_btn)
-        header.addStretch()
-        header.addWidget(unit)
         v.addLayout(header)
 
         # 表单
