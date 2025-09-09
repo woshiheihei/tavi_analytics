@@ -123,21 +123,45 @@ class ValveOverlayWidget(qt.QWidget):
         # 主操作按钮区域（常显）
         self._create_action_section()
 
-        # 透明度调节区域（常显）
-        self._create_opacity_section()
+        # 透明度 + 支架旋转（合并为一行，常显）
+        op_widget = self._create_opacity_section(return_widget=True, inline=True)
+        rot_widget = self._create_rotation_section(return_widget=True, inline=True)
+        row_container = qt.QFrame()
+        row_container.setStyleSheet(
+            """
+            QFrame {
+                background-color: #f8fafc;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            """
+        )
+        row = qt.QHBoxLayout(row_container)
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(8 if self._compact else 12)
+        if op_widget is not None:
+            row.addWidget(op_widget, 1)
+        # 中间分隔符（更轻量、居中、限定高度）
+        separator = qt.QWidget()
+        separator.setFixedWidth(1)
+        separator.setStyleSheet("background-color: #e5e7eb;")
+        # 限制竖线高度以避免压迫感，并垂直居中
+        separator.setMaximumHeight(24 if self._compact else 28)
+        row.addWidget(separator)
+        row.setAlignment(separator, qt.Qt.AlignVCenter)
+        if rot_widget is not None:
+            row.addWidget(rot_widget, 1)
+        self.section_card.add_widget(row_container)
 
         # 交接对齐测量（常显）
         self._create_commissure_alignment_section()
 
-        # 高级区域（旋转/微调/更多） -> 容器，可折叠
+        # 高级区域（微调/更多） -> 容器，可折叠
         self.advanced_container = qt.QWidget()
         adv_v = qt.QVBoxLayout(self.advanced_container)
         adv_v.setContentsMargins(0, 0, 0, 0)
         adv_v.setSpacing(6 if self._compact else 8)
-
-        rot = self._create_rotation_section(return_widget=True)
-        if rot is not None:
-            adv_v.addWidget(rot)
 
         pos = self._create_position_adjust_section(return_widget=True)
         if pos is not None:
@@ -202,177 +226,134 @@ class ValveOverlayWidget(qt.QWidget):
 
         self.section_card.add_layout(action_layout)
     
-    def _create_opacity_section(self):
-        """创建透明度调节区域"""
-        opacity_frame = qt.QFrame()
-        opacity_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8fafc;
-                border: 1px solid #e5e7eb;
-                border-radius: 6px;
-                padding: 6px;
-            }
-        """)
+    def _create_opacity_section(self, return_widget: bool = False, inline: bool = False):
+        """创建透明度调节区域
 
-        opacity_layout = qt.QVBoxLayout(opacity_frame)
-        opacity_layout.setSpacing(4 if self._compact else 6)
+        return_widget: 为 True 时返回构建好的控件而不直接添加到卡片。
+        """
+        # 容器（inline 模式下为无边框的 QWidget，否则为带边框的 QFrame）
+        container = qt.QWidget() if inline else qt.QFrame()
+        if not inline:
+            container.setStyleSheet(
+                """
+                QFrame {
+                    background-color: #f8fafc;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    padding: 6px;
+                }
+                """
+            )
+
+        layout = qt.QVBoxLayout(container)
+        layout.setSpacing(4 if self._compact else 6)
+        if inline:
+            layout.setContentsMargins(0, 0, 0, 0)
 
         # 透明度标签
-        opacity_header = qt.QHBoxLayout()
-        opacity_label = qt.QLabel("透明度")
-        opacity_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                font-weight: bold;
-                color: #495057;
-                background: transparent;
-            }
-        """)
-
+        header = qt.QHBoxLayout()
+        label = qt.QLabel("透明度")
+        label.setStyleSheet(
+            """
+            QLabel { font-size: 11px; font-weight: bold; color: #495057; background: transparent; }
+            """
+        )
         self.opacity_value_label = qt.QLabel("60%")
-        self.opacity_value_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                color: #2563eb;
-                background: transparent;
-                font-weight: bold;
-            }
-        """)
-
-        opacity_header.addWidget(opacity_label)
-        opacity_header.addStretch()
-        opacity_header.addWidget(self.opacity_value_label)
-
-        opacity_layout.addLayout(opacity_header)
+        self.opacity_value_label.setStyleSheet(
+            """
+            QLabel { font-size: 10px; color: #2563eb; background: transparent; font-weight: bold; }
+            """
+        )
+        header.addWidget(label)
+        header.addStretch()
+        header.addWidget(self.opacity_value_label)
+        layout.addLayout(header)
 
         # 透明度滑块
         self.opacity_slider = qt.QSlider(qt.Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(60)  # 默认60%
-        self.opacity_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #bbb;
-                background: white;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #2563eb;
-                border: 1px solid #2563eb;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::add-page:horizontal {
-                background: #dee2e6;
-                border: 1px solid #dee2e6;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                background: #2563eb;
-                border: 1px solid #2563eb;
-                width: 12px;
-                margin: -5px 0;
-                border-radius: 6px;
-            }
-        """)
+        self.opacity_slider.setStyleSheet(
+            """
+            QSlider::groove:horizontal { border: 1px solid #bbb; background: white; height: 4px; border-radius: 2px; }
+            QSlider::sub-page:horizontal { background: #2563eb; border: 1px solid #2563eb; height: 4px; border-radius: 2px; }
+            QSlider::add-page:horizontal { background: #dee2e6; border: 1px solid #dee2e6; height: 4px; border-radius: 2px; }
+            QSlider::handle:horizontal { background: #2563eb; border: 1px solid #2563eb; width: 12px; margin: -5px 0; border-radius: 6px; }
+            """
+        )
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         self.opacity_slider.setEnabled(False)
+        layout.addWidget(self.opacity_slider)
 
-        opacity_layout.addWidget(self.opacity_slider)
-
-        self.section_card.add_widget(opacity_frame)
+        if return_widget:
+            return container
+        else:
+            self.section_card.add_widget(container)
     
-    def _create_rotation_section(self, return_widget: bool = False):
+    def _create_rotation_section(self, return_widget: bool = False, inline: bool = False):
         """创建旋转控制区域"""
-        rotation_frame = qt.QFrame()
-        rotation_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8fafc;
-                border: 1px solid #e5e7eb;
-                border-radius: 6px;
-                padding: 6px;
-            }
-        """)
+        container = qt.QWidget() if inline else qt.QFrame()
+        if not inline:
+            container.setStyleSheet(
+                """
+                QFrame {
+                    background-color: #f8fafc;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 6px;
+                    padding: 6px;
+                }
+                """
+            )
 
-        rotation_layout = qt.QVBoxLayout(rotation_frame)
-        rotation_layout.setSpacing(4 if self._compact else 6)
+        layout = qt.QVBoxLayout(container)
+        layout.setSpacing(4 if self._compact else 6)
+        if inline:
+            layout.setContentsMargins(0, 0, 0, 0)
 
         # 旋转标签和角度显示
-        rotation_header = qt.QHBoxLayout()
-        rotation_label = qt.QLabel("支架旋转")
-        rotation_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                font-weight: bold;
-            }
-        """)
-
+        header = qt.QHBoxLayout()
+        label = qt.QLabel("支架旋转")
+        label.setStyleSheet("""QLabel { font-size: 11px; font-weight: bold; }""")
         self.rotation_value_label = qt.QLabel("0°")
-        self.rotation_value_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                color: #6c757d;
-                font-weight: bold;
-            }
-        """)
-
-        rotation_header.addWidget(rotation_label)
-        rotation_header.addStretch()
-        rotation_header.addWidget(self.rotation_value_label)
-
-        rotation_layout.addLayout(rotation_header)
+        self.rotation_value_label.setStyleSheet(
+            """QLabel { font-size: 10px; color: #6c757d; font-weight: bold; }"""
+        )
+        header.addWidget(label)
+        header.addStretch()
+        header.addWidget(self.rotation_value_label)
+        layout.addLayout(header)
 
         # 旋转滑块
         self.rotation_slider = qt.QSlider(qt.Qt.Horizontal)
         self.rotation_slider.setRange(-180, 180)
         self.rotation_slider.setValue(0)  # 默认0度
-        self.rotation_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                border: 1px solid #bbb;
-                background: white;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #16a34a;
-                border: 1px solid #16a34a;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::add-page:horizontal {
-                background: #dee2e6;
-                border: 1px solid #dee2e6;
-                height: 4px;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                background: #16a34a;
-                border: 1px solid #16a34a;
-                width: 12px;
-                margin: -5px 0;
-                border-radius: 6px;
-            }
-        """)
+        self.rotation_slider.setStyleSheet(
+            """
+            QSlider::groove:horizontal { border: 1px solid #bbb; background: white; height: 4px; border-radius: 2px; }
+            QSlider::sub-page:horizontal { background: #16a34a; border: 1px solid #16a34a; height: 4px; border-radius: 2px; }
+            QSlider::add-page:horizontal { background: #dee2e6; border: 1px solid #dee2e6; height: 4px; border-radius: 2px; }
+            QSlider::handle:horizontal { background: #16a34a; border: 1px solid #16a34a; width: 12px; margin: -5px 0; border-radius: 6px; }
+            """
+        )
         self.rotation_slider.valueChanged.connect(self._on_rotation_changed)
         self.rotation_slider.setEnabled(False)
+        layout.addWidget(self.rotation_slider)
 
-        rotation_layout.addWidget(self.rotation_slider)
-
-        # 紧凑模式不显示说明行，使用 tooltip 替代
-        if not self._compact:
-            info_label = qt.QLabel("围绕当前切片法线方向旋转支架 (-180° ~ +180°)")
-            info_label.setStyleSheet("""
-                QLabel { font-size: 10px; color: #6c757d; font-style: italic; }
-            """)
-            rotation_layout.addWidget(info_label)
+        # 紧凑模式：inline 时只用 tooltip；非 inline 保持原提示
+        if inline:
+            container.setToolTip("围绕切片法线旋转支架 (-180°~+180°)")
         else:
-            rotation_frame.setToolTip("围绕切片法线旋转支架 (-180°~+180°)")
+            if not self._compact:
+                info_label = qt.QLabel("围绕当前切片法线方向旋转支架 (-180° ~ +180°)")
+                info_label.setStyleSheet("""QLabel { font-size: 10px; color: #6c757d; font-style: italic; }""")
+                layout.addWidget(info_label)
+            else:
+                container.setToolTip("围绕切片法线旋转支架 (-180°~+180°)")
 
         if return_widget:
-            return rotation_frame
+            return container
         else:
-            self.section_card.add_widget(rotation_frame)
+            self.section_card.add_widget(container)
 
     def _create_commissure_alignment_section(self):
         """创建交接对齐测量表单 (单位：度)"""
