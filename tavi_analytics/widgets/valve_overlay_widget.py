@@ -167,10 +167,6 @@ class ValveOverlayWidget(qt.QWidget):
         if pos is not None:
             adv_v.addWidget(pos)
 
-        more = self._create_advanced_section(return_widget=True)
-        if more is not None:
-            adv_v.addWidget(more)
-
         self.section_card.add_widget(self.advanced_container)
 
         # 紧凑模式下默认收起高级区域，并在标题栏放置一个小型切换按钮
@@ -721,76 +717,6 @@ class ValveOverlayWidget(qt.QWidget):
 
         # 初始化累计偏移量
         self.cumulative_offset = [0.0, 0.0]  # [x_offset, y_offset] in mm
-
-    def _create_advanced_section(self, return_widget: bool = False):
-        """创建高级选项区域"""
-        advanced_layout = qt.QHBoxLayout()
-        advanced_layout.setSpacing(6 if self._compact else 8)
-
-        # 微调变换按钮
-        adjust_btn = qt.QPushButton("⚙️ 微调")
-        adjust_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 8px;
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 11px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:disabled {
-                background-color: #adb5bd;
-                color: #6c757d;
-            }
-        """)
-        adjust_btn.setToolTip("打开Transforms模块进行精细位置调整")
-        adjust_btn.clicked.connect(self._open_transforms_module)
-        self.adjust_btn = adjust_btn
-        adjust_btn.setEnabled(False)
-
-        # 重置按钮
-        reset_btn = qt.QPushButton("🔄 重置")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                padding: 4px 8px;
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                font-size: 11px;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-            QPushButton:disabled {
-                background-color: #adb5bd;
-                color: #6c757d;
-            }
-        """)
-        reset_btn.setToolTip("重置瓣膜叠加到初始状态")
-        reset_btn.clicked.connect(self._reset_overlay)
-        self.reset_btn = reset_btn
-        reset_btn.setEnabled(False)
-
-        advanced_layout.addWidget(adjust_btn)
-        advanced_layout.addWidget(reset_btn)
-        advanced_layout.addStretch()
-
-        if return_widget:
-            container = qt.QWidget()
-            c_layout = qt.QHBoxLayout(container)
-            c_layout.setContentsMargins(0, 0, 0, 0)
-            c_layout.setSpacing(6 if self._compact else 8)
-            c_layout.addLayout(advanced_layout)
-            c_layout.addStretch()
-            return container
-        else:
-            self.section_card.add_layout(advanced_layout)
     
     def _check_valve_availability(self):
         """检查瓣膜数据可用性 - 后台检测，只输出日志"""
@@ -1062,8 +988,6 @@ class ValveOverlayWidget(qt.QWidget):
             self.left_btn.setEnabled(True)
             self.right_btn.setEnabled(True)
             self.center_btn.setEnabled(True)
-            self.adjust_btn.setEnabled(True)
-            self.reset_btn.setEnabled(True)
         else:
             self.overlay_btn.setText("🔄 启用叠加")
             self.overlay_btn.setStyleSheet("""
@@ -1089,8 +1013,6 @@ class ValveOverlayWidget(qt.QWidget):
             self.left_btn.setEnabled(False)
             self.right_btn.setEnabled(False)
             self.center_btn.setEnabled(False)
-            self.adjust_btn.setEnabled(False)
-            self.reset_btn.setEnabled(False)
         
         self.overlay_btn.setEnabled(True)
     
@@ -1330,57 +1252,6 @@ class ValveOverlayWidget(qt.QWidget):
             except Exception as e:
                 logging.error(f"执行旋转回调失败: {e}")
 
-    def _open_transforms_module(self):
-        """打开Transforms模块进行微调"""
-        try:
-            import slicer
-            
-            # 切换到Transforms模块
-            slicer.util.selectModule('Transforms')
-            
-            # 如果有变换节点，选择它
-            if self.transform_node:
-                slicer.mrmlScene.SetActiveID("vtkMRMLLinearTransformNode", self.transform_node.GetID())
-            
-            self.statusUpdated.emit("已打开Transforms模块进行微调")
-            
-        except Exception as e:
-            logging.error(f"打开Transforms模块失败: {e}")
-            self.statusUpdated.emit("打开Transforms模块失败")
-    
-    def _reset_overlay(self):
-        """重置瓣膜叠加"""
-        try:
-            if self.is_overlay_active:
-                self._disable_overlay()
-            
-            # 重置透明度
-            self.current_opacity = 0.6
-            self.opacity_slider.setValue(60)
-            self.opacity_value_label.setText("60%")
-            
-            # 重置旋转
-            self.current_rotation = 0
-            self.rotation_slider.setValue(0)
-            self.rotation_value_label.setText("0°")
-            
-            # 重置位置微调
-            self.cumulative_offset = [0.0, 0.0]
-            self.offset_label.setText("偏移: (0.0, 0.0) mm")
-            
-            # 删除变换节点
-            import slicer
-            transform_node = slicer.util.getFirstNodeByClassByName('vtkMRMLLinearTransformNode', 'ValveToRedSlice')
-            if transform_node:
-                slicer.mrmlScene.RemoveNode(transform_node)
-                self.transform_node = None
-            
-            self.statusUpdated.emit("瓣膜叠加已重置")
-            
-        except Exception as e:
-            logging.error(f"重置瓣膜叠加失败: {e}")
-            self.statusUpdated.emit(f"重置失败: {str(e)}")
-    
     # 公共接口方法
     def add_overlay_callback(self, callback: Callable[[bool], None]):
         """添加叠加状态变化回调函数"""
