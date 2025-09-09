@@ -153,6 +153,14 @@ class TAVRStudySession:
                 'pfd': None,
             }
 
+            # 模块四：瓣膜植入深度（NC/LC/RC，单位 mm）
+            # 结构: { 'NC': Optional[float], 'LC': Optional[float], 'RC': Optional[float] }
+            self.implant_depth = {
+                'NC': None,
+                'LC': None,
+                'RC': None,
+            }
+
             # 人工瓣膜形态改变（报告-支架评估用），None=未填写，True=有，False=无
             self.stent_morphology_changed: Optional[bool] = None
             # 报告-支架评估的手工覆盖值：
@@ -922,6 +930,11 @@ class TAVRStudySession:
         # 重置几何数据
         self.landmark_node_ids = {}
         self.reconstructed_planes = {}
+        # 重置模块四植入深度
+        try:
+            self.implant_depth = {'NC': None, 'LC': None, 'RC': None}
+        except Exception:
+            pass
         
         # 重置平面数据管理器
         try:
@@ -974,6 +987,11 @@ class TAVRStudySession:
         # 重置几何数据
         self.landmark_node_ids = {}
         self.reconstructed_planes = {}
+        # 重置模块四植入深度
+        try:
+            self.implant_depth = {'NC': None, 'LC': None, 'RC': None}
+        except Exception:
+            pass
         
         # 重置平面数据管理器
         try:
@@ -1013,6 +1031,44 @@ class TAVRStudySession:
             'has_marked_phases': self.has_marked_phases(),
             'phase_summary': self.get_phase_summary()
         }
+
+    # ====== 模块四：瓣膜植入深度（报告字段） ======
+    def set_implant_depth(self, values: Dict[str, Any]) -> bool:
+        """设置瓣膜植入深度，值单位为 mm。
+
+        Args:
+            values: 包含 NC/LC/RC 的字典，值可为 float 或 None。
+        Returns:
+            bool: 设置成功返回 True
+        """
+        try:
+            if not isinstance(values, dict):
+                return False
+            for key in ('NC', 'LC', 'RC'):
+                if key in values:
+                    v = values.get(key)
+                    if v is None or v == "":
+                        self.implant_depth[key] = None
+                    else:
+                        try:
+                            self.implant_depth[key] = float(v)
+                        except Exception:
+                            # 忽略不可转换的值
+                            pass
+            return True
+        except Exception as e:
+            try:
+                self.logger.error(f"设置瓣膜植入深度失败: {e}")
+            except Exception:
+                pass
+            return False
+
+    def get_implant_depth(self) -> Dict[str, Any]:
+        """获取瓣膜植入深度（副本）。"""
+        try:
+            return dict(getattr(self, 'implant_depth', {}))
+        except Exception:
+            return {'NC': None, 'LC': None, 'RC': None}
 
     # ====== 模块三结果存取 ======
     def set_module3_results(self, results: Dict[str, Any]):

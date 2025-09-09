@@ -77,6 +77,8 @@ class Module6Widget(qt.QWidget):
         base_card.add_layout(base_form)
         form_layout.addWidget(base_card)
 
+    # 预览中的瓣膜植入深度将放入“人工瓣膜支架评估”模块内
+
         # Section B: 瓣膜功能评估（只读） - SectionCard（统一两列排版：每行两组“标签-数值”对）
         valve_func_card = SectionCard(title="二、瓣膜功能评估", variant="dashed", parent=self)
         valve_func_layout = qt.QVBoxLayout()
@@ -224,9 +226,38 @@ class Module6Widget(qt.QWidget):
         valve_func_card.add_layout(valve_func_layout)
         form_layout.addWidget(valve_func_card)
 
-        # Section C: 人工瓣膜支架评估（可编辑） - SectionCard
+        # Section C: 人工瓣膜支架评估（可编辑 + 子模块预览） - SectionCard
         stent_card = SectionCard(title="三、人工瓣膜支架评估", icon_text="🫀", variant="dashed", parent=self)
         stent_layout = qt.QVBoxLayout()
+
+        # 子模块：瓣膜植入深度（只读）
+        implant_group = qt.QGroupBox("瓣膜植入深度 (mm)")
+        implant_grid = qt.QGridLayout(implant_group)
+        implant_grid.setSpacing(8)
+        _label_style2 = "QLabel { font-weight: 500; color: #495057; min-width: 72px; }"
+        _data_field_style2 = (
+            "QLabel {"
+            "  background-color: #f8f9fa;"
+            "  border: 1px solid #dee2e6;"
+            "  border-radius: 4px;"
+            "  padding: 6px 10px;"
+            "  font-size: 13px;"
+            "}"
+        )
+        lbl_nc = qt.QLabel("NC"); lbl_nc.setStyleSheet(_label_style2)
+        self.lbl_implant_nc = qt.QLabel(); self.lbl_implant_nc.setStyleSheet(_data_field_style2)
+        lbl_lc = qt.QLabel("LC"); lbl_lc.setStyleSheet(_label_style2)
+        self.lbl_implant_lc = qt.QLabel(); self.lbl_implant_lc.setStyleSheet(_data_field_style2)
+        lbl_rc = qt.QLabel("RC"); lbl_rc.setStyleSheet(_label_style2)
+        self.lbl_implant_rc = qt.QLabel(); self.lbl_implant_rc.setStyleSheet(_data_field_style2)
+        implant_grid.addWidget(lbl_nc, 0, 0)
+        implant_grid.addWidget(self.lbl_implant_nc, 0, 1)
+        implant_grid.addWidget(lbl_lc, 0, 2)
+        implant_grid.addWidget(self.lbl_implant_lc, 0, 3)
+        implant_grid.addWidget(lbl_rc, 1, 0)
+        implant_grid.addWidget(self.lbl_implant_rc, 1, 1)
+        implant_grid.setColumnStretch(3, 1)
+        stent_layout.addWidget(implant_group)
 
         # 形态改变评估
         morph_group = qt.QGroupBox("形态改变评估")
@@ -355,6 +386,7 @@ class Module6Widget(qt.QWidget):
             summary = self.logic.collect_summary()
             base = summary.get('base', {})
             angles = summary.get('angles', {})
+            implant = summary.get('implant_depth', {}) or {}
             stent = summary.get('stent_assessment') or {}
 
             # 填充基本情况（逐行）
@@ -366,6 +398,18 @@ class Module6Widget(qt.QWidget):
             self.lbl_ct_date.setText(f"{base.get('ctScanDate','')}")
             self.lbl_valve_brand.setText(f"{base.get('valveBrand','')}")
             self.lbl_valve_model.setText(f"{base.get('valveModel','')}")
+
+            # 植入深度预览（两位小数，空值显示为空）
+            def _fmt2(x):
+                try:
+                    if x is None or x == "":
+                        return ""
+                    return f"{float(x):.2f} mm"
+                except Exception:
+                    return str(x)
+            self.lbl_implant_nc.setText(_fmt2(implant.get('NC')))
+            self.lbl_implant_lc.setText(_fmt2(implant.get('LC')))
+            self.lbl_implant_rc.setText(_fmt2(implant.get('RC')))
 
             # 角度填充
             self.inp_angle_rcc_lcc.setValue(float(angles.get('RCA_to_RCC_LCC', 0.0) or 0.0))

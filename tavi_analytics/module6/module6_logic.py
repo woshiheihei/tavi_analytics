@@ -49,6 +49,11 @@ class Module6Logic:
 
         phases = s.get_phase_summary()  # {'marked_phases': {...}, ...}
         angles = s.get_commissure_alignment_angles()  # dict 3 angles
+        implant_depth = {}
+        try:
+            implant_depth = s.get_implant_depth() or {}
+        except Exception:
+            implant_depth = {}
 
         # 支架评估期像测量（含覆盖）
         per_phase = {}
@@ -109,6 +114,7 @@ class Module6Logic:
             'base': base,
             'phases': phases,
             'angles': angles,
+            'implant_depth': implant_depth,
             'stent_assessment': stent_assessment,
             'module3': module3,
             'measurements': measurements,
@@ -195,6 +201,7 @@ class Module6Logic:
         b = data.get('base', {})
         phases = data.get('phases', {})
         angles = data.get('angles', {})
+        implant_depth = data.get('implant_depth') or {}
         module3 = data.get('module3', {}) or {}
         stent = data.get('stent_assessment') or {}
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -231,12 +238,14 @@ class Module6Logic:
 
         angles_html = f"""
         <table>
-          <tr><th colspan=4>四、交接对齐（commissure alignment）</th></tr>
+          <tr><th colspan=4>交接对齐（commissure alignment）</th></tr>
           <tr><td>RCA→RCC/LCC</td><td>{self._fmt2(angles.get('RCA_to_RCC_LCC'))} °</td>
               <td>RCA→LCC/NCC</td><td>{self._fmt2(angles.get('RCA_to_LCC_NCC'))} °</td></tr>
           <tr><td>RCA→NCC/RCC</td><td>{self._fmt2(angles.get('RCA_to_NCC_RCC'))} °</td><td></td><td></td></tr>
         </table>
         """
+
+        # 植入深度由支架评估章节内渲染
 
         mp = phases.get('marked_phases', {}) if isinstance(phases, dict) else {}
 
@@ -254,7 +263,6 @@ class Module6Logic:
             </table>
             """
 
-        # measurement.json 摘要（可选）
         geo_html = ""
         if include_geometry:
             meas = data.get('measurements') or {}
@@ -275,13 +283,12 @@ class Module6Logic:
                 </table>
                 """
 
-        # PDF路径下（group_leaflet_eval=True且include_phases=False）需要二、三标题
         if group_leaflet_eval and not include_phases:
             module3_html = self._render_leaflet_evaluation(module3, title_prefix="二、")
-            stent_html = self._render_stent_assessment_section(stent, b, section_prefix="三、")
+            stent_html = self._render_stent_assessment_section(stent, b, section_prefix="三、", implant_depth=implant_depth)
         else:
             module3_html = self._render_leaflet_evaluation(module3) if group_leaflet_eval else self._render_module3(module3)
-            stent_html = self._render_stent_assessment_section(stent, b)
+            stent_html = self._render_stent_assessment_section(stent, b, implant_depth=implant_depth)
 
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
@@ -397,7 +404,7 @@ class Module6Logic:
                f"<tr><th colspan=4>{title}</th></tr>" \
                + ''.join(rows) + "</table>"
 
-    def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any], section_prefix: str = "") -> str:
+    def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any], section_prefix: str = "", implant_depth: Optional[Dict[str, Any]] = None) -> str:
         if not stent or not isinstance(stent, dict):
             return ""
         def val(x):
@@ -409,6 +416,21 @@ class Module6Logic:
         morph_txt = '有' if morph is True else ('无' if morph is False else '')
         per_phase = stent.get('per_phase') or {}
         header_html = f"<table><tr><th colspan=7>{section_prefix}人工瓣膜支架评估</th></tr></table>" if section_prefix else ""
+
+        # 子模块：瓣膜植入深度（如有任一数值）
+        implant_html = ""
+        try:
+            d = implant_depth or {}
+            nc = d.get('NC'); lc = d.get('LC'); rc = d.get('RC')
+            if any(v is not None and str(v) != '' for v in (nc, lc, rc)):
+                implant_html = (
+                    "<table>"
+                    "<tr><th colspan=6>瓣膜植入深度</th></tr>"
+                    f"<tr><td>NC</td><td>{self._fmt2(nc)} mm</td><td>LC</td><td>{self._fmt2(lc)} mm</td><td>RC</td><td>{self._fmt2(rc)} mm</td></tr>"
+                    "</table>"
+                )
+        except Exception:
+            implant_html = ""
         def render_phase_table(phase_key: str, phase_label: str) -> str:
             p = per_phase.get(phase_key) or {}
             phase_percent = p.get('phase_percent')
@@ -454,6 +476,7 @@ class Module6Logic:
                 "</table>"
             )
         parts = [
+            implant_html,
             render_phase_table('end_diastole', '舒张末期'),
             render_phase_table('end_systole', '收缩末期'),
         ]

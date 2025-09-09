@@ -17,6 +17,7 @@ try:
     from ..widgets.valve_info_panel import ValveInfoPanel
     from .module4_logic import Module4Logic
     from .geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
+    from .implant_depth_widget import ValveImplantDepthWidget
 except ImportError:
     import os
     import sys
@@ -35,6 +36,7 @@ except ImportError:
     from widgets.valve_info_panel import ValveInfoPanel
     from module4_logic import Module4Logic
     from geometry_analysis_widget import InflowAnalysisWidget, NadirAnalysisWidget, CommissureLevelAnalysisWidget
+    from implant_depth_widget import ValveImplantDepthWidget
 
 
 class Module4Widget(qt.QWidget):
@@ -48,7 +50,7 @@ class Module4Widget(qt.QWidget):
         # 创建紧凑期像切换组件
         self.compact_phase_toggle = CompactPhaseToggle(session, self)
         self.compact_phase_toggle.phaseChanged.connect(self._on_phase_changed)
-        
+
         # 公共瓣膜信息面板（抽离公共组件）
         self.valve_info_panel = ValveInfoPanel(session, self.logic, parent=self)
 
@@ -56,6 +58,8 @@ class Module4Widget(qt.QWidget):
         self.inflow_analysis = InflowAnalysisWidget(session, self.logic, parent=self)
         self.nadir_analysis = NadirAnalysisWidget(session, self.logic, parent=self)
         self.commissure_level_analysis = CommissureLevelAnalysisWidget(session, self.logic, parent=self)
+        # 新增：瓣膜植入深度
+        self.implant_depth_widget = ValveImplantDepthWidget(session, self.logic, parent=self)
 
         # 隐藏各Tab内的重复瓣膜信息卡片（使用公共面板）
         for w in (self.inflow_analysis, self.nadir_analysis, self.commissure_level_analysis):
@@ -65,7 +69,7 @@ class Module4Widget(qt.QWidget):
             except Exception:
                 pass
         
-    # 模块四不再包含瓣膜叠加组件（迁移至模块五）
+        # 模块四不再包含瓣膜叠加组件（迁移至模块五）
         
         self.setObjectName("Module4Widget")
         self._setup_ui()
@@ -133,18 +137,20 @@ class Module4Widget(qt.QWidget):
             self.analysis_tabs.setElideMode(qt.Qt.ElideNone)
         except Exception:
             pass
-        self.analysis_tabs.setStyleSheet(
+        self.analysis_tabs.setStyleSheet(        
             """
             QTabWidget::pane { border: 1px solid #dee2e6; border-radius: 4px; background-color: white; }
             QTabBar::tab { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }
             QTabBar::tab:selected { background-color: white; border-bottom-color: white; }
             """
         )
-
         # 创建并添加分析组件
         self.analysis_tabs.addTab(self.inflow_analysis, "Inflow")
         self.analysis_tabs.addTab(self.nadir_analysis, "Nadir")
         self.analysis_tabs.addTab(self.commissure_level_analysis, "Commissure")
+        # 在 Commissure 后新增 “瓣膜植入深度”
+        self.analysis_tabs.addTab(self.implant_depth_widget, "瓣膜植入深度")
+
         # 汇总布局（滚动在主界面 MainUI 中提供）
         main_layout.addWidget(title_container)
         # 公共瓣膜信息面板置于选项卡上方（仅一处展示）
@@ -166,6 +172,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.set_session(session)
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.set_session(session)
+        if hasattr(self, 'implant_depth_widget'):
+            self.implant_depth_widget.set_session(session)
         if hasattr(self, 'valve_info_panel'):
             self.valve_info_panel.set_session(session)
     # 瓣膜叠加组件已迁移，无需处理
@@ -190,6 +198,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.on_activated()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.on_activated()
+        if hasattr(self, 'implant_depth_widget'):
+            self.implant_depth_widget.on_activated()
         if hasattr(self, 'valve_info_panel'):
             self.valve_info_panel.on_activated()
         
@@ -204,6 +214,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.on_deactivated()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.on_deactivated()
+        if hasattr(self, 'implant_depth_widget'):
+            self.implant_depth_widget.on_deactivated()
         if hasattr(self, 'valve_info_panel'):
             self.valve_info_panel.cleanup()
 
@@ -295,6 +307,8 @@ class Module4Widget(qt.QWidget):
             self.nadir_analysis.cleanup()
         if hasattr(self, 'commissure_level_analysis'):
             self.commissure_level_analysis.cleanup()
+        if hasattr(self, 'implant_depth_widget'):
+            self.implant_depth_widget.cleanup()
         if hasattr(self, 'valve_info_panel'):
             self.valve_info_panel.cleanup()
     # 瓣膜叠加组件已迁移，无需处理
