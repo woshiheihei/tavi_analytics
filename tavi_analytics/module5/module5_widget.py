@@ -1,7 +1,5 @@
 """
-模块五界面组件（占位）
-
-页面标题：交接对齐
+模块五界面组件
 """
 import logging
 from typing import Optional
@@ -10,7 +8,6 @@ import qt
 try:
     from ..core.session import TAVRStudySession
     from ..utils.layout_manager import LayoutManager, LayoutType
-    from ..ui.styles import ComponentStyleFactory
     from .module5_logic import Module5Logic
     from ..widgets.valve_overlay_widget import create_valve_overlay_widget
     from ..widgets.compact_phase_toggle import CompactPhaseToggle
@@ -28,7 +25,6 @@ except ImportError:
         sys.path.insert(0, current_dir)
     from core.session import TAVRStudySession
     from utils.layout_manager import LayoutManager, LayoutType
-    from ui.styles import ComponentStyleFactory
     from module5_logic import Module5Logic
     from widgets.valve_overlay_widget import create_valve_overlay_widget
     from widgets.compact_phase_toggle import CompactPhaseToggle
@@ -37,7 +33,7 @@ except ImportError:
 
 
 class Module5Widget(qt.QWidget):
-    """模块五界面 - 交接对齐（占位仅展示标题）"""
+    """模块五界面 - 交接对齐"""
 
     def __init__(self, session: TAVRStudySession, logic: Optional[Module5Logic] = None, parent=None):
         super().__init__(parent)
@@ -59,48 +55,31 @@ class Module5Widget(qt.QWidget):
         # 统一布局容器（与其他模块一致，由主界面提供滚动）
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 顶部标题（占位）
-        container = qt.QWidget()
-        v = qt.QVBoxLayout(container)
-        # Tighten margins/spacing for compact overlay UI
-        v.setContentsMargins(0, 12, 0, 12)
-        v.setSpacing(12)
-        v.setAlignment(qt.Qt.AlignTop | qt.Qt.AlignHCenter)
+        # 顶部第一行：期像切换器（与模块3/4保持一致风格与边距）
+        title_container = qt.QWidget()
+        title_layout = qt.QHBoxLayout(title_container)
+        title_layout.setContentsMargins(8, 8, 8, 8)
+        title_layout.setSpacing(20)
+        title_layout.addWidget(self.compact_phase_toggle)
+        title_layout.addStretch()
+        main_layout.addWidget(title_container)
 
-        styles = ComponentStyleFactory.get_main_ui_styles()
-        title = qt.QLabel("交接对齐")
-        try:
-            title.setStyleSheet(styles.get("welcome_label", ""))
-        except Exception:
-            pass
-        title.setAlignment(qt.Qt.AlignCenter)
-        v.addWidget(title)
+        # 第二行：分析准备 Section（风格参考“瓣膜信息”区，非虚线）
+        self._create_start_analysis_section(main_layout)
 
-        # 期像切换器区域（与模块3/4保持一致风格）
-        phase_row = qt.QWidget()
-        phase_row_layout = qt.QHBoxLayout(phase_row)
-        phase_row_layout.setContentsMargins(8, 8, 8, 8)
-        phase_row_layout.setSpacing(20)
-        phase_row_layout.addWidget(self.compact_phase_toggle)
-        phase_row_layout.addStretch()
-        v.addWidget(phase_row)
-
-        # 开始分析（参考模块三 SFD 的“分析准备”UI）
-        self._create_start_analysis_section(v)
-
-        # 瓣膜叠加组件（从模块四迁移）
+        # 第三行：瓣膜叠加组件（从模块四迁移）
         try:
             self.valve_overlay_widget = create_valve_overlay_widget(session=self.session, parent=self)
-            v.addWidget(self.valve_overlay_widget)
+            main_layout.addWidget(self.valve_overlay_widget)
             self._connect_valve_overlay_signals()
         except Exception as e:
             logging.warning(f"创建瓣膜叠加组件失败: {e}")
 
-        main_layout.addWidget(container)
+        # 拉伸占位，避免高度变化带来整体抖动
         main_layout.addStretch()
 
     def _create_start_analysis_section(self, parent_layout):
-        card = SectionCard(title="分析准备", icon_text="🧭", variant="dashed", parent=self)
+        card = SectionCard(title="分析准备", icon_text="🧭", variant="neutral", parent=self, header_compact=True)
         row = qt.QWidget()
         h = qt.QHBoxLayout(row)
         h.setSpacing(6)
