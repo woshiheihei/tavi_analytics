@@ -386,7 +386,9 @@ class KeyViewManagerWidget(qt.QWidget):
         confirm_btn.setDefault(True)
         
         def on_confirm():
-            view_name = name_input.text().strip()
+            # 兼容不同Qt绑定：QLineEdit.text 在某些环境是属性(str)，在部分环境是可调用方法
+            text_attr = getattr(name_input, "text", "")
+            view_name = text_attr().strip() if callable(text_attr) else str(text_attr).strip()
             if not view_name:
                 qt.QMessageBox.warning(dialog, "警告", "请输入视图名称！")
                 return
@@ -607,7 +609,9 @@ class KeyViewManagerWidget(qt.QWidget):
             has_phase_info = view_phase is not None
             
             # 提供视觉反馈
-            original_text = self.mark_btn.text()
+            # 兼容不同Qt绑定的text访问（方法或属性）
+            _btn_text_attr = getattr(self.mark_btn, "text", "")
+            original_text = _btn_text_attr() if callable(_btn_text_attr) else str(_btn_text_attr)
             self.mark_btn.setEnabled(False)
             
             # 阶段1：如果有期像信息，显示期像恢复状态
