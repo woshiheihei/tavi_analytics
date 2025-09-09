@@ -78,49 +78,50 @@ class CompactPhaseToggle(qt.QWidget):
         logging.info("CompactPhaseToggle 初始化完成")
     
     def _setup_ui(self):
-        """设置用户界面"""
+        """设置用户界面 - 现代化清爽设计"""
         # 主布局 - 水平布局，紧凑排列
         main_layout = qt.QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(6)
+        main_layout.setSpacing(12)  # 增加间距，更清爽
         
-        # 期像标签
-        phase_label = qt.QLabel("期像:")
+        # 期像标签 - 更现代的样式
+        phase_label = qt.QLabel("期像")
         phase_label.setStyleSheet("""
             QLabel {
-                color: #495057;
-                font-size: 12px;
+                color: #64748b;  /* slate-500 - 更柔和的颜色 */
+                font-size: 13px;
                 font-weight: 500;
+                margin: 0px;
             }
         """)
         main_layout.addWidget(phase_label)
         
-        # 切换开关容器
+        # 切换开关容器 - 现代化的pill设计
         toggle_container = qt.QWidget()
-        toggle_container.setFixedSize(120, 26)
+        toggle_container.setFixedSize(140, 32)  # 稍微增大尺寸
         toggle_container.setStyleSheet("""
             QWidget {
-                background-color: #e9ecef;
-                border-radius: 13px;
-                border: 1px solid #ced4da;
+                background-color: #f1f5f9;  /* slate-100 - 更柔和的背景 */
+                border-radius: 16px;  /* 更大的圆角，pill形状 */
+                border: 1px solid #e2e8f0;  /* slate-200 - 更细的边框 */
             }
         """)
         
         # 切换按钮布局
         toggle_layout = qt.QHBoxLayout(toggle_container)
-        toggle_layout.setContentsMargins(2, 2, 2, 2)
-        toggle_layout.setSpacing(0)
+        toggle_layout.setContentsMargins(3, 3, 3, 3)  # 增加内边距
+        toggle_layout.setSpacing(2)
         
-        # 舒张末期按钮
-        self.diastole_button = qt.QPushButton("舒张")
-        self.diastole_button.setFixedSize(56, 22)
+        # 舒张末期按钮 - 现代化样式
+        self.diastole_button = qt.QPushButton("舒张末期")
+        self.diastole_button.setFixedSize(65, 26)
         self.diastole_button.setCheckable(True)
         self.diastole_button.setToolTip("切换到舒张末期 (推荐用于全自动分析)")
         self.diastole_button.clicked.connect(self._on_diastole_clicked)
         
-        # 收缩末期按钮
-        self.systole_button = qt.QPushButton("收缩")
-        self.systole_button.setFixedSize(56, 22)
+        # 收缩末期按钮 - 现代化样式
+        self.systole_button = qt.QPushButton("收缩末期")
+        self.systole_button.setFixedSize(65, 26)
         self.systole_button.setCheckable(True)
         self.systole_button.setToolTip("切换到收缩末期 (用于动态分析)")
         self.systole_button.clicked.connect(self._on_systole_clicked)
@@ -133,14 +134,14 @@ class CompactPhaseToggle(qt.QWidget):
         
         main_layout.addWidget(toggle_container)
         
-        # 状态指示器 - 小圆点
-        self.status_indicator = qt.QLabel("●")
-        self.status_indicator.setFixedSize(12, 12)
-        self.status_indicator.setAlignment(qt.Qt.AlignCenter)
+        # 状态指示器 - 更现代的设计
+        self.status_indicator = qt.QLabel()
+        self.status_indicator.setFixedSize(8, 8)
         self.status_indicator.setStyleSheet("""
             QLabel {
-                color: #6c757d;
-                font-size: 10px;
+                background-color: #cbd5e1;  /* slate-300 */
+                border-radius: 4px;
+                border: none;
             }
         """)
         self.status_indicator.setToolTip("期像状态指示")
@@ -150,57 +151,47 @@ class CompactPhaseToggle(qt.QWidget):
         main_layout.addStretch()
     
     def _setup_button_styles(self):
-        """设置按钮样式"""
-        # 未激活状态样式
+        """设置按钮样式 - 现代化清爽设计"""
+        # 未激活状态样式 - 更柔和的颜色
         inactive_style = """
             QPushButton {
                 background-color: transparent;
-                color: #6c757d;
+                color: #64748b;  /* slate-500 - 更柔和的文字色 */
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;  /* 更大的圆角 */
                 font-size: 11px;
                 font-weight: 500;
+                text-align: center;
             }
             QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.05);
+                background-color: #f8fafc;  /* slate-50 - 极淡的悬停效果 */
+                color: #475569;  /* slate-600 */
             }
         """
         
-        # 激活状态样式 - 舒张末期 (绿色)
-        diastole_active_style = """
+        # 激活状态样式 - 统一使用柔和蓝色
+        active_style = """
             QPushButton {
-                background-color: #28a745;
-                color: white;
+                background-color: #3b82f6;  /* blue-500 - 柔和蓝色 */
+                color: #ffffff;
                 border: none;
-                border-radius: 10px;
+                border-radius: 12px;
                 font-size: 11px;
                 font-weight: 600;
+                text-align: center;
             }
             QPushButton:hover {
-                background-color: #218838;
+                background-color: #2563eb;  /* blue-600 */
             }
-        """
-        
-        # 激活状态样式 - 收缩末期 (红色)
-        systole_active_style = """
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 11px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
+            QPushButton:pressed {
+                background-color: #1d4ed8;  /* blue-700 */
             }
         """
         
         # 存储样式
         self.button_styles = {
             'inactive': inactive_style,
-            'diastole_active': diastole_active_style,
-            'systole_active': systole_active_style
+            'active': active_style
         }
         
         # 初始化为未激活状态
@@ -303,18 +294,18 @@ class CompactPhaseToggle(qt.QWidget):
         logging.info(f"CompactPhaseToggle 期像设置为: {phase} (数据可视化由服务层管理)")
     
     def _update_button_states(self, active_phase: str):
-        """更新按钮状态"""
+        """更新按钮状态 - 现代化统一设计"""
         # 重置所有按钮的选中状态
         self.diastole_button.setChecked(False)
         self.systole_button.setChecked(False)
         
         if active_phase == 'diastole':
             self.diastole_button.setChecked(True)
-            self.diastole_button.setStyleSheet(self.button_styles['diastole_active'])
+            self.diastole_button.setStyleSheet(self.button_styles['active'])
             self.systole_button.setStyleSheet(self.button_styles['inactive'])
         elif active_phase == 'systole':
             self.systole_button.setChecked(True)
-            self.systole_button.setStyleSheet(self.button_styles['systole_active'])
+            self.systole_button.setStyleSheet(self.button_styles['active'])
             self.diastole_button.setStyleSheet(self.button_styles['inactive'])
     
     def _reset_button_states(self):
@@ -328,28 +319,31 @@ class CompactPhaseToggle(qt.QWidget):
             self.systole_button.setStyleSheet(self.button_styles['inactive'])
     
     def _update_status_indicator(self, phase: str):
-        """更新状态指示器"""
+        """更新状态指示器 - 现代化设计"""
         if phase == 'diastole':
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    color: #28a745;
-                    font-size: 10px;
+                    background-color: #3b82f6;  /* blue-500 - 统一蓝色 */
+                    border-radius: 4px;
+                    border: none;
                 }
             """)
             self.status_indicator.setToolTip("当前: 舒张末期")
         elif phase == 'systole':
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    color: #dc3545;
-                    font-size: 10px;
+                    background-color: #3b82f6;  /* blue-500 - 统一蓝色 */
+                    border-radius: 4px;
+                    border: none;
                 }
             """)
             self.status_indicator.setToolTip("当前: 收缩末期")
         else:
             self.status_indicator.setStyleSheet("""
                 QLabel {
-                    color: #6c757d;
-                    font-size: 10px;
+                    background-color: #cbd5e1;  /* slate-300 */
+                    border-radius: 4px;
+                    border: none;
                 }
             """)
             self.status_indicator.setToolTip("期像状态指示")

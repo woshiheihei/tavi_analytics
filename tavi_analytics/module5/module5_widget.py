@@ -55,19 +55,75 @@ class Module5Widget(qt.QWidget):
         # 统一布局容器（与其他模块一致，由主界面提供滚动）
         main_layout = LayoutManager.create_layout(LayoutType.MODULE_CONTAINER, self)
 
-        # 顶部第一行：期像切换器（与模块3/4保持一致风格与边距）
-        title_container = qt.QWidget()
-        title_layout = qt.QHBoxLayout(title_container)
-        title_layout.setContentsMargins(8, 8, 8, 8)
-        title_layout.setSpacing(20)
-        title_layout.addWidget(self.compact_phase_toggle)
-        title_layout.addStretch()
-        main_layout.addWidget(title_container)
+        # 顶部工具栏：期像切换器 + 开始分析按钮（专业化样式设计）
+        toolbar_container = qt.QWidget()
+        toolbar_container.setObjectName("ToolbarContainer")
+        # 专业工具栏背景样式
+        toolbar_container.setStyleSheet("""
+            QWidget#ToolbarContainer {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #fafbfc, stop:1 #f4f6f8);
+                border: 1px solid #e1e7ef;
+                border-radius: 8px;
+                margin: 2px;
+            }
+        """)
+        
+        toolbar_layout = qt.QHBoxLayout(toolbar_container)
+        toolbar_layout.setContentsMargins(12, 8, 12, 8)
+        toolbar_layout.setSpacing(12)
+        
+        # 期像切换器
+        toolbar_layout.addWidget(self.compact_phase_toggle)
+        
+        # 精致分隔器设计
+        separator = qt.QWidget()
+        separator.setFixedSize(1, 20)
+        separator.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #e1e7ef, stop:0.5 #cbd5e0, stop:1 #e1e7ef);
+                border-radius: 0px;
+                margin: 2px 0px;
+            }
+        """)
+        toolbar_layout.addWidget(separator)
+        
+        # 开始分析按钮（优化样式）
+        self.start_analysis_btn = LayoutManager.create_button_with_style("🧭 开始分析", "toolbar-tonal", "default", 32)
+        self.start_analysis_btn.clicked.connect(self._on_start_alignment)
+        self.start_analysis_btn.setToolTip("定位到当前期像的瓦氏窦平面开始分析")
+        
+        # 简约高级按钮样式
+        self.start_analysis_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4f46e5;
+                color: #ffffff;
+                border: none;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 8px 16px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #4338ca;
+            }
+            QPushButton:pressed {
+                background-color: #3730a3;
+            }
+            QPushButton:disabled {
+                background-color: #e2e8f0;
+                color: #94a3b8;
+            }
+        """)
+        
+        toolbar_layout.addWidget(self.start_analysis_btn)
+        toolbar_layout.addStretch()
+        
+        main_layout.addWidget(toolbar_container)
 
-        # 第二行：分析准备 Section（风格参考“瓣膜信息”区，非虚线）
-        self._create_start_analysis_section(main_layout)
-
-        # 第三行：瓣膜叠加组件（从模块四迁移）
+        # 第二行：瓣膜叠加组件（从模块四迁移）
         try:
             self.valve_overlay_widget = create_valve_overlay_widget(session=self.session, parent=self)
             main_layout.addWidget(self.valve_overlay_widget)
@@ -77,20 +133,6 @@ class Module5Widget(qt.QWidget):
 
         # 拉伸占位，避免高度变化带来整体抖动
         main_layout.addStretch()
-
-    def _create_start_analysis_section(self, parent_layout):
-        card = SectionCard(title="分析准备", icon_text="🧭", variant="neutral", parent=self, header_compact=True)
-        row = qt.QWidget()
-        h = qt.QHBoxLayout(row)
-        h.setSpacing(6)
-        h.setContentsMargins(6, 6, 6, 6)
-        self.start_analysis_btn = LayoutManager.create_button_with_style("开始分析", "toolbar", "sm", 28)
-        self.start_analysis_btn.clicked.connect(self._on_start_alignment)
-        h.addWidget(self.start_analysis_btn)
-        h.addStretch()
-        card.add_widget(row)
-        parent_layout.addWidget(card)
-        self._start_card = card
 
     def _on_phase_changed(self, phase: str):
         """

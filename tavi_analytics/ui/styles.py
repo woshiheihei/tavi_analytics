@@ -211,6 +211,27 @@ class StyleManager:
                 "border": "1px solid #ced4da",
                 "radius": "4px",
                 "shadow": "none"
+            },
+            # 工具栏柔和风格按钮 - 更现代化的设计
+            "toolbar-tonal": {
+                "bg_color": "#f1f5f9",  # slate-100 - 更柔和的背景
+                "text_color": "#475569",  # slate-600 - 更柔和的文字
+                "hover_bg": "#e2e8f0",   # slate-200 - 悬停时稍深
+                "active_bg": "#cbd5e1",  # slate-300 - 激活时的背景
+                "border": "1px solid #e2e8f0",  # slate-200 - 细边框
+                "radius": "8px",  # 更大的圆角
+                "shadow": "0 1px 2px 0 rgb(0 0 0 / 0.05)"  # 微妙阴影
+            },
+            # 期像切换按钮 - 专用样式
+            "phase-toggle": {
+                "bg_color": "transparent",
+                "text_color": "#64748b",     # slate-500
+                "hover_bg": "#f8fafc",       # slate-50
+                "active_bg": "#3b82f6",      # blue-500 - 柔和蓝色
+                "active_text": "#ffffff",    # 激活时白色文字
+                "border": "1px solid transparent",
+                "radius": "6px",
+                "shadow": "none"
             }
         }
         
@@ -225,6 +246,10 @@ class StyleManager:
 
         # 尺寸/间距：toolbar按设计覆盖为 6px 12px
         if button_type == "toolbar":
+            padding_style = "min-height: 28px; padding: 6px 12px;"
+        elif button_type == "toolbar-tonal":
+            padding_style = "min-height: 32px; padding: 8px 16px;"
+        elif button_type == "phase-toggle":
             padding_style = "min-height: 28px; padding: 6px 12px;"
 
         style = f"""
@@ -272,6 +297,32 @@ class StyleManager:
                 }}
                 QPushButton:checked:hover {{
                     background-color: {ThemeColor.BRAND_PRIMARY_HOVER.value};
+                }}
+            """
+        elif button_type == "toolbar-tonal":
+            # 柔和风格的选中态
+            style += f"""
+                QPushButton:checked {{
+                    background-color: {type_cfg.get('active_bg', '#cbd5e1')};
+                    color: {type_cfg["text_color"]};
+                    border: 1px solid {type_cfg.get('active_bg', '#cbd5e1')};
+                    font-weight: 600;
+                }}
+                QPushButton:checked:hover {{
+                    background-color: #94a3b8;  /* slate-400 */
+                }}
+            """
+        elif button_type == "phase-toggle":
+            # 期像切换按钮的激活态
+            style += f"""
+                QPushButton:checked {{
+                    background-color: {type_cfg.get('active_bg', '#3b82f6')};
+                    color: {type_cfg.get('active_text', '#ffffff')};
+                    border: 1px solid {type_cfg.get('active_bg', '#3b82f6')};
+                    font-weight: 600;
+                }}
+                QPushButton:checked:hover {{
+                    background-color: #2563eb;  /* blue-600 */
                 }}
             """
         
