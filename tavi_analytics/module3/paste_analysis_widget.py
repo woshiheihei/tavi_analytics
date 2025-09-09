@@ -145,8 +145,19 @@ class BaseAnalysisWidget(qt.QWidget):
         card.add_header_widget(self.key_view_manager.mark_btn, align_right=True)
         card.add_widget(self.key_view_manager)
         parent_layout.addWidget(card)
+        # 固定SectionCard，不参与垂直伸缩
+        try:
+            parent_layout.setStretchFactor(card, 0)
+        except Exception:
+            pass
 
     def _create_action_buttons(self, parent_layout, include_status_btn: bool = True, next_label=None):
+        # 在动作区前添加可伸缩空隙，将按钮推到底部
+        try:
+            parent_layout.addStretch()
+        except Exception:
+            pass
+
         actions = qt.QHBoxLayout()
         actions.setSpacing(8)
         # 与 HALT 页面对齐的边距，减少视觉抖动
@@ -311,6 +322,13 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         title = qt.QLabel("SFD 窦内充盈缺损分析")
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
+        # 固定标题高度，避免被压缩
+        try:
+            title.setMinimumHeight(32)
+            title.setMaximumHeight(32)
+            title.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Fixed)
+        except Exception:
+            pass
         layout.addWidget(title)
 
         # 分析准备
@@ -355,6 +373,11 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
 
         card.add_layout(body)
         layout.addWidget(card)
+        # 固定SectionCard，不参与垂直伸缩
+        try:
+            layout.setStretchFactor(card, 0)
+        except Exception:
+            pass
 
         # 关键视图 + 操作
         self._create_key_view_section(layout)
@@ -374,6 +397,11 @@ class SfdAnalysisWidget(BaseAnalysisWidget):
         control_layout.addStretch()
         card.add_widget(control_row)
         parent_layout.addWidget(card)
+        # 固定SectionCard，不参与垂直伸缩
+        try:
+            parent_layout.setStretchFactor(card, 0)
+        except Exception:
+            pass
         self.control_frame = card
 
     def _create_sinus_selection_section(self, parent_layout):
@@ -542,6 +570,13 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         title = qt.QLabel("PFD 瓣叶下充盈缺损分析")
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
+        # 固定标题高度，避免被压缩
+        try:
+            title.setMinimumHeight(32)
+            title.setMaximumHeight(32)
+            title.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Fixed)
+        except Exception:
+            pass
         layout.addWidget(title)
 
         self._create_analysis_control_section(layout)
@@ -583,6 +618,11 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
 
         card.add_layout(body)
         layout.addWidget(card)
+        # 固定SectionCard，不参与垂直伸缩
+        try:
+            layout.setStretchFactor(card, 0)
+        except Exception:
+            pass
 
         self._create_key_view_section(layout)
         # PFD页：按钮显示为“继续分析瓣膜支架几何形态评估”
@@ -631,6 +671,11 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         control_layout.addStretch()
         card.add_widget(control_row)
         parent_layout.addWidget(card)
+        # 固定SectionCard，不参与垂直伸缩
+        try:
+            parent_layout.setStretchFactor(card, 0)
+        except Exception:
+            pass
         self.control_frame = card
 
     def _create_thickness_section(self, parent_layout):

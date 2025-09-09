@@ -216,10 +216,13 @@ class HaltAnalysisWidget(qt.QWidget):
         except Exception:
             pass
 
-        # 标题 - 与模块4一致的简洁大号样式
+        # 标题 - 与模块4一致的简洁大号样式，固定高度防止压缩
         title = qt.QLabel("HALT 瓣叶低密度增厚评估")
         title.setAlignment(qt.Qt.AlignCenter)
         title.setStyleSheet(StyleManager.get_label_style("large"))
+        title.setMinimumHeight(32)
+        title.setMaximumHeight(32)
+        title.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Fixed)
         main_layout.addWidget(title)
 
         # 0. 分析控制区域（开始HALT分析）
@@ -231,6 +234,9 @@ class HaltAnalysisWidget(qt.QWidget):
 
         # 2. 关键视图管理 - 使用公共组件
         self._create_key_view_section(main_layout)
+
+        # 添加一个可伸缩的间隔，将底部按钮推到最下方
+        main_layout.addStretch()
 
         # 3. 操作按钮 - 固定在底部
         self._create_action_buttons_section(main_layout)
@@ -256,6 +262,8 @@ class HaltAnalysisWidget(qt.QWidget):
         control_layout.addStretch()
         card.add_widget(control_row)
         parent_layout.addWidget(card)
+        # 为该卡片设置固定的上下边距，不参与伸缩
+        parent_layout.setStretchFactor(card, 0)
         self.control_frame = card  # 复用字段，便于可见性管理
     
     def _create_halt_status_and_grading_section(self, parent_layout):
@@ -383,6 +391,8 @@ class HaltAnalysisWidget(qt.QWidget):
 
         card.add_layout(main_status_layout)
         parent_layout.addWidget(card)
+        # 为该卡片设置固定的上下边距，不参与伸缩
+        parent_layout.setStretchFactor(card, 0)
     
     def _create_key_view_section(self, parent_layout):
         """创建关键视图管理区域 - 使用公共组件 + SectionCard"""
@@ -407,6 +417,8 @@ class HaltAnalysisWidget(qt.QWidget):
         card.add_header_widget(self.key_view_manager.mark_btn, align_right=True)
         card.add_widget(self.key_view_manager)
         parent_layout.addWidget(card)
+        # 为该卡片设置固定的上下边距，不参与伸缩
+        parent_layout.setStretchFactor(card, 0)
     
     def _create_action_buttons_section(self, parent_layout):
         """创建操作按钮区域"""
