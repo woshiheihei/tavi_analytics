@@ -222,39 +222,230 @@ class Module6Logic:
             return "" if x is None else str(x)
 
         css = """
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding: 16px; }
-        h1 { font-size: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
-        th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
-        th { background: #f9fafb; }
-        .section { margin-top: 18px; }
-        small { color: #6b7280; }
-        .toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0 16px; }
-        .btn { border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
-        .btn-primary { background: #2563eb; color: #fff; border-color: #1d4ed8; }
-        .btn:hover { filter: brightness(0.98); }
-        @page { size: A4; margin: 12mm; }
-        @media print { .no-print { display: none !important; } body { padding: 0; } th { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+        body { 
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            padding: 24px; 
+            background: #fafafa;
+            color: #2c3e50;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        h1 { 
+            font-size: 28px; 
+            font-weight: 300;
+            color: #1a365d;
+            margin: 0 0 8px 0;
+            border-bottom: 3px solid #3182ce;
+            padding-bottom: 12px;
+        }
+        
+        .report-meta {
+            color: #718096;
+            font-size: 13px;
+            margin-bottom: 32px;
+            font-style: italic;
+        }
+        
+        .section-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 24px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .section-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .section-content {
+            padding: 0;
+        }
+        
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin: 0;
+            background: white;
+        }
+        
+        th, td { 
+            padding: 12px 16px; 
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        th { 
+            background: #f7fafc;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            color: #4a5568;
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .data-row:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .data-label {
+            font-weight: 500;
+            color: #2d3748;
+            width: 25%;
+        }
+        
+        .data-value {
+            color: #4a5568;
+        }
+        
+        .highlight-value {
+            font-weight: 600;
+            color: #3182ce;
+        }
+        
+        .measurement-group {
+            border-left: 4px solid #3182ce;
+            margin: 16px 0;
+        }
+        
+        .measurement-title {
+            background: #ebf8ff;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #2c5282;
+            border-bottom: 1px solid #bee3f8;
+        }
+        
+        .notes-section {
+            background: #fef5e7;
+            border: 2px solid #f6ad55;
+            border-radius: 8px;
+            margin-top: 32px;
+        }
+        
+        .notes-header {
+            background: #ed8936;
+            color: white;
+            padding: 12px 20px;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .notes-content {
+            padding: 20px;
+        }
+        
+        .notes-content ol {
+            margin: 0;
+            padding-left: 20px;
+            color: #744210;
+        }
+        
+        .notes-content li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .toolbar { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            margin: 8px 0 24px; 
+        }
+        
+        .btn { 
+            border: 1px solid #e2e8f0; 
+            background: white; 
+            border-radius: 8px; 
+            padding: 8px 16px; 
+            cursor: pointer; 
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary { 
+            background: #3182ce; 
+            color: white; 
+            border-color: #2c5282; 
+        }
+        
+        .btn:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        @page { 
+            size: A4; 
+            margin: 15mm; 
+        }
+        
+        @media print { 
+            .no-print { display: none !important; } 
+            body { padding: 0; background: white; } 
+            .section-card { 
+                box-shadow: none; 
+                border: 1px solid #ccc;
+                page-break-inside: avoid;
+            }
+            .section-header { 
+                background: #4a5568 !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+            }
+            .notes-section {
+                background: #fff8f0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .notes-header {
+                background: #dd6b20 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
         """
 
         base_html = f"""
-        <table>
-          <tr><th colspan=4>一、基本情况</th></tr>
-          <tr><td>受试者编号</td><td>{val(b.get('patientID'))}</td><td>姓名</td><td>{val(b.get('patientName'))}</td></tr>
-          <tr><td>年龄</td><td>{val(b.get('age'))}</td><td>性别</td><td>{val(b.get('sex'))}</td></tr>
-          <tr><td>手术日期</td><td>{val(b.get('surgeryDate'))}</td><td>CT扫描日期</td><td>{val(b.get('ctScanDate'))}</td></tr>
-          <tr><td>图像质量</td><td>{val(b.get('imageQuality'))}</td><td>随访时间点</td><td>{val(b.get('followUp'))}</td></tr>
-          <tr><td>瓣膜品牌</td><td>{val(b.get('valveBrand'))}</td><td>瓣膜型号</td><td>{val(b.get('valveModel'))}</td></tr>
-        </table>
+        <div class="section-card">
+          <div class="section-header">一、基本情况</div>
+          <div class="section-content">
+            <table>
+              <tr class="data-row"><td class="data-label">受试者编号</td><td class="data-value">{val(b.get('patientID'))}</td><td class="data-label">姓名</td><td class="data-value">{val(b.get('patientName'))}</td></tr>
+              <tr class="data-row"><td class="data-label">年龄</td><td class="data-value">{val(b.get('age'))}</td><td class="data-label">性别</td><td class="data-value">{val(b.get('sex'))}</td></tr>
+              <tr class="data-row"><td class="data-label">手术日期</td><td class="data-value highlight-value">{val(b.get('surgeryDate'))}</td><td class="data-label">CT扫描日期</td><td class="data-value highlight-value">{val(b.get('ctScanDate'))}</td></tr>
+              <tr class="data-row"><td class="data-label">图像质量</td><td class="data-value">{val(b.get('imageQuality'))}</td><td class="data-label">随访时间点</td><td class="data-value">{val(b.get('followUp'))}</td></tr>
+              <tr class="data-row"><td class="data-label">瓣膜品牌</td><td class="data-value highlight-value">{val(b.get('valveBrand'))}</td><td class="data-label">瓣膜型号</td><td class="data-value highlight-value">{val(b.get('valveModel'))}</td></tr>
+            </table>
+          </div>
+        </div>
         """
 
         angles_html = f"""
-        <table>
-          <tr><th colspan=4>交接对齐（commissure alignment）</th></tr>
-          <tr><td>RCA→RCC/LCC</td><td>{self._fmt2(angles.get('RCA_to_RCC_LCC'))} °</td>
-              <td>RCA→LCC/NCC</td><td>{self._fmt2(angles.get('RCA_to_LCC_NCC'))} °</td></tr>
-          <tr><td>RCA→NCC/RCC</td><td>{self._fmt2(angles.get('RCA_to_NCC_RCC'))} °</td><td></td><td></td></tr>
-        </table>
+        <div class="section-card">
+          <div class="section-header">交接对齐 (Commissure Alignment)</div>
+          <div class="section-content">
+            <table>
+              <tr class="data-row"><td class="data-label">RCA→RCC/LCC</td><td class="data-value highlight-value">{self._fmt2(angles.get('RCA_to_RCC_LCC'))} °</td>
+                  <td class="data-label">RCA→LCC/NCC</td><td class="data-value highlight-value">{self._fmt2(angles.get('RCA_to_LCC_NCC'))} °</td></tr>
+              <tr class="data-row"><td class="data-label">RCA→NCC/RCC</td><td class="data-value highlight-value">{self._fmt2(angles.get('RCA_to_NCC_RCC'))} °</td><td></td><td></td></tr>
+            </table>
+          </div>
+        </div>
         """
 
         # 植入深度由支架评估章节内渲染
@@ -263,16 +454,20 @@ class Module6Logic:
 
         def _phase_row(name_key, label):
             p = mp.get(name_key, {})
-            return f"<tr><td>{label}帧索引</td><td>{val(p.get('frame_index'))}</td><td>{label}相位%</td><td>{self._fmt2(p.get('phase_percent'))}</td></tr>"
+            return f"<tr class='data-row'><td class='data-label'>{label}帧索引</td><td class='data-value'>{val(p.get('frame_index'))}</td><td class='data-label'>{label}相位%</td><td class='data-value highlight-value'>{self._fmt2(p.get('phase_percent'))}</td></tr>"
 
         phase_html = ""
         if include_phases:
             phase_html = f"""
-            <table>
-              <tr><th colspan=4>二、时相标记</th></tr>
-              {_phase_row('end_diastole', '舒张末期')}
-              {_phase_row('end_systole', '收缩末期')}
-            </table>
+            <div class="section-card">
+              <div class="section-header">二、时相标记</div>
+              <div class="section-content">
+                <table>
+                  {_phase_row('end_diastole', '舒张末期')}
+                  {_phase_row('end_systole', '收缩末期')}
+                </table>
+              </div>
+            </div>
             """
 
         geo_html = ""
@@ -284,15 +479,19 @@ class Module6Logic:
                     if not isinstance(m, dict):
                         continue
                     rows.append(
-                        f"<tr><td>{key}</td><td>{self._fmt2(m.get('perimeter'))}</td><td>{self._fmt2(m.get('area'))}</td>"
-                        f"<td>{self._fmt2(m.get('average_diameter'))}</td><td>{self._fmt2(m.get('longest_diameter'))}</td><td>{self._fmt2(m.get('shortest_diameter'))}</td></tr>"
+                        f"<tr class='data-row'><td class='data-label'>{key}</td><td class='data-value'>{self._fmt2(m.get('perimeter'))}</td><td class='data-value'>{self._fmt2(m.get('area'))}</td>"
+                        f"<td class='data-value highlight-value'>{self._fmt2(m.get('average_diameter'))}</td><td class='data-value'>{self._fmt2(m.get('longest_diameter'))}</td><td class='data-value'>{self._fmt2(m.get('shortest_diameter'))}</td></tr>"
                     )
                 geo_html = f"""
-                <table>
-                  <tr><th colspan=6>三、几何测量摘要</th></tr>
-                  <tr><th>平面</th><th>周长(mm)</th><th>面积(mm²)</th><th>平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>
-                  {''.join(rows)}
-                </table>
+                <div class="section-card">
+                  <div class="section-header">三、几何测量摘要</div>
+                  <div class="section-content">
+                    <table>
+                      <tr><th>平面</th><th>周长(mm)</th><th>面积(mm²)</th><th>平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>
+                      {''.join(rows)}
+                    </table>
+                  </div>
+                </div>
                 """
 
         if group_leaflet_eval and not include_phases:
@@ -305,24 +504,25 @@ class Module6Logic:
         valve_notes_html = ""
         if include_valve_notes:
             valve_notes_html = (
-                "<table>"
-                "<tr><th>备注：各瓣膜测量对照点</th></tr>"
-                "<tr><td>"
-                "<ol style='margin:0; padding-left:20px;'>"
-                "<li>美敦力Evolut R/PRO：inflow在最底部到半个菱形格之间直筒状，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
-                "<li>爱德华SAPIEN3 ：nadir level在底部往上0.5个菱形格，outerskirt plane在底部往上1个菱形格，Commissure Height在顶部往下0.5个菱形格</li>"
-                "<li>启明Venus/VenusA：inflow在半个菱形格，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
-                "<li>微创Vitaflow：inflow在最底部，nadir level在底部往上1个菱形格，Commissure Height在底部往上2个菱形格（形态特殊，两点需完全汇合）</li>"
-                "<li>沛佳Taurus：inflow在最底部，nadir level在底部往上半个菱形格，Commissure Height在底部往上2.5个菱形格</li>"
+                "<div class='notes-section'>"
+                "<div class='notes-header'>备注：各瓣膜测量对照点</div>"
+                "<div class='notes-content'>"
+                "<ol>"
+                "<li><strong>美敦力Evolut R/PRO：</strong>inflow在最底部到半个菱形格之间直筒状，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
+                "<li><strong>爱德华SAPIEN3：</strong>nadir level在底部往上0.5个菱形格，outerskirt plane在底部往上1个菱形格，Commissure Height在顶部往下0.5个菱形格</li>"
+                "<li><strong>启明Venus/VenusA：</strong>inflow在半个菱形格，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
+                "<li><strong>微创Vitaflow：</strong>inflow在最底部，nadir level在底部往上1个菱形格，Commissure Height在底部往上2个菱形格（形态特殊，两点需完全汇合）</li>"
+                "<li><strong>沛佳Taurus：</strong>inflow在最底部，nadir level在底部往上半个菱形格，Commissure Height在底部往上2.5个菱形格</li>"
                 "</ol>"
-                "</td></tr>"
-                "</table>"
+                "</div>"
+                "</div>"
             )
 
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
         <body>
-        <h1>TAVR Analytics 报告 <small>{now}</small></h1>
+        <h1>TAVR Analytics 报告</h1>
+        <div class='report-meta'>生成时间：{now}</div>
         <div class='toolbar no-print'>
             <button class='btn btn-primary' onclick=\"window.print()\">下载 PDF</button>
         </div>
@@ -394,45 +594,83 @@ class Module6Logic:
         sfd = m3.get('sfd') or {}
         pfd = m3.get('pfd') or {}
 
-        rows: list[str] = []
+        content_blocks: list[str] = []
 
         # HALT
         if halt:
-            rows.append("<tr><th colspan=4>HALT</th></tr>")
-            rows.append(f"<tr><td>整体</td><td colspan=3>{halt.get('overall_status','')}</td></tr>")
+            halt_rows = []
+            halt_rows.append(f"<tr class='data-row'><td class='data-label'>整体状态</td><td class='data-value highlight-value' colspan=3>{halt.get('overall_status','')}</td></tr>")
             grades = halt.get('leaflet_grades') or {}
             for leaflet in ('LC','RC','NC'):
                 if leaflet in grades:
-                    rows.append(f"<tr><td>分级 {leaflet}</td><td colspan=3>{grades.get(leaflet)}</td></tr>")
+                    halt_rows.append(f"<tr class='data-row'><td class='data-label'>分级 {leaflet}</td><td class='data-value' colspan=3>{grades.get(leaflet)}</td></tr>")
+            
+            if halt_rows:
+                content_blocks.append(
+                    "<div class='measurement-group'>"
+                    "<div class='measurement-title'>HALT 评估</div>"
+                    "<table>" + ''.join(halt_rows) + "</table>"
+                    "</div>"
+                )
 
         # RELM（按开关控制是否渲染）
         if SHOW_RELM and relm:
-            rows.append("<tr><th colspan=4>RELM</th></tr>")
-            rows.append(f"<tr><td>状态</td><td colspan=3>{relm.get('status','')}</td></tr>")
+            relm_rows = []
+            relm_rows.append(f"<tr class='data-row'><td class='data-label'>状态</td><td class='data-value highlight-value' colspan=3>{relm.get('status','')}</td></tr>")
             if relm.get('leaflet'):
-                rows.append(f"<tr><td>受累瓣叶</td><td colspan=3>{relm.get('leaflet')}</td></tr>")
+                relm_rows.append(f"<tr class='data-row'><td class='data-label'>受累瓣叶</td><td class='data-value' colspan=3>{relm.get('leaflet')}</td></tr>")
+            
+            if relm_rows:
+                content_blocks.append(
+                    "<div class='measurement-group'>"
+                    "<div class='measurement-title'>RELM 评估</div>"
+                    "<table>" + ''.join(relm_rows) + "</table>"
+                    "</div>"
+                )
 
         # SFD
         if sfd:
-            rows.append("<tr><th colspan=4>SFD</th></tr>")
-            rows.append(f"<tr><td>状态</td><td colspan=3>{sfd.get('status','')}</td></tr>")
+            sfd_rows = []
+            sfd_rows.append(f"<tr class='data-row'><td class='data-label'>状态</td><td class='data-value highlight-value' colspan=3>{sfd.get('status','')}</td></tr>")
             sinuses = sfd.get('affected_sinuses') or []
             if sinuses:
-                rows.append(f"<tr><td>受累窦</td><td colspan=3>{', '.join(sinuses)}</td></tr>")
+                sfd_rows.append(f"<tr class='data-row'><td class='data-label'>受累窦</td><td class='data-value' colspan=3>{', '.join(sinuses)}</td></tr>")
+            
+            if sfd_rows:
+                content_blocks.append(
+                    "<div class='measurement-group'>"
+                    "<div class='measurement-title'>SFD 评估</div>"
+                    "<table>" + ''.join(sfd_rows) + "</table>"
+                    "</div>"
+                )
 
         # PFD
         if pfd:
-            rows.append("<tr><th colspan=4>PFD</th></tr>")
-            rows.append(f"<tr><td>状态</td><td colspan=3>{pfd.get('status','')}</td></tr>")
+            pfd_rows = []
+            pfd_rows.append(f"<tr class='data-row'><td class='data-label'>状态</td><td class='data-value highlight-value' colspan=3>{pfd.get('status','')}</td></tr>")
             if pfd.get('max_thickness') is not None:
-                rows.append(f"<tr><td>最大厚度</td><td colspan=3>{self._fmt2(pfd.get('max_thickness'))} mm</td></tr>")
+                pfd_rows.append(f"<tr class='data-row'><td class='data-label'>最大厚度</td><td class='data-value highlight-value' colspan=3>{self._fmt2(pfd.get('max_thickness'))} mm</td></tr>")
+            
+            if pfd_rows:
+                content_blocks.append(
+                    "<div class='measurement-group'>"
+                    "<div class='measurement-title'>PFD 评估</div>"
+                    "<table>" + ''.join(pfd_rows) + "</table>"
+                    "</div>"
+                )
 
-        if not rows:
+        if not content_blocks:
             return ""
+        
         title = f"{title_prefix}人工瓣膜瓣叶评估" if title_prefix else "人工瓣膜瓣叶评估"
-        return "<table>" \
-               f"<tr><th colspan=4>{title}</th></tr>" \
-               + ''.join(rows) + "</table>"
+        return (
+            "<div class='section-card'>"
+            f"<div class='section-header'>{title}</div>"
+            "<div class='section-content'>"
+            + ''.join(content_blocks) +
+            "</div>"
+            "</div>"
+        )
 
     def _render_stent_assessment_section(self, stent: Dict[str, Any], base: Dict[str, Any], section_prefix: str = "", implant_depth: Optional[Dict[str, Any]] = None) -> str:
         if not stent or not isinstance(stent, dict):
@@ -445,23 +683,26 @@ class Module6Logic:
         morph = stent.get('morphology_changed')
         morph_txt = '有' if morph is True else ('无' if morph is False else '')
         per_phase = stent.get('per_phase') or {}
-        header_html = f"<table><tr><th colspan=7>{section_prefix}人工瓣膜支架评估</th></tr></table>" if section_prefix else ""
+
+        content_blocks: list[str] = []
 
         # 子模块：瓣膜植入深度（如有任一数值）
-        implant_html = ""
         try:
             d = implant_depth or {}
             nc = d.get('NC'); lc = d.get('LC'); rc = d.get('RC')
             if any(v is not None and str(v) != '' for v in (nc, lc, rc)):
-                implant_html = (
+                content_blocks.append(
+                    "<div class='measurement-group'>"
+                    "<div class='measurement-title'>瓣膜植入深度</div>"
                     "<table>"
-                    "<tr><th colspan=6>瓣膜植入深度</th></tr>"
-                    f"<tr><td>NC</td><td>{self._fmt2(nc)} mm</td><td>LC</td><td>{self._fmt2(lc)} mm</td><td>RC</td><td>{self._fmt2(rc)} mm</td></tr>"
+                    f"<tr class='data-row'><td class='data-label'>NC</td><td class='data-value highlight-value'>{self._fmt2(nc)} mm</td><td class='data-label'>LC</td><td class='data-value highlight-value'>{self._fmt2(lc)} mm</td><td class='data-label'>RC</td><td class='data-value highlight-value'>{self._fmt2(rc)} mm</td></tr>"
                     "</table>"
+                    "</div>"
                 )
         except Exception:
-            implant_html = ""
-        def render_phase_table(phase_key: str, phase_label: str) -> str:
+            pass
+
+        def render_phase_section(phase_key: str, phase_label: str) -> str:
             p = per_phase.get(phase_key) or {}
             phase_percent = p.get('phase_percent')
             planes = {
@@ -473,44 +714,58 @@ class Module6Logic:
             plane_data = dict(p)
             if 'outerskirt' not in plane_data:
                 plane_data['outerskirt'] = None
+            
             rows = []
-            header = (
-                "<tr><th>平面</th><th>周长(mm)</th><th>周长平均径(mm)</th><th>面积(mm²)</th>"
-                "<th>面积平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>"
-            )
             for key, (label, show) in planes.items():
                 if not show:
                     continue
                 m = plane_data.get(key)
                 if not m:
-                    rows.append(f"<tr><td>{label}</td><td colspan=6></td></tr>")
+                    rows.append(f"<tr class='data-row'><td class='data-label'>{label}</td><td class='data-value' colspan=6>—</td></tr>")
                 else:
                     rows.append(
-                        "<tr>"
-                        f"<td>{label}</td>"
-                        f"<td>{self._fmt2(m.get('perimeter'))}</td>"
-                        f"<td>{self._fmt2(m.get('perimeter_derived_diameter'))}</td>"
-                        f"<td>{self._fmt2(m.get('area'))}</td>"
-                        f"<td>{self._fmt2(m.get('area_derived_diameter'))}</td>"
-                        f"<td>{self._fmt2(m.get('longest_diameter'))}</td>"
-                        f"<td>{self._fmt2(m.get('shortest_diameter'))}</td>"
+                        f"<tr class='data-row'>"
+                        f"<td class='data-label'>{label}</td>"
+                        f"<td class='data-value'>{self._fmt2(m.get('perimeter'))}</td>"
+                        f"<td class='data-value'>{self._fmt2(m.get('perimeter_derived_diameter'))}</td>"
+                        f"<td class='data-value'>{self._fmt2(m.get('area'))}</td>"
+                        f"<td class='data-value highlight-value'>{self._fmt2(m.get('area_derived_diameter'))}</td>"
+                        f"<td class='data-value'>{self._fmt2(m.get('longest_diameter'))}</td>"
+                        f"<td class='data-value'>{self._fmt2(m.get('shortest_diameter'))}</td>"
                         "</tr>"
                     )
-            title = f"人工瓣膜支架评估（{phase_label}，测量期相: {self._fmt2(phase_percent)}%）"
-            morph_line = f"<tr><td>是否存在人工瓣膜形态改变</td><td colspan=6>{morph_txt}</td></tr>" if morph_txt else ""
+            
+            morph_row = ""
+            if morph_txt:
+                morph_row = f"<tr class='data-row'><td class='data-label'>人工瓣膜形态改变</td><td class='data-value highlight-value' colspan=6>{morph_txt}</td></tr>"
+            
             return (
+                "<div class='measurement-group'>"
+                f"<div class='measurement-title'>{phase_label} (测量期相: {self._fmt2(phase_percent)}%)</div>"
                 "<table>"
-                f"<tr><th colspan=7>{title}</th></tr>"
-                f"{morph_line}"
-                f"{header}{''.join(rows)}"
+                "<tr><th>平面</th><th>周长(mm)</th><th>周长平均径(mm)</th><th>面积(mm²)</th><th>面积平均径(mm)</th><th>最长径(mm)</th><th>最短径(mm)</th></tr>"
+                f"{morph_row}"
+                + ''.join(rows) +
                 "</table>"
+                "</div>"
             )
-        parts = [
-            implant_html,
-            render_phase_table('end_diastole', '舒张末期'),
-            render_phase_table('end_systole', '收缩末期'),
-        ]
-        return header_html + ''.join(parts)
+
+        # 添加各个期相的测量
+        content_blocks.append(render_phase_section('end_diastole', '舒张末期'))
+        content_blocks.append(render_phase_section('end_systole', '收缩末期'))
+
+        if not content_blocks:
+            return ""
+
+        title = f"{section_prefix}人工瓣膜支架评估" if section_prefix else "人工瓣膜支架评估"
+        return (
+            "<div class='section-card'>"
+            f"<div class='section-header'>{title}</div>"
+            "<div class='section-content'>"
+            + ''.join(content_blocks) +
+            "</div>"
+            "</div>"
+        )
 
     # ============== 工具方法 ==============
     def _fmt_date(self, d):
