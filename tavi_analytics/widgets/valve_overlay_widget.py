@@ -197,22 +197,19 @@ class ValveOverlayWidget(qt.QWidget):
         self.overlay_btn = qt.QPushButton("➕ 应用叠加")
         self.overlay_btn.setStyleSheet("""
             QPushButton {
-                padding: 6px 10px;
+                min-height: 28px;
+                max-height: 28px;
+                padding: 0 12px;
                 background-color: #28a745;
                 color: white;
                 border: none;
                 border-radius: 6px;
-                font-size: 12px;
-                font-weight: bold;
+                font-size: 11px;
+                font-weight: 600;
                 min-width: 96px;
             }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-            QPushButton:disabled {
-                background-color: #6c757d;
-                color: #adb5bd;
-            }
+            QPushButton:hover { background-color: #218838; }
+            QPushButton:disabled { background-color: #6c757d; color: #adb5bd; }
         """)
         self.overlay_btn.setToolTip("生成并显示瓣膜支架叠加")
         self.overlay_btn.clicked.connect(self._toggle_overlay)
@@ -362,6 +359,15 @@ class ValveOverlayWidget(qt.QWidget):
                 border-radius: 6px;
                 padding: 8px;
             }
+            /* 该区域内按钮统一高度/圆角/字重，确保一致性 */
+            QFrame QPushButton {
+                min-height: 28px;
+                max-height: 28px;
+                padding: 0 12px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
         """)
 
         v = qt.QVBoxLayout(frame)
@@ -377,16 +383,14 @@ class ValveOverlayWidget(qt.QWidget):
         # 角度测量按钮（调用 Slicer Markups 的 Angle 工具）
         measure_btn = qt.QPushButton("📐 角度测量")
         measure_btn.setToolTip("启动 Markups 角度工具，在视图中依次点击三个点完成测量。")
+        # 仅定义配色，尺寸由上面的统一样式控制
         measure_btn.setStyleSheet(
             """
             QPushButton {
-                padding: 2px 8px;
                 background-color: #2563eb;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                font-size: 11px;
-                font-weight: 600;
+                border-radius: 6px;
             }
             QPushButton:hover { background-color: #1d4ed8; }
             QPushButton:pressed { background-color: #1e40af; }
@@ -971,18 +975,18 @@ class ValveOverlayWidget(qt.QWidget):
             self.overlay_btn.setText("🗑️ 移除叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
-            padding: 6px 10px;
+                    min-height: 28px;
+                    max-height: 28px;
+                    padding: 0 12px;
                     background-color: #dc3545;
                     color: white;
                     border: none;
                     border-radius: 6px;
-            font-size: 12px;
-                    font-weight: bold;
-            min-width: 96px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    min-width: 96px;
                 }
-                QPushButton:hover {
-                    background-color: #c82333;
-                }
+                QPushButton:hover { background-color: #c82333; }
             """)
             self.overlay_btn.setToolTip("移除已生成的叠加数据")
             self.opacity_slider.setEnabled(True)
@@ -997,18 +1001,18 @@ class ValveOverlayWidget(qt.QWidget):
             self.overlay_btn.setText("➕ 应用叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
-            padding: 6px 10px;
+                    min-height: 28px;
+                    max-height: 28px;
+                    padding: 0 12px;
                     background-color: #28a745;
                     color: white;
                     border: none;
                     border-radius: 6px;
-            font-size: 12px;
-                    font-weight: bold;
-            min-width: 96px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    min-width: 96px;
                 }
-                QPushButton:hover {
-                    background-color: #218838;
-                }
+                QPushButton:hover { background-color: #218838; }
             """)
             self.overlay_btn.setToolTip("生成并显示瓣膜支架叠加")
             self.opacity_slider.setEnabled(False)
