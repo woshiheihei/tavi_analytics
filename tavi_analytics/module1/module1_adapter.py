@@ -31,7 +31,7 @@ class Module1Adapter(ModuleInterface):
     
     def get_display_name(self) -> str:
         """获取显示名称"""
-        return "数据导入与场景准备"
+        return "数据导入"
     
     def is_available(self) -> bool:
         """检查模块是否可用"""

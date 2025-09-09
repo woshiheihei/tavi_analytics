@@ -67,7 +67,7 @@ class tavi_analytics(ScriptedLoadableModule):
             if self._config.is_module_enabled("module1"):
                 module1_info = ModuleInfo(
                     name="module1",
-                    display_name="数据导入与场景准备",
+                    display_name="数据导入",
                     module_class=Module1Adapter,
                     dependencies=[],
                     enabled=True
