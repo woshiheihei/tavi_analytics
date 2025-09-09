@@ -555,7 +555,7 @@ class Module6Widget(qt.QWidget):
             dlg = qt.QFileDialog(self)
             dlg.setAcceptMode(qt.QFileDialog.AcceptSave)
             dlg.setNameFilter("HTML (*.html)")
-            dlg.selectFile("tavr_report.html")
+            dlg.selectFile("术后CT评估报告.html")
             # 默认保存目录：Windows 下载目录（带回退）
             try:
                 downloads_dir = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DownloadLocation)
@@ -593,7 +593,7 @@ class Module6Widget(qt.QWidget):
             dlg = qt.QFileDialog(self)
             dlg.setAcceptMode(qt.QFileDialog.AcceptSave)
             dlg.setNameFilter("PDF (*.pdf)")
-            dlg.selectFile("tavr_report.pdf")
+            dlg.selectFile("术后CT评估报告.pdf")
             # 默认保存目录：Windows 下载目录（带回退）
             try:
                 downloads_dir = qt.QStandardPaths.writableLocation(qt.QStandardPaths.DownloadLocation)

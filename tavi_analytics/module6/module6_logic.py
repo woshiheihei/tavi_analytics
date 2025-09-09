@@ -520,8 +520,8 @@ class Module6Logic:
 
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
-        <body>
-        <h1>TAVR Analytics 报告</h1>
+    <body>
+    <h1>术后CT评估报告</h1>
         <div class='report-meta'>生成时间：{now}</div>
         <div class='toolbar no-print'>
             <button class='btn btn-primary' onclick=\"window.print()\">下载 PDF</button>
