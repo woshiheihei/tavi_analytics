@@ -560,6 +560,11 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         self.logic.set_session(session)
         self.contour_service = get_contour_position_service()
         self.analysis_started = False
+        # 测量工具相关属性
+        self._activeLineNode = None
+        self._lineObserverTag = None
+        self._interactionNode = None
+        self._escShortcut = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -628,6 +633,14 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         # PFD页：按钮显示为“继续分析瓣膜支架几何形态评估”
         self._create_action_buttons(layout, next_label="继续分析瓣膜支架几何形态评估")
 
+        # ESC 取消快捷键（全局），用于随时终止当前放置
+        try:
+            self._escShortcut = qt.QShortcut(qt.QKeySequence("Escape"), self)
+            self._escShortcut.setContext(qt.Qt.ApplicationShortcut)
+            self._escShortcut.activated.connect(self._cancel_measurement)
+        except Exception:
+            pass
+
     def _analyze_next(self):
         """PFD页：完成后跳转到模块四；否则退回到基类默认行为"""
         try:
@@ -682,22 +695,44 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         title = qt.QLabel("2. 最大厚度（仅在选择“有”时显示）")
         title.setStyleSheet("font-size: 12px; font-weight: bold; color: #343a40; margin-bottom: 3px;")
         row = qt.QHBoxLayout()
+        row.setSpacing(8)
+        
         label = qt.QLabel("厚度 (mm):")
         label.setStyleSheet("font-size: 11px; font-weight: 500; color: #495057;")
+        
         self.thickness_spinbox = qt.QDoubleSpinBox()
         self.thickness_spinbox.setRange(0.0, 50.0)
         self.thickness_spinbox.setDecimals(1)
         self.thickness_spinbox.setSuffix(" mm")
+        self.thickness_spinbox.setFixedWidth(120)
         self.thickness_spinbox.valueChanged.connect(self._on_thickness_changed)
+        
+        # 测量工具按钮
+        self.measure_tool_btn = LayoutManager.create_button_with_style("测量工具", "toolbar", "sm", 28)
+        self.measure_tool_btn.clicked.connect(self._on_measure_tool_clicked)
+        
         row.addWidget(label)
         row.addWidget(self.thickness_spinbox)
+        row.addWidget(self.measure_tool_btn)
         row.addStretch()
+        
+        # 提示文案
+        tip = qt.QLabel("提示：点击测量工具→在 MPR 放两点→自动填入厚度；ESC 取消")
+        tip.setWordWrap(True)
+        tip.setStyleSheet("QLabel { color: #6c757d; font-size: 10px; margin-top: 4px; }")
+        
+        # 状态标签，用于显示测量状态
+        self.thickness_status_label = qt.QLabel("")
+        self.thickness_status_label.setStyleSheet("QLabel { color: #6b7280; font-size: 10px; }")
+        
         self.thickness_widget = qt.QWidget()
         box = qt.QVBoxLayout(self.thickness_widget)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(6)
         box.addWidget(title)
         box.addLayout(row)
+        box.addWidget(tip)
+        box.addWidget(self.thickness_status_label)
         self.thickness_widget.setVisible(False)
         parent_layout.addWidget(self.thickness_widget)
 
@@ -709,7 +744,12 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         if hasattr(self, "thickness_widget"):
             self.thickness_widget.setVisible(has_pfd)
             if not has_pfd:
+                # 当切换到"无"或"难以判定"时，取消未完成的测量并重置厚度值
+                self._cancel_measurement()
                 self.thickness_spinbox.setValue(0.0)
+                # 重置按钮文本
+                if hasattr(self, "measure_tool_btn"):
+                    self.measure_tool_btn.setText("测量工具")
         self.logic.set_status(status)
         self._emit_status_changed()
 
@@ -781,6 +821,9 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
         return results
 
     def reset_analysis(self):
+        # 清理测量工具状态
+        self._cancel_measurement()
+        
         self.analysis_started = False
         if hasattr(self, "control_frame"):
             self.control_frame.setVisible(True)
@@ -792,9 +835,273 @@ class PfdAnalysisWidget(BaseAnalysisWidget):
             self.thickness_spinbox.setValue(0.0)
         if hasattr(self, "thickness_widget"):
             self.thickness_widget.setVisible(False)
+        if hasattr(self, "thickness_status_label"):
+            self.thickness_status_label.setText("")
+        # 重置测量工具按钮文本
+        if hasattr(self, "measure_tool_btn"):
+            self.measure_tool_btn.setText("测量工具")
         self._emit_status_changed()
         # 更新状态：未开始
         self.set_analysis_state("not_started")
+
+    # --------------------- 测量工具相关方法 ---------------------
+    def _on_measure_tool_clicked(self):
+        """启动 3D Slicer Markups 长度（线段）测量工具，并给出操作提示"""
+        try:
+            import slicer  # 仅在 Slicer 环境下可用
+
+            # 删除之前的PFD测量标记，确保场景中只保留一个PFD测量
+            self._remove_previous_pfd_measurements()
+
+            # 若上次未完成的测量存在，先移除
+            try:
+                if getattr(self, "_activeLineNode", None) and self._activeLineNode.GetScene() is slicer.mrmlScene:
+                    if self._count_defined_points(self._activeLineNode) < 2:
+                        slicer.mrmlScene.RemoveNode(self._activeLineNode)
+            except Exception:
+                pass
+
+            # 创建线段（长度）节点（本次单次测量）
+            line_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsLineNode", "PFD厚度测量")
+            try:
+                line_node.CreateDefaultDisplayNodes()
+            except Exception:
+                pass
+            self._activeLineNode = line_node
+
+            # 方式一：使用 Markups 逻辑设置活动列表并进入放置模式（非持久，单次测量）
+            try:
+                markups_logic = slicer.modules.markups.logic()
+                if markups_logic:
+                    # 确保仅单次放置
+                    self._interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+                    if self._interactionNode:
+                        self._interactionNode.SetPlaceModePersistence(0)
+                    markups_logic.SetActiveListID(line_node)
+                    markups_logic.StartPlaceMode()
+            except Exception:
+                pass
+
+            # 方式二（备用）：通过 Selection/Interaction 节点进入放置模式（某些版本更稳定）
+            try:
+                selection_node = slicer.mrmlScene.GetNodeByID("vtkMRMLSelectionNodeSingleton")
+                self._interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+                if selection_node and self._interactionNode:
+                    try:
+                        selection_node.SetReferenceActivePlaceNodeClassName("vtkMRMLMarkupsLineNode")
+                    except Exception:
+                        pass
+                    selection_node.SetActivePlaceNodeID(line_node.GetID())
+                    # 非持久化：完成一次放置后自动退出
+                    self._interactionNode.SetPlaceModePersistence(0)
+                    self._interactionNode.SetCurrentInteractionMode(self._interactionNode.Place)
+            except Exception:
+                pass
+
+            # 观察点放置，两个点就自动结束本次测量
+            try:
+                if self._lineObserverTag:
+                    try:
+                        self._activeLineNode.RemoveObserver(self._lineObserverTag)
+                    except Exception:
+                        pass
+                    self._lineObserverTag = None
+
+                def _on_point_defined(caller, event):
+                    try:
+                        if self._count_defined_points(caller) >= 2:
+                            self._finalize_single_measure()
+                    except Exception:
+                        pass
+
+                self._lineObserverTag = line_node.AddObserver(slicer.vtkMRMLMarkupsNode.PointPositionDefinedEvent, _on_point_defined)
+            except Exception:
+                pass
+
+            # 友好提示
+            self._show_info_dialog(
+                "已启用长度测量工具",
+                "请在 MPR 中依次点击放置两个点完成长度标注（单位 mm）。\n\n"
+                "完成测量后，将自动填入厚度值。\n\n按下 ESC 可取消本次测量。"
+            )
+            self._set_thickness_status("长度测量工具已启用，在 MPR 中放置两个点以完成标注；按 ESC 可取消。", "info")
+
+        except Exception as e:
+            logging.error(f"启动长度测量工具失败: {e}")
+            self._set_thickness_status(f"无法启动测量工具：{e}", "error")
+
+    def _finalize_single_measure(self):
+        """测量完成后自动填入厚度值并退出放置模式"""
+        try:
+            import slicer
+            
+            # 获取测量长度
+            if self._activeLineNode:
+                try:
+                    # 获取线段长度（单位为 mm）
+                    length = self._activeLineNode.GetLineLengthWorld()
+                    
+                    # 自动填入厚度值
+                    if hasattr(self, "thickness_spinbox"):
+                        self.thickness_spinbox.setValue(length)
+                    
+                    # 自动切换状态为"有"
+                    if hasattr(self, "status_buttons") and "有" in self.status_buttons:
+                        self.status_buttons["有"].setChecked(True)
+                        # 触发状态变更事件，显示厚度区域
+                        self._on_status_changed(self.status_buttons["有"])
+                    
+                    self._set_thickness_status(f"测量完成：{length:.1f} mm 已自动填入", "success")
+                    # 更新按钮文本为"重新测量"
+                    if hasattr(self, "measure_tool_btn"):
+                        self.measure_tool_btn.setText("重新测量")
+                except Exception as e:
+                    logging.error(f"获取测量长度失败: {e}")
+                    self._set_thickness_status("测量完成，但无法自动填入数值，请手动输入", "warning")
+                    # 即使出错也更新按钮文本
+                    if hasattr(self, "measure_tool_btn"):
+                        self.measure_tool_btn.setText("重新测量")
+            
+            # 退出放置模式
+            if self._interactionNode is None:
+                self._interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+            if self._interactionNode:
+                self._interactionNode.SetCurrentInteractionMode(self._interactionNode.ViewTransform)
+            
+            # 移除观察者
+            if self._activeLineNode and self._lineObserverTag:
+                try:
+                    self._activeLineNode.RemoveObserver(self._lineObserverTag)
+                except Exception:
+                    pass
+                self._lineObserverTag = None
+            
+            # 清空引用，结束一次测量
+            self._activeLineNode = None
+            
+        except Exception as e:
+            logging.error(f"完成测量时出错: {e}")
+            self._set_thickness_status("测量完成，但处理过程中出现错误", "error")
+
+    def _cancel_measurement(self):
+        """按下 ESC 时取消当前单次测量：退出放置模式并移除未完成的线段。"""
+        try:
+            import slicer
+            if self._interactionNode is None:
+                self._interactionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLInteractionNodeSingleton")
+            if self._interactionNode:
+                self._interactionNode.SetCurrentInteractionMode(self._interactionNode.ViewTransform)
+                self._interactionNode.SetPlaceModePersistence(0)
+
+            # 若当前线段未完成（少于 2 个点），从场景移除
+            if getattr(self, "_activeLineNode", None) and self._activeLineNode.GetScene() is slicer.mrmlScene:
+                if self._count_defined_points(self._activeLineNode) < 2:
+                    try:
+                        slicer.mrmlScene.RemoveNode(self._activeLineNode)
+                    except Exception:
+                        pass
+            # 清理观察者
+            if self._activeLineNode and self._lineObserverTag:
+                try:
+                    self._activeLineNode.RemoveObserver(self._lineObserverTag)
+                except Exception:
+                    pass
+                self._lineObserverTag = None
+            self._activeLineNode = None
+
+            self._set_thickness_status("已取消当前测量。", "warning")
+            # 重置按钮文本
+            if hasattr(self, "measure_tool_btn"):
+                self.measure_tool_btn.setText("测量工具")
+        except Exception:
+            pass
+
+    def _count_defined_points(self, node) -> int:
+        """统计已定义（落点有效）的控制点数量，兼容不同 Slicer 版本。"""
+        try:
+            # Slicer 5.x 提供该方法
+            return int(node.GetNumberOfDefinedControlPoints())
+        except Exception:
+            try:
+                n = int(node.GetNumberOfControlPoints())
+                count = 0
+                # 回退：认为存在的位置即有效
+                for i in range(n):
+                    try:
+                        # 如果有状态枚举可用，尽量判断为 PositionDefined
+                        status = node.GetNthControlPointPositionStatus(i)
+                        # 2=Defined，1=Preview（不同版本枚举可能不同，这里尽量只接受已定义）
+                        if int(status) == 2:
+                            count += 1
+                    except Exception:
+                        count += 1
+                return count
+            except Exception:
+                return 0
+
+    def _show_info_dialog(self, title: str, text: str):
+        """显示信息对话框"""
+        msg = qt.QMessageBox(self)
+        msg.setIcon(qt.QMessageBox.Information)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setStandardButtons(qt.QMessageBox.Ok)
+        msg.exec_()
+
+    def _set_thickness_status(self, message: str, status_type: str = "info"):
+        """设置厚度测量状态提示"""
+        if not hasattr(self, "thickness_status_label"):
+            return
+        
+        color_map = {
+            "success": "#059669",
+            "error": "#dc2626",
+            "warning": "#d97706",
+            "info": "#6b7280"
+        }
+        color = color_map.get(status_type, "#6b7280")
+        self.thickness_status_label.setStyleSheet(f"QLabel {{ color: {color}; font-size: 10px; }}")
+        self.thickness_status_label.setText(message)
+
+    def _remove_previous_pfd_measurements(self):
+        """删除场景中之前的PFD测量标记，确保只保留一个测量"""
+        try:
+            import slicer
+            
+            # 获取场景中所有线段标记节点
+            line_nodes = slicer.mrmlScene.GetNodesByClass("vtkMRMLMarkupsLineNode")
+            nodes_to_remove = []
+            
+            for i in range(line_nodes.GetNumberOfItems()):
+                node = line_nodes.GetItemAsObject(i)
+                # 查找名称包含"PFD厚度测量"的节点
+                if node and node.GetName() and "PFD厚度测量" in node.GetName():
+                    # 如果不是当前正在编辑的节点，则标记为删除
+                    if node != getattr(self, "_activeLineNode", None):
+                        nodes_to_remove.append(node)
+            
+            # 删除标记的节点
+            for node in nodes_to_remove:
+                try:
+                    slicer.mrmlScene.RemoveNode(node)
+                    logging.info(f"已删除之前的PFD测量标记: {node.GetName()}")
+                except Exception as e:
+                    logging.warning(f"删除PFD测量标记失败: {e}")
+                    
+        except Exception as e:
+            logging.warning(f"清理之前PFD测量标记时出错: {e}")
+
+    def on_deactivated(self):
+        """离开页面时，如果还在放置或有未完成的线段，则取消本次测量"""
+        self._cancel_measurement()
+        # 调用父类方法
+        super().on_deactivated()
+
+    def cleanup(self):
+        """模块销毁时也做一次清理"""
+        self._cancel_measurement()
+        # 调用父类方法
+        super().cleanup()
 
 
 class Module3AnalysisWidget(qt.QWidget):
