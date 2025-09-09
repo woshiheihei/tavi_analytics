@@ -38,14 +38,14 @@ class ValveOverlayWidget(qt.QWidget):
     
     提供瓣膜支架到Red切片视图的一键叠加功能，包括：
     - 自动检测瓣膜数据
-    - 一键叠加/取消叠加
+    - 一键应用/移除叠加
     - 透明度实时调节
     - 变换微调选项
     - 状态指示与反馈
     """
     
     # 定义信号
-    overlayEnabled = qt.Signal(bool)      # 叠加启用/禁用信号
+    overlayEnabled = qt.Signal(bool)      # 叠加应用/移除信号（True=已应用，False=已移除）
     opacityChanged = qt.Signal(float)     # 透明度改变信号
     rotationChanged = qt.Signal(int)      # 旋转角度改变信号
     statusUpdated = qt.Signal(str)        # 状态更新信号
@@ -194,7 +194,7 @@ class ValveOverlayWidget(qt.QWidget):
         action_layout.setSpacing(8 if self._compact else 12)
 
         # 主操作按钮
-        self.overlay_btn = qt.QPushButton("🔄 启用叠加")
+        self.overlay_btn = qt.QPushButton("➕ 应用叠加")
         self.overlay_btn.setStyleSheet("""
             QPushButton {
                 padding: 6px 10px;
@@ -214,6 +214,7 @@ class ValveOverlayWidget(qt.QWidget):
                 color: #adb5bd;
             }
         """)
+        self.overlay_btn.setToolTip("生成并显示瓣膜支架叠加")
         self.overlay_btn.clicked.connect(self._toggle_overlay)
         self.overlay_btn.setEnabled(False)
 
@@ -788,12 +789,12 @@ class ValveOverlayWidget(qt.QWidget):
     def _toggle_overlay(self):
         """切换叠加状态"""
         if self.is_overlay_active:
-            self._disable_overlay()
+            self._remove_overlay()
         else:
-            self._enable_overlay()
+            self._apply_overlay()
     
-    def _enable_overlay(self):
-        """启用瓣膜叠加"""
+    def _apply_overlay(self):
+        """应用瓣膜叠加"""
         try:
             import slicer
             import vtk
@@ -803,7 +804,7 @@ class ValveOverlayWidget(qt.QWidget):
                 return
             
             # 显示进度反馈
-            self.overlay_btn.setText("🔄 正在叠加...")
+            self.overlay_btn.setText("⏳ 正在应用...")
             self.overlay_btn.setEnabled(False)
             qt.QApplication.processEvents()
             
@@ -812,7 +813,7 @@ class ValveOverlayWidget(qt.QWidget):
             
             if success:
                 self._update_overlay_status(True)
-                self.statusUpdated.emit("瓣膜叠加已启用")
+                self.statusUpdated.emit("瓣膜叠加已应用")
                 self.overlayEnabled.emit(True)
                 
                 # 调用回调函数
@@ -822,18 +823,18 @@ class ValveOverlayWidget(qt.QWidget):
                     except Exception as e:
                         logging.error(f"执行叠加回调失败: {e}")
             else:
-                self.overlay_btn.setText("🔄 启用叠加")
+                self.overlay_btn.setText("➕ 应用叠加")
                 self.overlay_btn.setEnabled(True)
                 self.statusUpdated.emit("瓣膜叠加失败")
                 
         except Exception as e:
-            logging.error(f"启用瓣膜叠加时出错: {e}")
-            self.overlay_btn.setText("🔄 启用叠加")
+            logging.error(f"应用瓣膜叠加时出错: {e}")
+            self.overlay_btn.setText("➕ 应用叠加")
             self.overlay_btn.setEnabled(True)
-            self.statusUpdated.emit(f"叠加错误: {str(e)}")
+            self.statusUpdated.emit(f"应用错误: {str(e)}")
     
-    def _disable_overlay(self):
-        """禁用瓣膜叠加"""
+    def _remove_overlay(self):
+        """移除瓣膜叠加"""
         try:
             import slicer
             
@@ -858,7 +859,7 @@ class ValveOverlayWidget(qt.QWidget):
             self.offset_label.setText("偏移: (0.0, 0.0) mm")
             
             self._update_overlay_status(False)
-            self.statusUpdated.emit("瓣膜叠加已禁用")
+            self.statusUpdated.emit("瓣膜叠加已移除")
             self.overlayEnabled.emit(False)
             
             # 调用回调函数
@@ -866,11 +867,18 @@ class ValveOverlayWidget(qt.QWidget):
                 try:
                     callback(False)
                 except Exception as e:
-                    logging.error(f"执行禁用回调失败: {e}")
+                    logging.error(f"执行移除回调失败: {e}")
                     
         except Exception as e:
-            logging.error(f"禁用瓣膜叠加时出错: {e}")
-            self.statusUpdated.emit(f"禁用错误: {str(e)}")
+            logging.error(f"移除瓣膜叠加时出错: {e}")
+            self.statusUpdated.emit(f"移除错误: {str(e)}")
+
+    # 兼容旧方法名（外部可能仍调用）
+    def _enable_overlay(self):
+        return self._apply_overlay()
+
+    def _disable_overlay(self):
+        return self._remove_overlay()
     
     def _execute_valve_overlay(self) -> bool:
         """执行瓣膜叠加（基于文档逻辑）"""
@@ -960,7 +968,7 @@ class ValveOverlayWidget(qt.QWidget):
         self.is_overlay_active = is_active
         
         if is_active:
-            self.overlay_btn.setText("❌ 禁用叠加")
+            self.overlay_btn.setText("🗑️ 移除叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
             padding: 6px 10px;
@@ -976,6 +984,7 @@ class ValveOverlayWidget(qt.QWidget):
                     background-color: #c82333;
                 }
             """)
+            self.overlay_btn.setToolTip("移除已生成的叠加数据")
             self.opacity_slider.setEnabled(True)
             self.rotation_slider.setEnabled(True)
             # 启用方向键微调按钮
@@ -985,7 +994,7 @@ class ValveOverlayWidget(qt.QWidget):
             self.right_btn.setEnabled(True)
             self.center_btn.setEnabled(True)
         else:
-            self.overlay_btn.setText("🔄 启用叠加")
+            self.overlay_btn.setText("➕ 应用叠加")
             self.overlay_btn.setStyleSheet("""
                 QPushButton {
             padding: 6px 10px;
@@ -1001,6 +1010,7 @@ class ValveOverlayWidget(qt.QWidget):
                     background-color: #218838;
                 }
             """)
+            self.overlay_btn.setToolTip("生成并显示瓣膜支架叠加")
             self.opacity_slider.setEnabled(False)
             self.rotation_slider.setEnabled(False)
             # 禁用方向键微调按钮
