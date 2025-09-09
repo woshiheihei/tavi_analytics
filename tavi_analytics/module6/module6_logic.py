@@ -137,7 +137,13 @@ class Module6Logic:
         try:
             data = self.collect_summary()
             # PDF导出不展示“几何测量摘要”
-            html = self._render_html(data, include_geometry=False, include_phases=False, group_leaflet_eval=True)
+            html = self._render_html(
+                data,
+                include_geometry=False,
+                include_phases=False,
+                group_leaflet_eval=True,
+                include_valve_notes=True,
+            )
             doc = qt.QTextDocument(); doc.setHtml(html)
             printer = qt.QPrinter(); printer.setOutputFormat(qt.QPrinter.PdfFormat); printer.setOutputFileName(out_path)
             try:
@@ -157,7 +163,13 @@ class Module6Logic:
                 return {"success": False, "message": "未配置PDF渲染服务"}
             data = self.collect_summary()
             # 服务器端PDF不展示“几何测量摘要”，并将HALT/RELM/SFD/PFD归入“人工瓣膜瓣叶评估”；同时移除“时相标记”
-            html = self._render_html(data, include_geometry=False, include_phases=False, group_leaflet_eval=True)
+            html = self._render_html(
+                data,
+                include_geometry=False,
+                include_phases=False,
+                group_leaflet_eval=True,
+                include_valve_notes=True,
+            )
             req = urllib.request.Request(
                 url=server_url.rstrip('/') + '/render/pdf',
                 data=json.dumps({
@@ -197,7 +209,7 @@ class Module6Logic:
             return {"success": False, "message": str(e)}
 
     # ============== HTML渲染 ==============
-    def _render_html(self, data: Dict[str, Any], *, include_geometry: bool = True, include_phases: bool = True, group_leaflet_eval: bool = False) -> str:
+    def _render_html(self, data: Dict[str, Any], *, include_geometry: bool = True, include_phases: bool = True, group_leaflet_eval: bool = False, include_valve_notes: bool = False) -> str:
         b = data.get('base', {})
         phases = data.get('phases', {})
         angles = data.get('angles', {})
@@ -290,6 +302,23 @@ class Module6Logic:
             module3_html = self._render_leaflet_evaluation(module3) if group_leaflet_eval else self._render_module3(module3)
             stent_html = self._render_stent_assessment_section(stent, b, implant_depth=implant_depth)
 
+        valve_notes_html = ""
+        if include_valve_notes:
+            valve_notes_html = (
+                "<table>"
+                "<tr><th>备注：各瓣膜测量对照点</th></tr>"
+                "<tr><td>"
+                "<ol style='margin:0; padding-left:20px;'>"
+                "<li>美敦力Evolut R/PRO：inflow在最底部到半个菱形格之间直筒状，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
+                "<li>爱德华SAPIEN3 ：nadir level在底部往上0.5个菱形格，outerskirt plane在底部往上1个菱形格，Commissure Height在顶部往下0.5个菱形格</li>"
+                "<li>启明Venus/VenusA：inflow在半个菱形格，nadir level在1.5个菱形格，Commissure Height在底部往上第3个菱形格</li>"
+                "<li>微创Vitaflow：inflow在最底部，nadir level在底部往上1个菱形格，Commissure Height在底部往上2个菱形格（形态特殊，两点需完全汇合）</li>"
+                "<li>沛佳Taurus：inflow在最底部，nadir level在底部往上半个菱形格，Commissure Height在底部往上2.5个菱形格</li>"
+                "</ol>"
+                "</td></tr>"
+                "</table>"
+            )
+
         return f"""
         <html><head><meta charset='utf-8'><style>{css}</style></head>
         <body>
@@ -303,6 +332,7 @@ class Module6Logic:
         {module3_html}
         {stent_html}
         {angles_html}
+        {valve_notes_html}
         </body></html>
         """
 
