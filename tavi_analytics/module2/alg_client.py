@@ -80,7 +80,7 @@ class DCMProcessor:
         with open(file_path, 'rb') as f:
             files = {'file': f}
             # 设置30秒超时，避免长时间阻塞
-            response = requests.post(f"{self.base_url}/upload", files=files, timeout=30)
+            response = requests.post(f"{self.base_url}/upload", files=files, timeout=3000)
 
         if response.status_code == 200:
             task_id = response.json().get('task_id')
