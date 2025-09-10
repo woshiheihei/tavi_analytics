@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  tavi-pdf-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: tavi-analytics/pdf-render:latest
+    container_name: tavi-pdf-server
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - PDF_OUT_DIR=/app/out
+    restart: always

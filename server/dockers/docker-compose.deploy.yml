@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  tavi-pdf-server:
+    image: ${IMAGE}
+    container_name: tavi-pdf-server
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - PORT=${PORT:-8080}
+      - PDF_OUT_DIR=${PDF_OUT_DIR:-/app/out}
+    restart: always
+    # Optional: simple healthcheck using Python to avoid curl/wget dependency
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
