@@ -1,6 +1,8 @@
 import requests
 import time
 import os
+import json
+from typing import Optional
 
 
 #命令行命令：
@@ -15,8 +17,55 @@ curl -X GET http://http://192.168.4.210:5000/result/measurement/{task-id} -o mea
 
 
 class DCMProcessor:
-    def __init__(self, base_url="http://192.168.4.210:5001"):
-        self.base_url = base_url
+    def __init__(self, base_url: Optional[str] = None):
+        """Algorithm client.
+
+        Args:
+            base_url: Optional override. If not provided, will be resolved from:
+              1) env TAVR_ALG_SERVER_URL
+              2) tavi_analytics/config.json -> services.alg_server_url or server.alg_server_url
+              3) fallback default 'http://192.168.4.210:5001'
+        """
+        self.base_url = base_url or self._resolve_base_url()
+
+    def _resolve_base_url(self) -> str:
+        # 1) environment variable has highest priority
+        env_url = os.getenv("TAVR_ALG_SERVER_URL")
+        if env_url:
+            return env_url
+
+        # 2) try PluginConfig if available (running inside Slicer)
+        try:
+            from ..core.plugin_config import PluginConfig  # type: ignore
+            pc = PluginConfig()
+            url = (
+                (pc.get_config("services.alg_server_url") or None)
+                or (pc.get_config("server.alg_server_url") or None)
+            )
+            if isinstance(url, str) and url.strip():
+                return url.strip()
+        except Exception:
+            pass
+
+        # 3) fallback to reading repo config.json directly (CLI/dev usage)
+        try:
+            # guess repo root from this file location
+            current_dir = os.path.dirname(os.path.dirname(__file__))  # tavi_analytics/
+            cfg_path = os.path.join(current_dir, "config.json")
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                url = (
+                    ((data.get("services") or {}).get("alg_server_url"))
+                    or ((data.get("server") or {}).get("alg_server_url"))
+                )
+                if isinstance(url, str) and url.strip():
+                    return url.strip()
+        except Exception:
+            pass
+
+        # 4) final default
+        return "http://192.168.4.210:5001"
 
     def upload_file(self, file_path):
         """

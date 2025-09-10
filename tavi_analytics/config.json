@@ -63,6 +63,7 @@
     "profiling_enabled": false
   },
   "services": {
-    "pdf_server_url": "http://localhost:8080"
+    "alg_server_url": "http://221.226.1.150:5001",
+    "pdf_server_url": "http://221.226.1.150:5002"
   }
 }
