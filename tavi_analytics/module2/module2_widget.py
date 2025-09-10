@@ -74,7 +74,10 @@ class Module2Widget(qt.QWidget):
             auto_start_analysis: 是否自动启动分析
         """
         logging.info("模块二已激活")
-        
+
+        # 进入模块二时隐藏 Sequence Browser 工具栏，避免占用顶部一行空间
+        self._hide_sequence_browser_toolbar()
+
         # 如果需要自动启动分析
         if auto_start_analysis:
             self._prepare_auto_start_analysis()
@@ -742,3 +745,18 @@ class Module2Widget(qt.QWidget):
             self.logic.cleanup()
         
         logging.info("模块二界面清理完成")
+
+    # =========================
+    # UI 辅助：隐藏 Sequence Browser 工具栏
+    # =========================
+    def _hide_sequence_browser_toolbar(self):
+        """隐藏 3D Slicer 的 Sequence Browser 工具栏（objectName: 'SequenceBrowserToolBar'）。"""
+        try:
+            mw = slicer.util.mainWindow()
+            if not mw:
+                return
+            tb = mw.findChild(qt.QToolBar, 'SequenceBrowserToolBar')
+            if tb and tb.isVisible():
+                tb.hide()
+        except Exception as e:
+            logging.warning(f"隐藏 Sequence Browser 工具栏失败: {e}")
