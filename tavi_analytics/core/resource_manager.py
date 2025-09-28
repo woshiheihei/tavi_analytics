@@ -158,6 +158,7 @@ class ResourceManager:
 
 			candidates = [
 				os.path.join(repo_root, "assets", "valve.nrrd"),  # 开发环境
+				os.path.join(package_root, "assets", "valve.nrrd"),  # 安装后资源目录
 				os.path.join(package_root, "Resources", "valve.nrrd"),  # 若未来打包到Resources
 			]
 
