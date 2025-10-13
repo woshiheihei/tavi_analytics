@@ -155,6 +155,32 @@ class DataLoadingDialog(qt.QDialog):
         info_label.setStyleSheet("QLabel { font-size: 12px; color: #666; padding: 8px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; }")
         layout.addWidget(info_label)
         
+        # 添加导入DICOM文件按钮
+        import_button_layout = qt.QHBoxLayout()
+        self.import_dicom_button = qt.QPushButton("📁 导入 DICOM 文件")
+        self.import_dicom_button.setStyleSheet("""
+            QPushButton {
+                font-size: 13px;
+                padding: 8px 16px;
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        self.import_dicom_button.setToolTip("点击选择并导入DICOM文件或文件夹")
+        self.import_dicom_button.clicked.connect(self.on_import_dicom_files)
+        import_button_layout.addWidget(self.import_dicom_button)
+        import_button_layout.addStretch()
+        layout.addLayout(import_button_layout)
+        
         # 序列信息显示
         self.sequence_info_label = qt.QLabel("等待加载DICOM序列...")
         self.sequence_info_label.setWordWrap(True)
@@ -311,6 +337,66 @@ class DataLoadingDialog(qt.QDialog):
             self.update_sequence_info()
             self.parse_dicom_metadata()
             self.check_confirm_button_state()
+    
+    def on_import_dicom_files(self):
+        """导入DICOM文件"""
+        try:
+            import DICOMLib
+            
+            # 使用文件对话框选择DICOM文件夹
+            file_dialog = qt.QFileDialog(self)
+            file_dialog.setFileMode(qt.QFileDialog.Directory)
+            file_dialog.setWindowTitle("选择包含DICOM文件的文件夹")
+            file_dialog.setOption(qt.QFileDialog.ShowDirsOnly, True)
+            
+            if file_dialog.exec_():
+                import_dir = file_dialog.selectedFiles()[0]
+                
+                # 显示进度对话框
+                progress = qt.QProgressDialog("正在导入DICOM文件...", "取消", 0, 0, self)
+                progress.setWindowModality(qt.Qt.WindowModal)
+                progress.setMinimumDuration(0)
+                progress.setValue(0)
+                qt.QApplication.processEvents()
+                
+                try:
+                    # 使用 DICOMLib.importDicom 导入文件
+                    # 这是Slicer推荐的标准方式
+                    DICOMLib.importDicom(import_dir, slicer.dicomDatabase)
+                    
+                    progress.close()
+                    
+                    # 刷新DICOM浏览器显示
+                    if self.dicom_browser:
+                        try:
+                            # 方法1: 尝试使用 setDatabaseDirectory 刷新
+                            if hasattr(self.dicom_browser, 'setDatabaseDirectory'):
+                                current_db = slicer.dicomDatabase.databaseDirectory
+                                self.dicom_browser.setDatabaseDirectory(current_db)
+                                logging.info("DICOM浏览器已刷新")
+                        except Exception as refresh_error:
+                            logging.warning(f"Failed to refresh DICOM browser: {refresh_error}")
+                    
+                    # 记录导入成功
+                    logging.info(f"Successfully imported DICOM files from: {import_dir}")
+                    
+                    qt.QMessageBox.information(self, "导入成功", 
+                        f"DICOM文件已成功导入到数据库。\n\n请在右侧DICOM浏览器中选择并加载序列。")
+                    
+                    # 确保DICOM面板可见
+                    if not self.dicom_panel_visible:
+                        self.show_dicom_panel()
+                        
+                except Exception as import_error:
+                    progress.close()
+                    logging.error(f"Failed to import DICOM directory: {import_error}")
+                    qt.QMessageBox.warning(self, "导入失败", 
+                        f"导入DICOM文件时出错:\n{str(import_error)}\n\n请检查文件夹中是否包含有效的DICOM文件。")
+                    
+        except Exception as e:
+            logging.error(f"Failed to open import dialog: {e}")
+            qt.QMessageBox.warning(self, "错误", 
+                f"无法打开导入对话框:\n{str(e)}\n\n请使用右侧DICOM浏览器的Import按钮手动导入。")
             
     def update_sequence_info(self):
         """更新序列信息显示"""
