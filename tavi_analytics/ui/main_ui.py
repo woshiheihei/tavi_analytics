@@ -82,8 +82,8 @@ class MainUI(qt.QWidget):
             settings = qt.QSettings()
             pref = settings.value("TAVRAnalytics/DeveloperPanelVisible", None)
             if pref is None:
-                # 默认遵循环境变量（默认开启）
-                flag = str(os.environ.get("TAVI_DEBUG", "1")).strip().lower()
+                # 默认遵循环境变量（默认关闭）
+                flag = str(os.environ.get("TAVI_DEBUG", "0")).strip().lower()
                 show_dev = flag not in ("0", "false", "off")
             else:
                 show_dev = str(pref).strip().lower() in ("1", "true", "on", "yes")
