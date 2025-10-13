@@ -72,11 +72,11 @@ class DataLoadingDialog(qt.QDialog):
         
         # DICOM相关组件
         self.dicom_browser = None
-        self.dicom_panel_visible = True  # 默认显示DICOM面板
+        self.dicom_section = None
         
-        self.setWindowTitle("数据加载与配置")
+        self.setWindowTitle("TAVR 数据导入向导")
         self.setModal(True)
-        self.setMinimumSize(1300, 750)  # 优化最小尺寸以适应新布局
+        self.setMinimumSize(950, 750)
         
         self.setup_ui()
         self.setup_connections()
@@ -90,197 +90,604 @@ class DataLoadingDialog(qt.QDialog):
         return QtUtils.get_widget_value(widget, method_name)
         
     def setup_ui(self):
-        """设置对话框界面"""
-        # 创建主水平布局
-        main_layout = qt.QHBoxLayout(self)
+        """设置对话框界面 - 现代化垂直布局"""
+        main_layout = qt.QVBoxLayout(self)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 左侧：原有的配置面板
-        left_panel = qt.QWidget()
-        left_layout = qt.QVBoxLayout(left_panel)
+        # 创建滚动区域以支持小屏幕
+        scroll_area = qt.QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(qt.QFrame.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarAlwaysOff)
         
-        # 标题
-        title_label = qt.QLabel("TAVR-Analytics 数据导入与配置")
-        title_label.setAlignment(qt.Qt.AlignCenter)
-        title_label.setStyleSheet("QLabel { font-size: 18px; font-weight: bold; margin: 10px; }")
-        left_layout.addWidget(title_label)
+        scroll_content = qt.QWidget()
+        scroll_layout = qt.QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(16)
+        scroll_layout.setContentsMargins(20, 20, 20, 20)
         
-        # 数据加载区域
-        self.create_data_loading_section(left_layout)
+        # 1. 标题栏
+        self.create_header_section(scroll_layout)
         
-        # 患者信息区域
-        self.create_patient_info_section(left_layout)
+        # 2. DICOM 导入区域（可折叠）
+        self.create_dicom_section(scroll_layout)
         
-        # 按钮区域
-        self.create_button_section(left_layout)
+        # 3. 患者信息区域
+        self.create_patient_info_section_modern(scroll_layout)
         
-        # 设置左侧面板宽度范围
-        left_panel.setMinimumWidth(480)
-        left_panel.setMaximumWidth(600)
+        # 添加弹性空间
+        scroll_layout.addStretch()
         
-        # 右侧：DICOM面板
-        self.right_panel = qt.QWidget()
-        self.right_panel.setVisible(True)  # 默认显示
-        right_layout = qt.QVBoxLayout(self.right_panel)
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
         
-        # DICOM面板标题
-        dicom_title = qt.QLabel("DICOM 数据库")
-        dicom_title.setAlignment(qt.Qt.AlignCenter)
-        dicom_title.setStyleSheet("QLabel { font-size: 16px; font-weight: bold; margin: 5px; color: #2c3e50; }")
-        right_layout.addWidget(dicom_title)
+        # 4. 底部操作按钮（固定在底部）
+        self.create_action_buttons(main_layout)
         
-        # DICOM浏览器容器
-        self.dicom_container = qt.QWidget()
-        container_layout = qt.QVBoxLayout(self.dicom_container)
-        right_layout.addWidget(self.dicom_container)
-        
-        # 设置右侧面板宽度
-        self.right_panel.setMinimumWidth(650)
-        self.right_panel.setMaximumWidth(800)
-        
-        # 添加到主布局
-        main_layout.addWidget(left_panel)
-        main_layout.addWidget(self.right_panel)
-        
-        # 默认创建并显示DICOM面板
+        # 默认创建DICOM浏览器
         self.create_dicom_browser()
         
-    def create_data_loading_section(self, parent_layout):
-        """创建数据状态显示区域"""
-        group_box = qt.QGroupBox("数据状态")
-        layout = qt.QVBoxLayout(group_box)
+    def create_header_section(self, parent_layout):
+        """创建优化的标题栏 - 现代简洁版本"""
+        header_widget = qt.QWidget()
+        header_widget.setStyleSheet("""
+            QWidget {
+                background-color: #1565C0;
+                border-radius: 0px;
+            }
+        """)
+        header_layout = qt.QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(32, 24, 32, 24)
+        header_layout.setSpacing(20)
         
-        # 使用说明
-        info_label = qt.QLabel("💡 使用右侧DICOM数据库导入和加载4D心脏CT序列")
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("QLabel { font-size: 12px; color: #666; padding: 8px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; }")
-        layout.addWidget(info_label)
+        # 左侧：标题和副标题
+        title_container = qt.QWidget()
+        title_container.setStyleSheet("background: transparent;")
+        title_layout = qt.QVBoxLayout(title_container)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(6)
         
-        # 添加导入DICOM文件按钮
-        import_button_layout = qt.QHBoxLayout()
+        # 主标题
+        title_label = qt.QLabel("TAVR 数据导入")
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 22px;
+                font-weight: bold;
+                color: white;
+                background: transparent;
+                letter-spacing: 0.5px;
+            }
+        """)
+        title_layout.addWidget(title_label)
+        
+        # 副标题
+        subtitle_label = qt.QLabel("导入 4D 心脏 CT 序列并配置患者信息")
+        subtitle_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.85);
+                background: transparent;
+            }
+        """)
+        title_layout.addWidget(subtitle_label)
+        
+        header_layout.addWidget(title_container, 1)
+        
+        # 右侧：步骤指示器
+        steps_container = qt.QWidget()
+        steps_container.setStyleSheet("background: transparent;")
+        steps_layout = qt.QHBoxLayout(steps_container)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
+        steps_layout.setSpacing(16)
+        
+        # 步骤指示器
+        self.step_indicators = []
+        steps_info = [
+            ("1", "导入数据"),
+            ("2", "配置信息")
+        ]
+        
+        for i, (number, label) in enumerate(steps_info):
+            step_widget = self.create_step_indicator(number, label, i == 0)
+            steps_layout.addWidget(step_widget)
+            self.step_indicators.append(step_widget)
+        
+        header_layout.addWidget(steps_container)
+        
+        parent_layout.addWidget(header_widget)
+    
+    def create_step_indicator(self, number, label, is_active=False):
+        """创建步骤指示器"""
+        step_widget = qt.QWidget()
+        step_widget.setStyleSheet("background: transparent;")
+        step_layout = qt.QVBoxLayout(step_widget)
+        step_layout.setContentsMargins(0, 0, 0, 0)
+        step_layout.setSpacing(4)
+        step_layout.setAlignment(qt.Qt.AlignCenter)
+        
+        # 圆形数字
+        number_label = qt.QLabel(number)
+        if is_active:
+            number_label.setStyleSheet("""
+                QLabel {
+                    background-color: white;
+                    color: #1565C0;
+                    border-radius: 16px;
+                    font-size: 13px;
+                    font-weight: bold;
+                    min-width: 32px;
+                    max-width: 32px;
+                    min-height: 32px;
+                    max-height: 32px;
+                    padding: 0px;
+                    qproperty-alignment: AlignCenter;
+                }
+            """)
+        else:
+            number_label.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(255, 255, 255, 0.3);
+                    color: white;
+                    border-radius: 16px;
+                    font-size: 13px;
+                    font-weight: bold;
+                    min-width: 32px;
+                    max-width: 32px;
+                    min-height: 32px;
+                    max-height: 32px;
+                    padding: 0px;
+                    qproperty-alignment: AlignCenter;
+                }
+            """)
+        number_label.setAlignment(qt.Qt.AlignCenter)
+        step_layout.addWidget(number_label, 0, qt.Qt.AlignCenter)
+        
+        # 步骤标签
+        text_label = qt.QLabel(label)
+        text_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 11px;
+                background: transparent;
+                font-weight: normal;
+            }
+        """)
+        text_label.setAlignment(qt.Qt.AlignCenter)
+        step_layout.addWidget(text_label, 0, qt.Qt.AlignCenter)
+        
+        return step_widget
+    
+    def create_dicom_section(self, parent_layout):
+        """创建DICOM导入区域"""
+        dicom_section = ctk.ctkCollapsibleButton()
+        dicom_section.text = "📁 第一步：导入 DICOM 数据"
+        dicom_section.collapsed = False
+        dicom_section.setStyleSheet("""
+            ctkCollapsibleButton {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #424242;
+            }
+            ctkCollapsibleButton:hover {
+                border-color: #1976D2;
+            }
+        """)
+        
+        dicom_layout = qt.QVBoxLayout(dicom_section)
+        dicom_layout.setSpacing(12)
+        dicom_layout.setContentsMargins(16, 8, 16, 16)
+        
+        # 操作栏：导入按钮 + 序列状态
+        action_bar = qt.QWidget()
+        action_bar_layout = qt.QHBoxLayout(action_bar)
+        action_bar_layout.setContentsMargins(0, 0, 0, 0)
+        action_bar_layout.setSpacing(12)
+        
+        # 导入按钮
         self.import_dicom_button = qt.QPushButton("📁 导入 DICOM 文件")
+        self.import_dicom_button.setFixedHeight(40)
         self.import_dicom_button.setStyleSheet("""
             QPushButton {
-                font-size: 13px;
-                padding: 8px 16px;
-                background-color: #2196F3;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0 24px;
+                background-color: #1976D2;
                 color: white;
                 border: none;
-                border-radius: 4px;
-                font-weight: bold;
+                border-radius: 6px;
             }
             QPushButton:hover {
-                background-color: #1976D2;
+                background-color: #1565C0;
             }
             QPushButton:pressed {
                 background-color: #0D47A1;
             }
         """)
-        self.import_dicom_button.setToolTip("点击选择并导入DICOM文件或文件夹")
+        self.import_dicom_button.setCursor(qt.Qt.PointingHandCursor)
         self.import_dicom_button.clicked.connect(self.on_import_dicom_files)
-        import_button_layout.addWidget(self.import_dicom_button)
-        import_button_layout.addStretch()
-        layout.addLayout(import_button_layout)
+        action_bar_layout.addWidget(self.import_dicom_button)
         
-        # 序列信息显示
-        self.sequence_info_label = qt.QLabel("等待加载DICOM序列...")
-        self.sequence_info_label.setWordWrap(True)
-        self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }")
-        layout.addWidget(self.sequence_info_label)
+        # 序列状态标签
+        self.sequence_info_label = qt.QLabel("⏳ 等待导入 DICOM 序列...")
+        self.sequence_info_label.setStyleSheet("""
+            QLabel {
+                background-color: #f5f5f5;
+                padding: 10px 16px;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 13px;
+                color: #666;
+            }
+        """)
+        action_bar_layout.addWidget(self.sequence_info_label, 1)
         
-        # 可选：收起DICOM面板的小按钮
-        self.show_dicom_button = qt.QPushButton("🗕 收起数据库面板")
-        self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; border: none; border-radius: 3px; }")
-        self.show_dicom_button.clicked.connect(self.toggle_dicom_panel)
-        layout.addWidget(self.show_dicom_button)
+        dicom_layout.addWidget(action_bar)
         
-        parent_layout.addWidget(group_box)
+        # DICOM 浏览器容器
+        self.dicom_container = qt.QWidget()
+        self.dicom_container.setVisible(True)
+        container_layout = qt.QVBoxLayout(self.dicom_container)
+        container_layout.setContentsMargins(0, 8, 0, 0)
+        container_layout.setSpacing(0)
         
-    def create_patient_info_section(self, parent_layout):
-        """创建患者信息区域"""
-        group_box = qt.QGroupBox("患者信息")
-        layout = qt.QFormLayout(group_box)
+        dicom_layout.addWidget(self.dicom_container)
         
-        # 基本信息
+        parent_layout.addWidget(dicom_section)
+    
+    def create_patient_info_section_modern(self, parent_layout):
+        """创建现代化的患者信息区域"""
+        # 主容器
+        info_section = ctk.ctkCollapsibleButton()
+        info_section.text = "📋 第二步：配置患者信息"
+        info_section.collapsed = False
+        info_section.setStyleSheet("""
+            ctkCollapsibleButton {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #424242;
+            }
+            ctkCollapsibleButton:hover {
+                border-color: #1976D2;
+            }
+        """)
+        
+        section_layout = qt.QVBoxLayout(info_section)
+        section_layout.setSpacing(16)
+        section_layout.setContentsMargins(16, 12, 16, 16)
+        
+        # 基本信息卡片
+        basic_card = self.create_info_card("基本信息", self.create_basic_info_form())
+        section_layout.addWidget(basic_card)
+        
+        # 临床信息卡片
+        clinical_card = self.create_info_card("临床信息", self.create_clinical_info_form())
+        section_layout.addWidget(clinical_card)
+        
+        parent_layout.addWidget(info_section)
+    
+    def create_info_card(self, title, content_widget):
+        """创建信息卡片"""
+        card = qt.QGroupBox(title)
+        card.setStyleSheet("""
+            QGroupBox {
+                font-size: 13px;
+                font-weight: bold;
+                color: #424242;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                margin-top: 8px;
+                padding-top: 12px;
+                background-color: #fafafa;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 8px;
+                background-color: #fafafa;
+            }
+        """)
+        
+        card_layout = qt.QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 8, 12, 12)
+        card_layout.addWidget(content_widget)
+        
+        return card
+    
+    def create_basic_info_form(self):
+        """创建基本信息表单"""
+        form_widget = qt.QWidget()
+        form_layout = qt.QFormLayout(form_widget)
+        form_layout.setSpacing(10)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setFieldGrowthPolicy(qt.QFormLayout.ExpandingFieldsGrow)
+        
+        # 通用样式
+        label_style = "QLabel { font-size: 13px; color: #424242; min-width: 140px; }"
+        required_style = "QLabel { font-size: 13px; color: #f44336; font-weight: bold; }"
+        input_style = """
+            QLineEdit, QSpinBox, QComboBox, QDateEdit {
+                padding: 6px 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 13px;
+            }
+            QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QDateEdit:focus {
+                border-color: #2196F3;
+            }
+        """
+        
+        # 受试者编号（必填）
+        id_container = qt.QWidget()
+        id_layout = qt.QHBoxLayout(id_container)
+        id_layout.setContentsMargins(0, 0, 0, 0)
+        id_layout.setSpacing(4)
+        
+        id_label = qt.QLabel("受试者编号")
+        id_label.setStyleSheet(label_style)
+        id_required = qt.QLabel("*")
+        id_required.setStyleSheet(required_style)
+        id_layout.addWidget(id_label)
+        id_layout.addWidget(id_required)
+        id_layout.addStretch()
+        
         self.patient_id_edit = qt.QLineEdit()
-        self.patient_id_edit.setPlaceholderText("必填项")
+        self.patient_id_edit.setPlaceholderText("请输入受试者编号")
+        self.patient_id_edit.setStyleSheet(input_style)
+        form_layout.addRow(id_container, self.patient_id_edit)
         
+        # 患者姓名
+        name_label = qt.QLabel("患者姓名")
+        name_label.setStyleSheet(label_style)
         self.patient_name_edit = qt.QLineEdit()
+        self.patient_name_edit.setPlaceholderText("选填")
+        self.patient_name_edit.setStyleSheet(input_style)
+        form_layout.addRow(name_label, self.patient_name_edit)
+        
+        # 年龄和性别（同一行）
+        age_sex_widget = qt.QWidget()
+        age_sex_layout = qt.QHBoxLayout(age_sex_widget)
+        age_sex_layout.setContentsMargins(0, 0, 0, 0)
+        age_sex_layout.setSpacing(12)
         
         self.patient_age_edit = qt.QSpinBox()
         self.patient_age_edit.setMaximum(150)
+        self.patient_age_edit.setSpecialValueText("未知")
+        self.patient_age_edit.setStyleSheet(input_style)
+        age_sex_layout.addWidget(self.patient_age_edit, 1)
         
         self.patient_sex_combo = qt.QComboBox()
-        self.patient_sex_combo.addItems(["", "男", "女"])
+        self.patient_sex_combo.addItems(["未知", "男", "女"])
+        self.patient_sex_combo.setStyleSheet(input_style)
+        age_sex_layout.addWidget(self.patient_sex_combo, 1)
         
-        # 日期信息
+        age_sex_label = qt.QLabel("年龄 / 性别")
+        age_sex_label.setStyleSheet(label_style)
+        form_layout.addRow(age_sex_label, age_sex_widget)
+        
+        # 手术时间和CT扫描时间（同一行）
+        date_widget = qt.QWidget()
+        date_layout = qt.QHBoxLayout(date_widget)
+        date_layout.setContentsMargins(0, 0, 0, 0)
+        date_layout.setSpacing(12)
+        
         self.surgery_date_edit = qt.QDateEdit()
         self.surgery_date_edit.setCalendarPopup(True)
         self.surgery_date_edit.setDate(qt.QDate.currentDate())
+        self.surgery_date_edit.setDisplayFormat("yyyy-MM-dd")
+        self.surgery_date_edit.setStyleSheet(input_style)
+        date_layout.addWidget(self.surgery_date_edit, 1)
         
         self.ct_scan_date_edit = qt.QDateEdit()
         self.ct_scan_date_edit.setCalendarPopup(True)
         self.ct_scan_date_edit.setDate(qt.QDate.currentDate())
+        self.ct_scan_date_edit.setDisplayFormat("yyyy-MM-dd")
+        self.ct_scan_date_edit.setStyleSheet(input_style)
+        date_layout.addWidget(self.ct_scan_date_edit, 1)
         
-        # 图像质量和随访时间
-        self.image_quality_combo = qt.QComboBox()
-        self.image_quality_combo.addItems([q.value for q in ImageQuality])
+        date_label = qt.QLabel("手术时间 / CT 扫描时间")
+        date_label.setStyleSheet(label_style)
+        form_layout.addRow(date_label, date_widget)
         
-        self.followup_timepoint_combo = qt.QComboBox()
-        self.followup_timepoint_combo.addItems([t.value for t in FollowUpTimepoint])
+        return form_widget
+    
+    def create_clinical_info_form(self):
+        """创建临床信息表单"""
+        form_widget = qt.QWidget()
+        form_layout = qt.QFormLayout(form_widget)
+        form_layout.setSpacing(10)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setFieldGrowthPolicy(qt.QFormLayout.ExpandingFieldsGrow)
         
-        # 瓣膜信息（关键）
-        valve_layout = qt.QHBoxLayout()
+        label_style = "QLabel { font-size: 13px; color: #424242; min-width: 140px; }"
+        required_style = "QLabel { font-size: 13px; color: #f44336; font-weight: bold; }"
+        input_style = """
+            QLineEdit, QSpinBox, QComboBox, QDateEdit, QDoubleSpinBox {
+                padding: 6px 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: white;
+                font-size: 13px;
+            }
+            QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QDateEdit:focus, QDoubleSpinBox:focus {
+                border-color: #2196F3;
+            }
+        """
+        
+        # 瓣膜品牌和型号（同一行，必填）
+        valve_label_container = qt.QWidget()
+        valve_label_layout = qt.QHBoxLayout(valve_label_container)
+        valve_label_layout.setContentsMargins(0, 0, 0, 0)
+        valve_label_layout.setSpacing(4)
+        
+        valve_label = qt.QLabel("瓣膜品牌 / 型号")
+        valve_label.setStyleSheet(label_style)
+        valve_required = qt.QLabel("*")
+        valve_required.setStyleSheet(required_style)
+        valve_label_layout.addWidget(valve_label)
+        valve_label_layout.addWidget(valve_required)
+        valve_label_layout.addStretch()
+        
+        valve_widget = qt.QWidget()
+        valve_layout = qt.QHBoxLayout(valve_widget)
+        valve_layout.setContentsMargins(0, 0, 0, 0)
+        valve_layout.setSpacing(12)
+        
         self.valve_brand_combo = qt.QComboBox()
-        self.valve_brand_combo.addItem("")
+        self.valve_brand_combo.addItem("请选择...")
         self.valve_brand_combo.addItems(list(self.valve_config.keys()))
+        self.valve_brand_combo.setStyleSheet(input_style)
+        valve_layout.addWidget(self.valve_brand_combo, 1)
+        
+        self.valve_model_combo = qt.QComboBox()
+        self.valve_model_combo.setStyleSheet(input_style)
+        valve_layout.addWidget(self.valve_model_combo, 1)
         
         # 设置瓣膜品牌预设值
         if self.valve_config:
-            # 优先选择默认品牌，如果没有则选择第一个
             default_brand = self.DEFAULT_VALVE_BRAND if self.DEFAULT_VALVE_BRAND in self.valve_config else list(self.valve_config.keys())[0]
             brand_index = self.valve_brand_combo.findText(default_brand)
             if brand_index >= 0:
                 self.valve_brand_combo.setCurrentIndex(brand_index)
         
-        self.valve_model_combo = qt.QComboBox()
+        form_layout.addRow(valve_label_container, valve_widget)
         
-        valve_layout.addWidget(self.valve_brand_combo)
-        valve_layout.addWidget(self.valve_model_combo)
-        
-        # 初始化瓣膜型号选项（基于默认品牌）
+        # 初始化瓣膜型号选项
         self.initialize_valve_model_combo()
         
-        # 可选评分
+        # 图像质量和随访时间点（同一行）
+        quality_followup_widget = qt.QWidget()
+        quality_followup_layout = qt.QHBoxLayout(quality_followup_widget)
+        quality_followup_layout.setContentsMargins(0, 0, 0, 0)
+        quality_followup_layout.setSpacing(12)
+        
+        self.image_quality_combo = qt.QComboBox()
+        self.image_quality_combo.addItems([q.value for q in ImageQuality])
+        self.image_quality_combo.setStyleSheet(input_style)
+        quality_followup_layout.addWidget(self.image_quality_combo, 1)
+        
+        self.followup_timepoint_combo = qt.QComboBox()
+        self.followup_timepoint_combo.addItems([t.value for t in FollowUpTimepoint])
+        self.followup_timepoint_combo.setStyleSheet(input_style)
+        quality_followup_layout.addWidget(self.followup_timepoint_combo, 1)
+        
+        quality_label = qt.QLabel("图像质量 / 随访时间点")
+        quality_label.setStyleSheet(label_style)
+        form_layout.addRow(quality_label, quality_followup_widget)
+        
+        # STS评分和EuroScore（同一行）
+        score_widget = qt.QWidget()
+        score_layout = qt.QHBoxLayout(score_widget)
+        score_layout.setContentsMargins(0, 0, 0, 0)
+        score_layout.setSpacing(12)
+        
         self.sts_score_edit = qt.QDoubleSpinBox()
         self.sts_score_edit.setDecimals(2)
         self.sts_score_edit.setMaximum(100)
+        self.sts_score_edit.setSpecialValueText("未评估")
+        self.sts_score_edit.setStyleSheet(input_style)
+        score_layout.addWidget(self.sts_score_edit, 1)
         
         self.euro_score_edit = qt.QDoubleSpinBox()
         self.euro_score_edit.setDecimals(2)
         self.euro_score_edit.setMaximum(100)
+        self.euro_score_edit.setSpecialValueText("未评估")
+        self.euro_score_edit.setStyleSheet(input_style)
+        score_layout.addWidget(self.euro_score_edit, 1)
         
-        # 添加到表单
-        layout.addRow("受试者编号*:", self.patient_id_edit)
-        layout.addRow("患者姓名:", self.patient_name_edit)
-        layout.addRow("年龄:", self.patient_age_edit)
-        layout.addRow("性别:", self.patient_sex_combo)
-        layout.addRow("手术时间:", self.surgery_date_edit)
-        layout.addRow("CT扫描时间:", self.ct_scan_date_edit)
-        layout.addRow("图像质量:", self.image_quality_combo)
-        layout.addRow("术后随访复查时间节点:", self.followup_timepoint_combo)
-        layout.addRow("瓣膜品牌* | 瓣膜型号*:", valve_layout)
-        layout.addRow("STS评分:", self.sts_score_edit)
-        layout.addRow("EuroScore II:", self.euro_score_edit)
+        score_label = qt.QLabel("STS 评分 / EuroScore II")
+        score_label.setStyleSheet(label_style)
+        form_layout.addRow(score_label, score_widget)
         
-        parent_layout.addWidget(group_box)
+        return form_widget
+    
+    def create_action_buttons(self, parent_layout):
+        """创建底部操作按钮"""
+        button_container = qt.QWidget()
+        button_container.setStyleSheet("""
+            QWidget {
+                background-color: #f5f5f5;
+                border-top: 1px solid #e0e0e0;
+            }
+        """)
+        button_layout = qt.QHBoxLayout(button_container)
+        button_layout.setContentsMargins(20, 16, 20, 16)
+        button_layout.setSpacing(12)
+        
+        # 取消按钮
+        self.cancel_button = qt.QPushButton("取消")
+        self.cancel_button.setFixedSize(100, 40)
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                background-color: white;
+                color: #666;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #f5f5f5;
+                border-color: #999;
+            }
+        """)
+        self.cancel_button.setCursor(qt.Qt.PointingHandCursor)
+        self.cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_button)
+        
+        button_layout.addStretch()
+        
+        # 必填项提示
+        self.required_hint_label = qt.QLabel("* 表示必填项")
+        self.required_hint_label.setStyleSheet("QLabel { font-size: 12px; color: #999; background: transparent; }")
+        button_layout.addWidget(self.required_hint_label)
+        
+        button_layout.addStretch()
+        
+        # 确认按钮
+        self.confirm_button = qt.QPushButton("✓ 确认并继续")
+        self.confirm_button.setEnabled(False)
+        self.confirm_button.setFixedSize(150, 40)
+        self.confirm_button.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 6px;
+            }
+            QPushButton:hover:enabled {
+                background-color: #45a049;
+            }
+            QPushButton:pressed:enabled {
+                background-color: #3d8b40;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #999;
+            }
+        """)
+        self.confirm_button.setCursor(qt.Qt.PointingHandCursor)
+        self.confirm_button.clicked.connect(self.on_confirm)
+        button_layout.addWidget(self.confirm_button)
+        
+        parent_layout.addWidget(button_container)
         
     def initialize_valve_model_combo(self):
         """初始化瓣膜型号下拉菜单，包括设置默认值"""
         current_brand = self._get_widget_text(self.valve_brand_combo, 'currentText')
         self.valve_model_combo.clear()
         
-        if current_brand and current_brand in self.valve_config:
-            self.valve_model_combo.addItem("")
+        if current_brand and current_brand != "请选择..." and current_brand in self.valve_config:
+            self.valve_model_combo.addItem("请选择...")
             models = self.valve_config[current_brand]
             self.valve_model_combo.addItems(models)
             
@@ -289,24 +696,6 @@ class DataLoadingDialog(qt.QDialog):
                 model_index = self.valve_model_combo.findText(self.DEFAULT_VALVE_MODELS[current_brand])
                 if model_index >= 0:
                     self.valve_model_combo.setCurrentIndex(model_index)
-        
-    def create_button_section(self, parent_layout):
-        """创建按钮区域"""
-        button_layout = qt.QHBoxLayout()
-        
-        self.cancel_button = qt.QPushButton("取消")
-        self.cancel_button.clicked.connect(self.reject)
-        
-        self.confirm_button = qt.QPushButton("确认并继续")
-        self.confirm_button.setEnabled(False)
-        self.confirm_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-size: 14px; padding: 10px; }")
-        self.confirm_button.clicked.connect(self.on_confirm)
-        
-        button_layout.addWidget(self.cancel_button)
-        button_layout.addStretch()
-        button_layout.addWidget(self.confirm_button)
-        
-        parent_layout.addLayout(button_layout)
         
     def setup_connections(self):
         """设置信号连接"""
@@ -381,11 +770,7 @@ class DataLoadingDialog(qt.QDialog):
                     logging.info(f"Successfully imported DICOM files from: {import_dir}")
                     
                     qt.QMessageBox.information(self, "导入成功", 
-                        f"DICOM文件已成功导入到数据库。\n\n请在右侧DICOM浏览器中选择并加载序列。")
-                    
-                    # 确保DICOM面板可见
-                    if not self.dicom_panel_visible:
-                        self.show_dicom_panel()
+                        f"DICOM文件已成功导入到数据库。\n\n请在DICOM浏览器中选择并加载序列。")
                         
                 except Exception as import_error:
                     progress.close()
@@ -404,12 +789,101 @@ class DataLoadingDialog(qt.QDialog):
         if sequence_node:
             num_frames = sequence_node.GetNumberOfDataNodes()
             node_name = sequence_node.GetName()
-            self.sequence_info_label.setText(f"已加载序列: {node_name} ({num_frames} 帧)")
-            self.sequence_info_label.setStyleSheet("QLabel { background-color: #e8f5e8; padding: 5px; border: 1px solid #4CAF50; }")
+            self.sequence_info_label.setText(f"✅ 已加载: {node_name} ({num_frames} 帧)")
+            self.sequence_info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #e8f5e9;
+                    padding: 10px 16px;
+                    border: 1px solid #4CAF50;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    color: #2e7d32;
+                }
+            """)
+            # 更新步骤指示器：激活第二步
+            self.update_step_indicator(1)
         else:
-            self.sequence_info_label.setText("未加载序列")
-            self.sequence_info_label.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 5px; border: 1px solid #ccc; }")
+            self.sequence_info_label.setText("⏳ 等待导入 DICOM 序列...")
+            self.sequence_info_label.setStyleSheet("""
+                QLabel {
+                    background-color: #f5f5f5;
+                    padding: 10px 16px;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    color: #666;
+                }
+            """)
+            # 更新步骤指示器：激活第一步
+            self.update_step_indicator(0)
+    
+    def update_step_indicator(self, active_step_index):
+        """更新步骤指示器状态
+        
+        Args:
+            active_step_index: 当前激活步骤的索引 (0-based)
+        """
+        if not hasattr(self, 'step_indicators') or not self.step_indicators:
+            return
             
+        for i, step_widget in enumerate(self.step_indicators):
+            # 获取步骤中的圆形数字标签（第一个子widget）
+            step_layout = step_widget.layout()
+            if step_layout and step_layout.count() > 0:
+                number_label = step_layout.itemAt(0).widget()
+                if number_label:
+                    if i == active_step_index:
+                        # 激活状态
+                        number_label.setStyleSheet("""
+                            QLabel {
+                                background-color: white;
+                                color: #1565C0;
+                                border-radius: 16px;
+                                font-size: 13px;
+                                font-weight: bold;
+                                min-width: 32px;
+                                max-width: 32px;
+                                min-height: 32px;
+                                max-height: 32px;
+                                padding: 0px;
+                                qproperty-alignment: AlignCenter;
+                            }
+                        """)
+                    elif i < active_step_index:
+                        # 已完成状态
+                        number_label.setStyleSheet("""
+                            QLabel {
+                                background-color: rgba(76, 175, 80, 0.9);
+                                color: white;
+                                border-radius: 16px;
+                                font-size: 13px;
+                                font-weight: bold;
+                                min-width: 32px;
+                                max-width: 32px;
+                                min-height: 32px;
+                                max-height: 32px;
+                                padding: 0px;
+                                qproperty-alignment: AlignCenter;
+                            }
+                        """)
+                    else:
+                        # 未激活状态
+                        number_label.setStyleSheet("""
+                            QLabel {
+                                background-color: rgba(255, 255, 255, 0.3);
+                                color: white;
+                                border-radius: 16px;
+                                font-size: 13px;
+                                font-weight: bold;
+                                min-width: 32px;
+                                max-width: 32px;
+                                min-height: 32px;
+                                max-height: 32px;
+                                padding: 0px;
+                                qproperty-alignment: AlignCenter;
+                            }
+                        """)
+    
     def parse_dicom_metadata(self):
         """解析DICOM元数据"""
         try:
@@ -520,59 +994,6 @@ class DataLoadingDialog(qt.QDialog):
         logging.info(f"保存患者数据到session: ID='{data.patientID}', 瓣膜品牌='{data.valveBrand}', 瓣膜型号='{data.valveModel}'")
         logging.info(f"保存后session状态: 序列节点ID={self.session.volume_sequence_node_id}, is_ready={self.session.is_ready()}")
         
-    def toggle_dicom_panel(self):
-        """切换DICOM面板的显示状态"""
-        try:
-            if self.dicom_panel_visible:
-                self.hide_dicom_panel()
-            else:
-                self.show_dicom_panel()
-        except Exception as e:
-            logging.error(f"Failed to toggle DICOM panel: {e}")
-            qt.QMessageBox.warning(self, "错误", f"无法切换DICOM面板: {str(e)}")
-    
-    def show_dicom_panel(self):
-        """显示DICOM数据库面板"""
-        try:
-            if not self.dicom_browser:
-                self.create_dicom_browser()
-            
-            # 显示右侧面板
-            self.right_panel.setVisible(True)
-            self.dicom_panel_visible = True
-            
-            # 更新按钮文本和样式
-            self.show_dicom_button.setText("🗕 收起数据库面板")
-            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #9E9E9E; color: white; }")
-            
-            # 调整对话框大小
-            self.resize(1400, 750)
-            
-            logging.info("DICOM数据库面板已显示")
-            
-        except Exception as e:
-            logging.error(f"Failed to show DICOM panel: {e}")
-            qt.QMessageBox.warning(self, "错误", f"无法显示DICOM面板: {str(e)}")
-    
-    def hide_dicom_panel(self):
-        """隐藏DICOM数据库面板"""
-        try:
-            # 隐藏右侧面板
-            self.right_panel.setVisible(False)
-            self.dicom_panel_visible = False
-            
-            # 更新按钮文本和样式
-            self.show_dicom_button.setText("🗖 展开数据库面板")
-            self.show_dicom_button.setStyleSheet("QPushButton { font-size: 10px; padding: 4px; background-color: #2196F3; color: white; }")
-            
-            # 调整对话框大小（紧凑模式）
-            self.resize(900, 750)
-            
-            logging.info("DICOM数据库面板已隐藏")
-            
-        except Exception as e:
-            logging.error(f"Failed to hide DICOM panel: {e}")
-    
     def create_dicom_browser(self):
         """创建DICOM浏览器"""
         try:
@@ -589,12 +1010,6 @@ class DataLoadingDialog(qt.QDialog):
                 container_layout = qt.QVBoxLayout(self.dicom_container)
             
             container_layout.addWidget(self.dicom_browser)
-            
-            # 添加操作指南
-            info_label = qt.QLabel("📝 操作步骤：\n1. 点击 Import 导入DICOM文件\n2. 选择4D心脏CT序列\n3. 点击 Load 加载数据\n4. 数据加载后左侧将自动更新")
-            info_label.setWordWrap(True)
-            info_label.setStyleSheet("QLabel { font-size: 11px; color: #2c3e50; padding: 12px; background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 6px; line-height: 1.4; }")
-            container_layout.addWidget(info_label)
             
             # 监听DICOM数据库变化和场景变化
             self.setup_dicom_monitoring()
