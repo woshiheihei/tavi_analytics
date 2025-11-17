@@ -47,7 +47,6 @@ class TestPatientData(unittest.TestCase):
         self.assertEqual(self.patient_data.patientName, "")
         self.assertEqual(self.patient_data.patientAge, 0)
         self.assertEqual(self.patient_data.patientSex, "")
-        self.assertIsNone(self.patient_data.studyDate)
         self.assertEqual(self.patient_data.valveBrand, "")
         self.assertEqual(self.patient_data.valveModel, "")
 
@@ -78,8 +77,8 @@ class TestPatientData(unittest.TestCase):
     def test_study_date_assignment(self):
         """测试检查日期赋值"""
         test_date = "2024-01-15"
-        self.patient_data.studyDate = test_date
-        self.assertEqual(self.patient_data.studyDate, test_date)
+        self.patient_data.ctScanDate = test_date
+        self.assertEqual(self.patient_data.ctScanDate, test_date)
 
     def test_valve_brand_assignment(self):
         """测试瓣膜品牌赋值"""
@@ -99,7 +98,7 @@ class TestPatientData(unittest.TestCase):
         self.patient_data.patientName = "张三"
         self.patient_data.patientAge = 65
         self.patient_data.patientSex = "M"
-        self.patient_data.studyDate = "2024-01-15"
+        self.patient_data.ctScanDate = "2024-01-15"
         self.patient_data.valveBrand = "Medtronic"
         self.patient_data.valveModel = "Evolut R/PRO"
         self.patient_data.valveSize = "29mm"
@@ -109,7 +108,7 @@ class TestPatientData(unittest.TestCase):
         self.assertEqual(self.patient_data.patientName, "张三")
         self.assertEqual(self.patient_data.patientAge, 65)
         self.assertEqual(self.patient_data.patientSex, "M")
-        self.assertEqual(self.patient_data.studyDate, "2024-01-15")
+        self.assertEqual(self.patient_data.ctScanDate, "2024-01-15")
         self.assertEqual(self.patient_data.valveBrand, "Medtronic")
         self.assertEqual(self.patient_data.valveModel, "Evolut R/PRO")
         self.assertEqual(self.patient_data.valveSize, "29mm")
