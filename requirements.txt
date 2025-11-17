@@ -1,0 +1,42 @@
+# TAVR Analytics - Python Dependencies
+#
+# Note: This extension is designed to run within 3D Slicer, which provides
+# most of the required dependencies (Qt, VTK, ITK, numpy, etc.)
+#
+# The following are standard Python libraries included with Python:
+# - logging
+# - os
+# - sys
+# - typing
+# - json
+# - traceback
+# - unittest
+# - dataclasses (Python 3.7+)
+# - enum
+# - pathlib
+# - datetime
+# - copy
+#
+# Dependencies provided by 3D Slicer:
+# - qt (PythonQt bindings)
+# - slicer (Slicer Python API)
+# - vtk (VTK Python bindings)
+# - ctk (CTK widgets)
+# - numpy
+# - SimpleITK
+#
+# For standalone testing or development outside Slicer:
+# These packages can help with testing but are not required for production use
+typing_extensions>=4.0.0; python_version < '3.8'
+
+# Development dependencies (optional)
+# Uncomment if needed for development/testing:
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# pylint>=2.15.0
+# black>=22.0.0
+# mypy>=0.990
+# flake8>=5.0.0
+
+# Note: For production use in 3D Slicer, no additional pip packages are required.
+# All necessary dependencies are provided by the Slicer installation.

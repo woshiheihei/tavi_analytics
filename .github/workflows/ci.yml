@@ -1,0 +1,207 @@
+# GitHub Actions CI/CD Workflow for TAVR Analytics
+# This workflow runs tests, linting, and other quality checks
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**', 'fix/**' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  # Job 1: Lint and Code Quality
+  lint:
+    name: Lint and Code Quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint black isort mypy bandit
+        pip install typing-extensions
+
+    - name: Run Black (code formatting check)
+      run: |
+        black --check --line-length 120 --skip-string-normalization tavi_analytics/
+      continue-on-error: true
+
+    - name: Run isort (import sorting check)
+      run: |
+        isort --check-only --profile black --line-length 120 tavi_analytics/
+      continue-on-error: true
+
+    - name: Run Flake8 (code linting)
+      run: |
+        flake8 tavi_analytics/ --count --max-line-length=120 \
+          --extend-ignore=E203,E266,E501,W503,E402 \
+          --statistics --show-source
+      continue-on-error: true
+
+    - name: Run Pylint (code analysis)
+      run: |
+        pylint tavi_analytics/ --rcfile=.pylintrc || true
+      continue-on-error: true
+
+    - name: Run Bandit (security checks)
+      run: |
+        bandit -r tavi_analytics/ -ll -f txt || true
+      continue-on-error: true
+
+  # Job 2: Unit Tests
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-test-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-test-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov unittest-xml-reporting
+        pip install typing-extensions
+
+    - name: Run unit tests
+      run: |
+        cd tavi_analytics/tests
+        python -m unittest discover -v -s . -p "test_*.py"
+
+    - name: Generate test report
+      if: always()
+      run: |
+        echo "Test execution completed"
+
+  # Job 3: Documentation Check
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check README exists
+      run: |
+        if [ ! -f README.md ]; then
+          echo "README.md not found!"
+          exit 1
+        fi
+        echo "README.md exists"
+
+    - name: Check LICENSE exists
+      run: |
+        if [ ! -f LICENSE ]; then
+          echo "LICENSE file not found!"
+          exit 1
+        fi
+        echo "LICENSE file exists"
+
+    - name: Check CONTRIBUTING guide exists
+      run: |
+        if [ ! -f CONTRIBUTING.md ]; then
+          echo "CONTRIBUTING.md not found!"
+          exit 1
+        fi
+        echo "CONTRIBUTING.md exists"
+
+    - name: Validate Markdown files
+      uses: DavidAnson/markdownlint-cli2-action@v15
+      with:
+        globs: |
+          README.md
+          CONTRIBUTING.md
+      continue-on-error: true
+
+  # Job 4: Security Scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run Bandit security scan
+      run: |
+        bandit -r tavi_analytics/ -ll -f json -o bandit-report.json || true
+        bandit -r tavi_analytics/ -ll || true
+      continue-on-error: true
+
+    - name: Upload Bandit report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: bandit-security-report
+        path: bandit-report.json
+
+  # Job 5: Code Quality Summary
+  quality-summary:
+    name: Code Quality Summary
+    runs-on: ubuntu-latest
+    needs: [lint, test, docs, security]
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate summary
+      run: |
+        echo "## CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ All quality checks completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Jobs Status:" >> $GITHUB_STEP_SUMMARY
+        echo "- Lint: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Documentation: ${{ needs.docs.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Security: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
